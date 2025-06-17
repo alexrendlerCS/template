@@ -24,6 +24,11 @@ const nextConfig = {
       ...config.resolve.alias,
       "@": path.resolve(__dirname),
     };
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+      path: false,
+    };
     return config;
   },
 };

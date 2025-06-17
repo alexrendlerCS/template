@@ -1,23 +1,72 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Calendar, List, ArrowLeft, User, ChevronLeft, ChevronRight } from "lucide-react"
-import Link from "next/link"
-import { ClientNavigation } from "@/components/client-navigation"
+import { useState } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Calendar,
+  List,
+  ArrowLeft,
+  User,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+import Link from "next/link";
+import { ClientNavigation } from "@/components/client-navigation";
 
 const mockSessions = [
-  { id: 1, date: "2024-01-15", time: "10:00 AM", type: "Personal Training", status: "confirmed" },
-  { id: 2, date: "2024-01-17", time: "2:00 PM", type: "Strength Training", status: "confirmed" },
-  { id: 3, date: "2024-01-19", time: "11:00 AM", type: "Cardio Session", status: "confirmed" },
-  { id: 4, date: "2024-01-22", time: "9:00 AM", type: "Personal Training", status: "pending" },
-  { id: 5, date: "2024-01-24", time: "3:00 PM", type: "Flexibility Training", status: "confirmed" },
-  { id: 6, date: "2024-01-26", time: "10:30 AM", type: "Strength Training", status: "confirmed" },
-]
+  {
+    id: 1,
+    date: "2024-01-15",
+    time: "10:00 AM",
+    type: "Personal Training",
+    status: "confirmed",
+  },
+  {
+    id: 2,
+    date: "2024-01-17",
+    time: "2:00 PM",
+    type: "Strength Training",
+    status: "confirmed",
+  },
+  {
+    id: 3,
+    date: "2024-01-19",
+    time: "11:00 AM",
+    type: "Cardio Session",
+    status: "confirmed",
+  },
+  {
+    id: 4,
+    date: "2024-01-22",
+    time: "9:00 AM",
+    type: "Personal Training",
+    status: "pending",
+  },
+  {
+    id: 5,
+    date: "2024-01-24",
+    time: "3:00 PM",
+    type: "Flexibility Training",
+    status: "confirmed",
+  },
+  {
+    id: 6,
+    date: "2024-01-26",
+    time: "10:30 AM",
+    type: "Strength Training",
+    status: "confirmed",
+  },
+];
 
-const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const months = [
   "January",
   "February",
@@ -31,54 +80,56 @@ const months = [
   "October",
   "November",
   "December",
-]
+];
 
 export default function ClientCalendarPage() {
-  const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar")
-  const [currentDate, setCurrentDate] = useState(new Date(2024, 0, 1)) // January 2024
+  const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar");
+  const [currentDate, setCurrentDate] = useState(new Date(2024, 0, 1)); // January 2024
 
   const getDaysInMonth = (date: Date) => {
-    const year = date.getFullYear()
-    const month = date.getMonth()
-    const firstDay = new Date(year, month, 1)
-    const lastDay = new Date(year, month + 1, 0)
-    const daysInMonth = lastDay.getDate()
-    const startingDayOfWeek = firstDay.getDay()
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
 
-    const days = []
+    const days = [];
 
     // Add empty cells for days before the first day of the month
     for (let i = 0; i < startingDayOfWeek; i++) {
-      days.push(null)
+      days.push(null);
     }
 
     // Add days of the month
     for (let day = 1; day <= daysInMonth; day++) {
-      days.push(day)
+      days.push(day);
     }
 
-    return days
-  }
+    return days;
+  };
 
-  const getSessionsForDate = (day: number) => {
-    if (!day) return []
-    const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
-    return mockSessions.filter((session) => session.date === dateStr)
-  }
+  const getSessionsForDate = (day: number | null) => {
+    if (!day) return [];
+    const dateStr = `${currentDate.getFullYear()}-${String(
+      currentDate.getMonth() + 1
+    ).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    return mockSessions.filter((session) => session.date === dateStr);
+  };
 
   const navigateMonth = (direction: "prev" | "next") => {
     setCurrentDate((prev) => {
-      const newDate = new Date(prev)
+      const newDate = new Date(prev);
       if (direction === "prev") {
-        newDate.setMonth(prev.getMonth() - 1)
+        newDate.setMonth(prev.getMonth() - 1);
       } else {
-        newDate.setMonth(prev.getMonth() + 1)
+        newDate.setMonth(prev.getMonth() + 1);
       }
-      return newDate
-    })
-  }
+      return newDate;
+    });
+  };
 
-  const days = getDaysInMonth(currentDate)
+  const days = getDaysInMonth(currentDate);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -101,7 +152,9 @@ export default function ClientCalendarPage() {
                 variant={viewMode === "calendar" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setViewMode("calendar")}
-                className={viewMode === "calendar" ? "bg-red-600 hover:bg-red-700" : ""}
+                className={
+                  viewMode === "calendar" ? "bg-red-600 hover:bg-red-700" : ""
+                }
               >
                 <Calendar className="h-4 w-4 mr-2" />
                 Calendar
@@ -110,7 +163,9 @@ export default function ClientCalendarPage() {
                 variant={viewMode === "list" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setViewMode("list")}
-                className={viewMode === "list" ? "bg-red-600 hover:bg-red-700" : ""}
+                className={
+                  viewMode === "list" ? "bg-red-600 hover:bg-red-700" : ""
+                }
               >
                 <List className="h-4 w-4 mr-2" />
                 List
@@ -129,32 +184,45 @@ export default function ClientCalendarPage() {
                   {months[currentDate.getMonth()]} {currentDate.getFullYear()}
                 </CardTitle>
                 <div className="flex items-center space-x-2">
-                  <Button variant="outline" size="sm" onClick={() => navigateMonth("prev")}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigateMonth("prev")}
+                  >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => navigateMonth("next")}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigateMonth("next")}
+                  >
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
-              <CardDescription>Your training sessions and appointments</CardDescription>
+              <CardDescription>
+                Your training sessions and appointments
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-7 gap-1 mb-4">
                 {daysOfWeek.map((day) => (
-                  <div key={day} className="p-2 text-center font-medium text-gray-600 text-sm">
+                  <div
+                    key={day}
+                    className="p-2 text-center font-medium text-gray-600 text-sm"
+                  >
                     {day}
                   </div>
                 ))}
               </div>
               <div className="grid grid-cols-7 gap-1">
                 {days.map((day, index) => {
-                  const sessions = getSessionsForDate(day)
+                  const sessions = getSessionsForDate(day);
                   const isToday =
                     day &&
                     currentDate.getFullYear() === new Date().getFullYear() &&
                     currentDate.getMonth() === new Date().getMonth() &&
-                    day === new Date().getDate()
+                    day === new Date().getDate();
 
                   return (
                     <div
@@ -165,7 +233,11 @@ export default function ClientCalendarPage() {
                     >
                       {day && (
                         <>
-                          <div className={`text-sm font-medium mb-1 ${isToday ? "text-red-600" : "text-gray-900"}`}>
+                          <div
+                            className={`text-sm font-medium mb-1 ${
+                              isToday ? "text-red-600" : "text-gray-900"
+                            }`}
+                          >
                             {day}
                           </div>
                           <div className="space-y-1">
@@ -178,7 +250,9 @@ export default function ClientCalendarPage() {
                                     : "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
                                 }`}
                               >
-                                <div className="font-medium">{session.time}</div>
+                                <div className="font-medium">
+                                  {session.time}
+                                </div>
                                 <div className="truncate">{session.type}</div>
                               </div>
                             ))}
@@ -186,7 +260,7 @@ export default function ClientCalendarPage() {
                         </>
                       )}
                     </div>
-                  )
+                  );
                 })}
               </div>
             </CardContent>
@@ -196,7 +270,9 @@ export default function ClientCalendarPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Upcoming Sessions</CardTitle>
-                <CardDescription>All your scheduled training sessions</CardDescription>
+                <CardDescription>
+                  All your scheduled training sessions
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
@@ -207,12 +283,17 @@ export default function ClientCalendarPage() {
                     >
                       <div className="flex items-center space-x-4">
                         <div className="text-center">
-                          <p className="font-medium text-red-600">{session.time}</p>
+                          <p className="font-medium text-red-600">
+                            {session.time}
+                          </p>
                           <p className="text-sm text-gray-500">
-                            {new Date(session.date).toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                            })}
+                            {new Date(session.date).toLocaleDateString(
+                              "en-US",
+                              {
+                                month: "short",
+                                day: "numeric",
+                              }
+                            )}
                           </p>
                         </div>
                         <div>
@@ -225,10 +306,20 @@ export default function ClientCalendarPage() {
                       </div>
                       <div className="flex items-center space-x-3">
                         <Badge
-                          variant={session.status === "confirmed" ? "default" : "secondary"}
-                          className={session.status === "confirmed" ? "bg-green-100 text-green-800" : ""}
+                          variant={
+                            session.status === "confirmed"
+                              ? "default"
+                              : "secondary"
+                          }
+                          className={
+                            session.status === "confirmed"
+                              ? "bg-green-100 text-green-800"
+                              : ""
+                          }
                         >
-                          {session.status === "confirmed" ? "Confirmed" : "Pending"}
+                          {session.status === "confirmed"
+                            ? "Confirmed"
+                            : "Pending"}
                         </Badge>
                         <Button size="sm" variant="outline">
                           Reschedule
@@ -250,7 +341,9 @@ export default function ClientCalendarPage() {
               </Card>
               <Card>
                 <CardContent className="p-6 text-center">
-                  <div className="text-2xl font-bold text-green-600 mb-2">4</div>
+                  <div className="text-2xl font-bold text-green-600 mb-2">
+                    4
+                  </div>
                   <p className="text-sm text-gray-600">Completed Sessions</p>
                 </CardContent>
               </Card>
@@ -265,5 +358,5 @@ export default function ClientCalendarPage() {
         )}
       </main>
     </div>
-  )
+  );
 }
