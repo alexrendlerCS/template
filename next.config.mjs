@@ -22,7 +22,7 @@ const nextConfig = {
     config.resolve = config.resolve || {};
     config.resolve.alias = {
       ...config.resolve.alias,
-      "@": path.join(__dirname),
+      "@": path.resolve(__dirname),
     };
     return config;
   },
