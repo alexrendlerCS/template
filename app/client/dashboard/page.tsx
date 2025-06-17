@@ -1,24 +1,56 @@
-"use client"
+"use client";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Calendar, CreditCard, Clock, User, CheckCircle, AlertCircle } from "lucide-react"
-import Link from "next/link"
-import { ClientNavigation } from "@/components/client-navigation"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Calendar,
+  CreditCard,
+  Clock,
+  User,
+  CheckCircle,
+  AlertCircle,
+} from "lucide-react";
+import Link from "next/link";
+import { ClientNavigation } from "@/components/client-navigation";
+import Image from "next/image";
 
 const mockUpcomingSessions = [
-  { id: 1, date: "2024-01-15", time: "10:00 AM", type: "Personal Training", trainer: "John Doe" },
-  { id: 2, date: "2024-01-17", time: "2:00 PM", type: "Strength Training", trainer: "John Doe" },
-  { id: 3, date: "2024-01-19", time: "11:00 AM", type: "Cardio Session", trainer: "John Doe" },
-]
+  {
+    id: 1,
+    date: "2024-01-15",
+    time: "10:00 AM",
+    type: "Personal Training",
+    trainer: "John Doe",
+  },
+  {
+    id: 2,
+    date: "2024-01-17",
+    time: "2:00 PM",
+    type: "Strength Training",
+    trainer: "John Doe",
+  },
+  {
+    id: 3,
+    date: "2024-01-19",
+    time: "11:00 AM",
+    type: "Cardio Session",
+    trainer: "John Doe",
+  },
+];
 
 const mockPaymentHistory = [
   { id: 1, date: "2024-01-10", amount: 240, sessions: 4, status: "completed" },
   { id: 2, date: "2023-12-15", amount: 180, sessions: 3, status: "completed" },
   { id: 3, date: "2023-11-20", amount: 300, sessions: 5, status: "completed" },
-]
+];
 
 export default function ClientDashboard() {
   return (
@@ -29,17 +61,26 @@ export default function ClientDashboard() {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-4">
               <ClientNavigation />
-              <div className="flex items-center space-x-2">
-                <div className="bg-red-600 p-2 rounded-full">
-                  <User className="h-6 w-6 text-white" />
-                </div>
-                <h1 className="text-xl font-bold text-gray-900">FitCoach Pro</h1>
+              <div className="flex items-center space-x-3">
+                <Image
+                  src="/logo.jpg"
+                  alt="Fitness Trainer Logo"
+                  width={40}
+                  height={40}
+                  className="rounded-full shadow"
+                  priority
+                />
+                <h1 className="text-xl font-bold text-gray-900">
+                  Fitness Trainer
+                </h1>
               </div>
             </div>
             <div className="flex items-center space-x-4">
               <Avatar>
                 <AvatarImage src="/placeholder.svg?height=40&width=40" />
-                <AvatarFallback className="bg-gray-600 text-white">SJ</AvatarFallback>
+                <AvatarFallback className="bg-gray-600 text-white">
+                  SJ
+                </AvatarFallback>
               </Avatar>
               <div>
                 <p className="font-medium text-gray-900">Sarah Johnson</p>
@@ -57,12 +98,18 @@ export default function ClientDashboard() {
             <div className="flex items-center space-x-4">
               <Avatar className="h-16 w-16">
                 <AvatarImage src="/placeholder.svg?height=64&width=64" />
-                <AvatarFallback className="bg-white text-red-600 text-xl font-bold">JD</AvatarFallback>
+                <AvatarFallback className="bg-white text-red-600 text-xl font-bold">
+                  JD
+                </AvatarFallback>
               </Avatar>
               <div>
                 <h2 className="text-2xl font-bold">Welcome back, Sarah!</h2>
-                <p className="text-red-100">Your trainer: John Doe - Certified Personal Trainer</p>
-                <p className="text-red-100 text-sm mt-1">Member since December 2023</p>
+                <p className="text-red-100">
+                  Your trainer: John Doe - Certified Personal Trainer
+                </p>
+                <p className="text-red-100 text-sm mt-1">
+                  Member since December 2023
+                </p>
               </div>
             </div>
           </CardContent>
@@ -78,7 +125,9 @@ export default function ClientDashboard() {
                   <Calendar className="h-5 w-5 text-red-600" />
                   <span>Upcoming Sessions</span>
                 </CardTitle>
-                <CardDescription>Your scheduled training sessions</CardDescription>
+                <CardDescription>
+                  Your scheduled training sessions
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
@@ -89,16 +138,25 @@ export default function ClientDashboard() {
                     >
                       <div className="flex items-center space-x-4">
                         <div className="text-center">
-                          <p className="font-medium text-red-600">{session.time}</p>
-                          <p className="text-sm text-gray-500">{session.date}</p>
+                          <p className="font-medium text-red-600">
+                            {session.time}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {session.date}
+                          </p>
                         </div>
                         <div>
                           <p className="font-medium">{session.type}</p>
-                          <p className="text-sm text-gray-500">with {session.trainer}</p>
+                          <p className="text-sm text-gray-500">
+                            with {session.trainer}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <Badge variant="default" className="bg-green-100 text-green-800">
+                        <Badge
+                          variant="default"
+                          className="bg-green-100 text-green-800"
+                        >
                           Confirmed
                         </Badge>
                         <Button size="sm" variant="outline">
@@ -131,9 +189,14 @@ export default function ClientDashboard() {
               <CardContent>
                 <div className="space-y-4">
                   {mockPaymentHistory.map((payment) => (
-                    <div key={payment.id} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div
+                      key={payment.id}
+                      className="flex items-center justify-between p-3 border rounded-lg"
+                    >
                       <div>
-                        <p className="font-medium">{payment.sessions} Training Sessions</p>
+                        <p className="font-medium">
+                          {payment.sessions} Training Sessions
+                        </p>
                         <p className="text-sm text-gray-500">{payment.date}</p>
                       </div>
                       <div className="text-right">
@@ -226,11 +289,17 @@ export default function ClientDashboard() {
                 <div className="flex items-start space-x-3">
                   <AlertCircle className="h-5 w-5 text-orange-600 mt-0.5" />
                   <div>
-                    <p className="font-medium text-orange-800">Payment Reminder</p>
-                    <p className="text-sm text-orange-700 mt-1">
-                      Your current package expires in 45 days. Consider renewing to avoid interruption.
+                    <p className="font-medium text-orange-800">
+                      Payment Reminder
                     </p>
-                    <Button size="sm" className="mt-3 bg-orange-600 hover:bg-orange-700">
+                    <p className="text-sm text-orange-700 mt-1">
+                      Your current package expires in 45 days. Consider renewing
+                      to avoid interruption.
+                    </p>
+                    <Button
+                      size="sm"
+                      className="mt-3 bg-orange-600 hover:bg-orange-700"
+                    >
                       Renew Now
                     </Button>
                   </div>
@@ -241,5 +310,5 @@ export default function ClientDashboard() {
         </div>
       </main>
     </div>
-  )
+  );
 }
