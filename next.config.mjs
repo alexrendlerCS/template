@@ -18,10 +18,11 @@ const nextConfig = {
   experimental: {
     esmExternals: true,
   },
-  webpack: (config, { isServer }) => {
+  webpack: (config) => {
+    config.resolve = config.resolve || {};
     config.resolve.alias = {
       ...config.resolve.alias,
-      "@": path.resolve(__dirname),
+      "@": path.join(__dirname),
     };
     return config;
   },
