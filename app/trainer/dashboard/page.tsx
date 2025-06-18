@@ -1,14 +1,30 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
-import { TrainerSidebar } from "@/components/trainer-sidebar"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Calendar, Search, DollarSign, Users, Clock, CheckCircle, QrCode, CreditCard } from "lucide-react"
+import { useState } from "react";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { TrainerSidebar } from "@/components/trainer-sidebar";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Calendar,
+  Search,
+  DollarSign,
+  Users,
+  Clock,
+  CheckCircle,
+  QrCode,
+  CreditCard,
+  BarChart3,
+} from "lucide-react";
 
 const mockClients = [
   {
@@ -19,9 +35,23 @@ const mockClients = [
     nextSession: "2024-01-15 10:00",
     status: "active",
   },
-  { id: 2, name: "Mike Chen", email: "mike@email.com", sessions: 3, nextSession: "2024-01-16 14:00", status: "active" },
-  { id: 3, name: "Emma Davis", email: "emma@email.com", sessions: 0, nextSession: null, status: "payment_due" },
-]
+  {
+    id: 2,
+    name: "Mike Chen",
+    email: "mike@email.com",
+    sessions: 3,
+    nextSession: "2024-01-16 14:00",
+    status: "active",
+  },
+  {
+    id: 3,
+    name: "Emma Davis",
+    email: "emma@email.com",
+    sessions: 0,
+    nextSession: null,
+    status: "payment_due",
+  },
+];
 
 const mockSessions = [
   {
@@ -32,7 +62,14 @@ const mockSessions = [
     type: "Personal Training",
     status: "scheduled",
   },
-  { id: 2, client: "Mike Chen", time: "2:00 PM", date: "2024-01-16", type: "Strength Training", status: "scheduled" },
+  {
+    id: 2,
+    client: "Mike Chen",
+    time: "2:00 PM",
+    date: "2024-01-16",
+    type: "Strength Training",
+    status: "scheduled",
+  },
   {
     id: 3,
     client: "Emma Davis",
@@ -41,21 +78,35 @@ const mockSessions = [
     type: "Cardio Session",
     status: "pending_payment",
   },
-]
+];
 
 const mockPayments = [
-  { id: 1, client: "Sarah Johnson", amount: 240, date: "2024-01-10", sessions: 4, status: "completed" },
-  { id: 2, client: "Mike Chen", amount: 180, date: "2024-01-12", sessions: 3, status: "completed" },
-]
+  {
+    id: 1,
+    client: "Sarah Johnson",
+    amount: 240,
+    date: "2024-01-10",
+    sessions: 4,
+    status: "completed",
+  },
+  {
+    id: 2,
+    client: "Mike Chen",
+    amount: 180,
+    date: "2024-01-12",
+    sessions: 3,
+    status: "completed",
+  },
+];
 
 export default function TrainerDashboard() {
-  const [searchTerm, setSearchTerm] = useState("")
+  const [searchTerm, setSearchTerm] = useState("");
 
   const filteredClients = mockClients.filter(
     (client) =>
       client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.email.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
+      client.email.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <SidebarProvider>
@@ -66,12 +117,16 @@ export default function TrainerDashboard() {
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <SidebarTrigger />
-                <h1 className="text-2xl font-bold text-gray-900">Trainer Dashboard</h1>
+                <h1 className="text-2xl font-bold text-gray-900">
+                  Trainer Dashboard
+                </h1>
               </div>
               <div className="flex items-center space-x-4">
                 <Avatar>
                   <AvatarImage src="/placeholder.svg?height=40&width=40" />
-                  <AvatarFallback className="bg-red-600 text-white">JD</AvatarFallback>
+                  <AvatarFallback className="bg-red-600 text-white">
+                    JD
+                  </AvatarFallback>
                 </Avatar>
                 <div>
                   <p className="font-medium text-gray-900">John Doe</p>
@@ -83,40 +138,68 @@ export default function TrainerDashboard() {
 
           <main className="p-6 space-y-6">
             {/* Stats Overview */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Clients</CardTitle>
+                  <CardTitle className="text-sm font-medium">
+                    Total Clients
+                  </CardTitle>
                   <Users className="h-4 w-4 text-red-600" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">12</div>
-                  <p className="text-xs text-muted-foreground">+2 from last month</p>
+                  <p className="text-xs text-muted-foreground">
+                    +2 from last month
+                  </p>
                 </CardContent>
               </Card>
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Today's Sessions</CardTitle>
+                  <CardTitle className="text-sm font-medium">
+                    Today's Sessions
+                  </CardTitle>
                   <Clock className="h-4 w-4 text-red-600" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">5</div>
-                  <p className="text-xs text-muted-foreground">3 completed, 2 upcoming</p>
+                  <p className="text-xs text-muted-foreground">
+                    3 completed, 2 upcoming
+                  </p>
                 </CardContent>
               </Card>
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Monthly Revenue</CardTitle>
+                  <CardTitle className="text-sm font-medium">
+                    Monthly Sessions
+                  </CardTitle>
+                  <BarChart3 className="h-4 w-4 text-red-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">18</div>
+                  <p className="text-xs text-muted-foreground">
+                    +3 from last month
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">
+                    Monthly Revenue
+                  </CardTitle>
                   <DollarSign className="h-4 w-4 text-red-600" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">$3,240</div>
-                  <p className="text-xs text-muted-foreground">+12% from last month</p>
+                  <p className="text-xs text-muted-foreground">
+                    +12% from last month
+                  </p>
                 </CardContent>
               </Card>
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Pending Payments</CardTitle>
+                  <CardTitle className="text-sm font-medium">
+                    Pending Payments
+                  </CardTitle>
                   <CreditCard className="h-4 w-4 text-red-600" />
                 </CardHeader>
                 <CardContent>
@@ -133,28 +216,48 @@ export default function TrainerDashboard() {
                   <Calendar className="h-5 w-5 text-red-600" />
                   <span>Today's Schedule</span>
                 </CardTitle>
-                <CardDescription>Manage your sessions for today</CardDescription>
+                <CardDescription>
+                  Manage your sessions for today
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   {mockSessions.map((session) => (
-                    <div key={session.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div
+                      key={session.id}
+                      className="flex items-center justify-between p-4 border rounded-lg"
+                    >
                       <div className="flex items-center space-x-4">
                         <div className="text-center">
                           <p className="font-medium">{session.time}</p>
-                          <p className="text-sm text-gray-500">{session.date}</p>
+                          <p className="text-sm text-gray-500">
+                            {session.date}
+                          </p>
                         </div>
                         <div>
                           <p className="font-medium">{session.client}</p>
-                          <p className="text-sm text-gray-500">{session.type}</p>
+                          <p className="text-sm text-gray-500">
+                            {session.type}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <Badge variant={session.status === "scheduled" ? "default" : "destructive"}>
-                          {session.status === "scheduled" ? "Scheduled" : "Payment Due"}
+                        <Badge
+                          variant={
+                            session.status === "scheduled"
+                              ? "default"
+                              : "destructive"
+                          }
+                        >
+                          {session.status === "scheduled"
+                            ? "Scheduled"
+                            : "Payment Due"}
                         </Badge>
                         {session.status === "scheduled" && (
-                          <Button size="sm" className="bg-green-600 hover:bg-green-700">
+                          <Button
+                            size="sm"
+                            className="bg-green-600 hover:bg-green-700"
+                          >
                             <CheckCircle className="h-4 w-4 mr-1" />
                             Complete
                           </Button>
@@ -174,7 +277,9 @@ export default function TrainerDashboard() {
                     <Users className="h-5 w-5 text-red-600" />
                     <span>Client Management</span>
                   </CardTitle>
-                  <CardDescription>Search and manage your clients</CardDescription>
+                  <CardDescription>
+                    Search and manage your clients
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
@@ -189,15 +294,30 @@ export default function TrainerDashboard() {
                     </div>
                     <div className="space-y-3">
                       {filteredClients.map((client) => (
-                        <div key={client.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div
+                          key={client.id}
+                          className="flex items-center justify-between p-3 border rounded-lg"
+                        >
                           <div>
                             <p className="font-medium">{client.name}</p>
-                            <p className="text-sm text-gray-500">{client.email}</p>
-                            <p className="text-sm text-gray-500">{client.sessions} sessions remaining</p>
+                            <p className="text-sm text-gray-500">
+                              {client.email}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              {client.sessions} sessions remaining
+                            </p>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <Badge variant={client.status === "active" ? "default" : "destructive"}>
-                              {client.status === "active" ? "Active" : "Payment Due"}
+                            <Badge
+                              variant={
+                                client.status === "active"
+                                  ? "default"
+                                  : "destructive"
+                              }
+                            >
+                              {client.status === "active"
+                                ? "Active"
+                                : "Payment Due"}
                             </Badge>
                             {client.status === "payment_due" && (
                               <Button size="sm" variant="outline">
@@ -220,20 +340,34 @@ export default function TrainerDashboard() {
                     <DollarSign className="h-5 w-5 text-red-600" />
                     <span>Recent Payments</span>
                   </CardTitle>
-                  <CardDescription>Track your recent transactions</CardDescription>
+                  <CardDescription>
+                    Track your recent transactions
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
                     {mockPayments.map((payment) => (
-                      <div key={payment.id} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div
+                        key={payment.id}
+                        className="flex items-center justify-between p-3 border rounded-lg"
+                      >
                         <div>
                           <p className="font-medium">{payment.client}</p>
-                          <p className="text-sm text-gray-500">{payment.sessions} sessions</p>
-                          <p className="text-sm text-gray-500">{payment.date}</p>
+                          <p className="text-sm text-gray-500">
+                            {payment.sessions} sessions
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {payment.date}
+                          </p>
                         </div>
                         <div className="text-right">
-                          <p className="font-bold text-green-600">${payment.amount}</p>
-                          <Badge variant="default" className="bg-green-100 text-green-800">
+                          <p className="font-bold text-green-600">
+                            ${payment.amount}
+                          </p>
+                          <Badge
+                            variant="default"
+                            className="bg-green-100 text-green-800"
+                          >
                             Completed
                           </Badge>
                         </div>
@@ -250,5 +384,5 @@ export default function TrainerDashboard() {
         </div>
       </div>
     </SidebarProvider>
-  )
+  );
 }
