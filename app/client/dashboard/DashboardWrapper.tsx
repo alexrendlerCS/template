@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { GoogleCalendarPopup } from "@/components/GoogleCalendarPopup";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createClient } from "@/lib/supabaseClient";
 
 export function DashboardWrapper({ children }: { children: React.ReactNode }) {
   const [showPopup, setShowPopup] = useState(false);
-  const supabase = createClientComponentClient();
+  const supabase = createClient();
 
   useEffect(() => {
     const checkCalendarStatus = async () => {

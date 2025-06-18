@@ -1,4 +1,4 @@
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { createClient } from "@/lib/supabase-server";
 import { cookies } from "next/headers";
 
 export async function GET(request: Request) {
@@ -126,7 +126,7 @@ export async function GET(request: Request) {
     const tokens = await tokenResponse.json();
 
     // Get current user
-    const supabase = createRouteHandlerClient({ cookies });
+    const supabase = createClient();
     const {
       data: { user },
       error: userError,

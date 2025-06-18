@@ -1,4 +1,4 @@
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { createClient } from "@/lib/supabase-server";
 import { cookies } from "next/headers";
 import { Database } from "@/lib/database.types";
 
@@ -17,9 +17,7 @@ export async function POST(req: Request) {
 
     // Create a Supabase client with cookie handling
     const cookieStore = cookies();
-    const supabase = createRouteHandlerClient<Database>({
-      cookies: () => cookieStore,
-    });
+    const supabase = createClient();
 
     console.log("[LOGIN] Attempting signInWithPassword", { email });
     const { data: authData, error: authError } =

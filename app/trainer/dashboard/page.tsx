@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { ContractModal } from "@/components/ContractModal";
 import { GoogleCalendarPopup } from "@/components/GoogleCalendarPopup";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createClient } from "@/lib/supabaseClient";
 
 const mockClients = [
   {
@@ -116,7 +116,7 @@ export default function TrainerDashboard() {
     contractAccepted: false,
     googleConnected: false,
   });
-  const supabase = createClientComponentClient();
+  const supabase = createClient();
 
   useEffect(() => {
     async function checkUserStatus() {

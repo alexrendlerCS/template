@@ -25,7 +25,7 @@ import { DashboardWrapper } from "./DashboardWrapper";
 import { useEffect, useState } from "react";
 import { ContractModal } from "@/components/ContractModal";
 import { GoogleCalendarPopup } from "@/components/GoogleCalendarPopup";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createClient } from "@/lib/supabaseClient";
 
 const mockUpcomingSessions = [
   {
@@ -70,7 +70,7 @@ export default function ClientDashboard() {
     contractAccepted: false,
     googleConnected: false,
   });
-  const supabase = createClientComponentClient();
+  const supabase = createClient();
 
   useEffect(() => {
     async function checkUserStatus() {
