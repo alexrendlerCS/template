@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import {
   Calendar as CalendarIcon,
   List,
@@ -18,9 +19,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  Menu,
 } from "lucide-react";
 import Link from "next/link";
-import { ClientNavigation } from "@/components/client-navigation";
 
 interface GoogleEvent {
   id: string;
@@ -178,70 +179,79 @@ export default function ClientCalendarPage() {
 
   if (!isGoogleConnected) {
     return (
-      <div className="min-h-screen bg-gray-50 p-8">
-        <Card className="max-w-2xl mx-auto">
-          <CardHeader>
-            <CardTitle>Connect Google Calendar</CardTitle>
-            <CardDescription>
-              To view your training sessions, please connect your Google
-              Calendar account.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/client/dashboard">
-              <Button className="bg-red-600 hover:bg-red-700">
-                Go to Dashboard to Connect
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-gray-50">
+        <div className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
+          <SidebarTrigger>
+            <Button variant="ghost" size="icon" className="md:hidden">
+              <Menu className="h-6 w-6" />
+              <span className="sr-only">Toggle sidebar</span>
+            </Button>
+          </SidebarTrigger>
+        </div>
+        <div className="p-8">
+          <Card className="max-w-2xl mx-auto">
+            <CardHeader>
+              <CardTitle>Connect Google Calendar</CardTitle>
+              <CardDescription>
+                To view your training sessions, please connect your Google
+                Calendar account.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link href="/client/dashboard">
+                <Button className="bg-red-600 hover:bg-red-700">
+                  Go to Dashboard to Connect
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-4">
-              <ClientNavigation />
-              <Link href="/client/dashboard">
-                <Button variant="ghost" size="sm">
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back to Dashboard
-                </Button>
-              </Link>
-              <h1 className="text-xl font-bold text-gray-900">My Calendar</h1>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Button
-                variant={viewMode === "calendar" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setViewMode("calendar")}
-                className={
-                  viewMode === "calendar" ? "bg-red-600 hover:bg-red-700" : ""
-                }
-              >
-                <CalendarIcon className="h-4 w-4 mr-2" />
-                Calendar
-              </Button>
-              <Button
-                variant={viewMode === "list" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setViewMode("list")}
-                className={
-                  viewMode === "list" ? "bg-red-600 hover:bg-red-700" : ""
-                }
-              >
-                <List className="h-4 w-4 mr-2" />
-                List
-              </Button>
-            </div>
+      <div className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
+        <SidebarTrigger>
+          <Button variant="ghost" size="icon" className="md:hidden">
+            <Menu className="h-6 w-6" />
+            <span className="sr-only">Toggle sidebar</span>
+          </Button>
+        </SidebarTrigger>
+        <div className="flex items-center justify-between w-full">
+          <Link href="/client/dashboard">
+            <Button variant="ghost" size="sm">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Dashboard
+            </Button>
+          </Link>
+          <div className="flex items-center space-x-2">
+            <Button
+              variant={viewMode === "calendar" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setViewMode("calendar")}
+              className={
+                viewMode === "calendar" ? "bg-red-600 hover:bg-red-700" : ""
+              }
+            >
+              <CalendarIcon className="h-4 w-4 mr-2" />
+              Calendar
+            </Button>
+            <Button
+              variant={viewMode === "list" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setViewMode("list")}
+              className={
+                viewMode === "list" ? "bg-red-600 hover:bg-red-700" : ""
+              }
+            >
+              <List className="h-4 w-4 mr-2" />
+              List
+            </Button>
           </div>
         </div>
-      </header>
+      </div>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Calendar View */}

@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import {
   Calendar,
   CreditCard,
@@ -17,9 +18,9 @@ import {
   User,
   CheckCircle,
   AlertCircle,
+  Menu,
 } from "lucide-react";
 import Link from "next/link";
-import { ClientNavigation } from "@/components/client-navigation";
 import Image from "next/image";
 import { DashboardWrapper } from "./DashboardWrapper";
 import { useEffect, useState } from "react";
@@ -151,42 +152,14 @@ export default function ClientDashboard() {
   return (
     <DashboardWrapper>
       <div className="min-h-screen bg-gray-50">
-        {/* Header */}
-        <header className="bg-white border-b">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between h-16">
-              <div className="flex items-center space-x-4">
-                <ClientNavigation />
-                <div className="flex items-center space-x-3">
-                  <Image
-                    src="/logo.jpg"
-                    alt="Fitness Trainer Logo"
-                    width={40}
-                    height={40}
-                    className="rounded-full shadow"
-                    priority
-                  />
-                  <h1 className="text-xl font-bold text-gray-900">
-                    Fitness Trainer
-                  </h1>
-                </div>
-              </div>
-              <div className="flex items-center space-x-4">
-                <Avatar>
-                  <AvatarImage src="/placeholder.svg?height=40&width=40" />
-                  <AvatarFallback className="bg-gray-600 text-white">
-                    SJ
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-medium text-gray-900">Sarah Johnson</p>
-                  <p className="text-sm text-gray-500">Client</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </header>
-
+        <div className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
+          <SidebarTrigger>
+            <Button variant="ghost" size="icon" className="md:hidden">
+              <Menu className="h-6 w-6" />
+              <span className="sr-only">Toggle sidebar</span>
+            </Button>
+          </SidebarTrigger>
+        </div>
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Welcome Banner */}
           <Card className="mb-8 bg-gradient-to-r from-red-600 to-red-700 text-white border-0">
@@ -201,10 +174,8 @@ export default function ClientDashboard() {
                 <div>
                   <h2 className="text-2xl font-bold">Welcome back, Sarah!</h2>
                   <p className="text-red-100">
-                    Your trainer: John Doe - Certified Personal Trainer
-                  </p>
-                  <p className="text-red-100 text-sm mt-1">
-                    Member since December 2023
+                    Your next training session is scheduled for tomorrow at
+                    10:00 AM
                   </p>
                 </div>
               </div>
@@ -411,9 +382,7 @@ export default function ClientDashboard() {
         {showContractModal && (
           <ContractModal
             onAccept={handleContractAccepted}
-            onOpenChange={(open: boolean) => {
-              setShowContractModal(open);
-            }}
+            onOpenChange={(open: boolean) => setShowContractModal(open)}
           />
         )}
       </div>

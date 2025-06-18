@@ -1,12 +1,18 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Calendar, Clock, ArrowLeft, CheckCircle } from "lucide-react"
-import Link from "next/link"
-import { ClientNavigation } from "@/components/client-navigation"
+import { useState } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { SidebarTrigger } from "@/components/ui/sidebar";
+import { Calendar, Clock, ArrowLeft, CheckCircle, Menu } from "lucide-react";
+import Link from "next/link";
 
 const mockAvailableSlots = [
   { date: "2024-01-15", slots: ["9:00 AM", "10:00 AM", "2:00 PM", "4:00 PM"] },
@@ -14,44 +20,68 @@ const mockAvailableSlots = [
   { date: "2024-01-17", slots: ["9:00 AM", "1:00 PM", "2:00 PM", "5:00 PM"] },
   { date: "2024-01-18", slots: ["8:00 AM", "10:00 AM", "3:00 PM"] },
   { date: "2024-01-19", slots: ["9:00 AM", "11:00 AM", "2:00 PM", "4:00 PM"] },
-]
+];
 
 const sessionTypes = [
-  { id: "personal", name: "Personal Training", duration: "60 min", description: "One-on-one focused training" },
-  { id: "strength", name: "Strength Training", duration: "45 min", description: "Build muscle and power" },
-  { id: "cardio", name: "Cardio Session", duration: "30 min", description: "Improve cardiovascular health" },
-  { id: "flexibility", name: "Flexibility & Mobility", duration: "45 min", description: "Enhance range of motion" },
-]
+  {
+    id: "personal",
+    name: "Personal Training",
+    duration: "60 min",
+    description: "One-on-one focused training",
+  },
+  {
+    id: "strength",
+    name: "Strength Training",
+    duration: "45 min",
+    description: "Build muscle and power",
+  },
+  {
+    id: "cardio",
+    name: "Cardio Session",
+    duration: "30 min",
+    description: "Improve cardiovascular health",
+  },
+  {
+    id: "flexibility",
+    name: "Flexibility & Mobility",
+    duration: "45 min",
+    description: "Enhance range of motion",
+  },
+];
 
 export default function BookingPage() {
-  const [selectedType, setSelectedType] = useState("")
-  const [selectedDate, setSelectedDate] = useState("")
-  const [selectedTime, setSelectedTime] = useState("")
+  const [selectedType, setSelectedType] = useState("");
+  const [selectedDate, setSelectedDate] = useState("");
+  const [selectedTime, setSelectedTime] = useState("");
 
   const handleBooking = () => {
     // Mock booking logic
-    alert(`Session booked: ${selectedType} on ${selectedDate} at ${selectedTime}`)
-  }
+    alert(
+      `Session booked: ${selectedType} on ${selectedDate} at ${selectedTime}`
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-4">
-              <ClientNavigation />
-              <Link href="/client/dashboard">
-                <Button variant="ghost" size="sm">
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back to Dashboard
-                </Button>
-              </Link>
-              <h1 className="text-xl font-bold text-gray-900">Book a Session</h1>
-            </div>
+      <div className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
+        <SidebarTrigger>
+          <Button variant="ghost" size="icon" className="md:hidden">
+            <Menu className="h-6 w-6" />
+            <span className="sr-only">Toggle sidebar</span>
+          </Button>
+        </SidebarTrigger>
+        <div className="flex items-center justify-between w-full">
+          <div className="flex items-center space-x-4">
+            <Link href="/client/dashboard">
+              <Button variant="ghost" size="sm">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Dashboard
+              </Button>
+            </Link>
+            <h1 className="text-xl font-bold text-gray-900">Book a Session</h1>
           </div>
         </div>
-      </header>
+      </div>
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-8">
@@ -64,7 +94,9 @@ export default function BookingPage() {
                 </span>
                 <span>Choose Session Type</span>
               </CardTitle>
-              <CardDescription>Select the type of training session you'd like to book</CardDescription>
+              <CardDescription>
+                Select the type of training session you'd like to book
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -72,7 +104,9 @@ export default function BookingPage() {
                   <div
                     key={type.id}
                     className={`p-4 border rounded-lg cursor-pointer transition-all ${
-                      selectedType === type.id ? "border-red-600 bg-red-50" : "border-gray-200 hover:border-gray-300"
+                      selectedType === type.id
+                        ? "border-red-600 bg-red-50"
+                        : "border-gray-200 hover:border-gray-300"
                     }`}
                     onClick={() => setSelectedType(type.id)}
                   >
@@ -81,7 +115,9 @@ export default function BookingPage() {
                       <Badge variant="outline">{type.duration}</Badge>
                     </div>
                     <p className="text-sm text-gray-600">{type.description}</p>
-                    {selectedType === type.id && <CheckCircle className="h-5 w-5 text-red-600 mt-2" />}
+                    {selectedType === type.id && (
+                      <CheckCircle className="h-5 w-5 text-red-600 mt-2" />
+                    )}
                   </div>
                 ))}
               </div>
@@ -89,19 +125,25 @@ export default function BookingPage() {
           </Card>
 
           {/* Date Selection */}
-          <Card className={selectedType ? "" : "opacity-50 pointer-events-none"}>
+          <Card
+            className={selectedType ? "" : "opacity-50 pointer-events-none"}
+          >
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <span
                   className={`rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold ${
-                    selectedType ? "bg-red-600 text-white" : "bg-gray-300 text-gray-600"
+                    selectedType
+                      ? "bg-red-600 text-white"
+                      : "bg-gray-300 text-gray-600"
                   }`}
                 >
                   2
                 </span>
                 <span>Select Date & Time</span>
               </CardTitle>
-              <CardDescription>Choose your preferred date and time slot</CardDescription>
+              <CardDescription>
+                Choose your preferred date and time slot
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-6">
@@ -122,13 +164,19 @@ export default function BookingPage() {
                       {day.slots.map((time) => (
                         <Button
                           key={`${day.date}-${time}`}
-                          variant={selectedDate === day.date && selectedTime === time ? "default" : "outline"}
+                          variant={
+                            selectedDate === day.date && selectedTime === time
+                              ? "default"
+                              : "outline"
+                          }
                           className={`${
-                            selectedDate === day.date && selectedTime === time ? "bg-red-600 hover:bg-red-700" : ""
+                            selectedDate === day.date && selectedTime === time
+                              ? "bg-red-600 hover:bg-red-700"
+                              : ""
                           }`}
                           onClick={() => {
-                            setSelectedDate(day.date)
-                            setSelectedTime(time)
+                            setSelectedDate(day.date);
+                            setSelectedTime(time);
                           }}
                         >
                           <Clock className="h-4 w-4 mr-2" />
@@ -143,12 +191,20 @@ export default function BookingPage() {
           </Card>
 
           {/* Booking Summary */}
-          <Card className={selectedType && selectedDate && selectedTime ? "" : "opacity-50 pointer-events-none"}>
+          <Card
+            className={
+              selectedType && selectedDate && selectedTime
+                ? ""
+                : "opacity-50 pointer-events-none"
+            }
+          >
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <span
                   className={`rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold ${
-                    selectedType && selectedDate && selectedTime ? "bg-red-600 text-white" : "bg-gray-300 text-gray-600"
+                    selectedType && selectedDate && selectedTime
+                      ? "bg-red-600 text-white"
+                      : "bg-gray-300 text-gray-600"
                   }`}
                 >
                   3
@@ -165,11 +221,21 @@ export default function BookingPage() {
                     <div className="space-y-2">
                       <div className="flex justify-between">
                         <span className="text-gray-600">Session Type:</span>
-                        <span className="font-medium">{sessionTypes.find((t) => t.id === selectedType)?.name}</span>
+                        <span className="font-medium">
+                          {
+                            sessionTypes.find((t) => t.id === selectedType)
+                              ?.name
+                          }
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Duration:</span>
-                        <span className="font-medium">{sessionTypes.find((t) => t.id === selectedType)?.duration}</span>
+                        <span className="font-medium">
+                          {
+                            sessionTypes.find((t) => t.id === selectedType)
+                              ?.duration
+                          }
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Date:</span>
@@ -195,12 +261,16 @@ export default function BookingPage() {
 
                   <div className="bg-blue-50 p-4 rounded-lg">
                     <p className="text-sm text-blue-800">
-                      <strong>Note:</strong> This session will use 1 credit from your current package. You have 8
-                      sessions remaining.
+                      <strong>Note:</strong> This session will use 1 credit from
+                      your current package. You have 8 sessions remaining.
                     </p>
                   </div>
 
-                  <Button onClick={handleBooking} className="w-full bg-red-600 hover:bg-red-700" size="lg">
+                  <Button
+                    onClick={handleBooking}
+                    className="w-full bg-red-600 hover:bg-red-700"
+                    size="lg"
+                  >
                     Confirm Booking
                   </Button>
                 </div>
@@ -212,9 +282,12 @@ export default function BookingPage() {
           <Card className="border-dashed border-2 border-gray-300">
             <CardContent className="p-6 text-center">
               <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="font-medium text-gray-900 mb-2">Google Calendar Integration</h3>
+              <h3 className="font-medium text-gray-900 mb-2">
+                Google Calendar Integration
+              </h3>
               <p className="text-gray-600 mb-4">
-                Connect your Google Calendar to automatically sync your training sessions
+                Connect your Google Calendar to automatically sync your training
+                sessions
               </p>
               <Button variant="outline" disabled>
                 Connect Google Calendar (Coming Soon)
@@ -224,5 +297,5 @@ export default function BookingPage() {
         </div>
       </main>
     </div>
-  )
+  );
 }
