@@ -2,31 +2,203 @@
 
 import type React from "react";
 import Image from "next/image";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
+  CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dumbbell, Mail, Lock, User } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Loader2 } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
+
+interface FormData {
+  email: string;
+  password: string;
+  full_name: string;
+}
 
 export default function LoginPage() {
+  const router = useRouter();
+  const { toast } = useToast();
   const [isLogin, setIsLogin] = useState(true);
   const [userType, setUserType] = useState<"trainer" | "client">("client");
+  const [formData, setFormData] = useState<FormData>({
+    email: "",
+    password: "",
+    full_name: "",
+  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<{
+    type: "success" | "error" | null;
+    message: string;
+  }>({ type: null, message: "" });
+  const [loginData, setLoginData] = useState({ email: "", password: "" });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Mock login - redirect based on user type
-    if (userType === "trainer") {
-      window.location.href = "/trainer/dashboard";
-    } else {
-      window.location.href = "/client/dashboard";
+    setIsLoading(true);
+    setStatusMessage({ type: null, message: "" });
+    try {
+      console.log("[LOGIN FORM] Attempting login", {
+        email: loginData.email,
+        userType,
+      });
+
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: loginData.email,
+          password: loginData.password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        const errorMessage = data.error || "Login failed";
+        throw new Error(errorMessage);
+      }
+
+      // Check if user's role matches selected type
+      const userRole = data.user.role?.toLowerCase();
+      if (userRole !== userType) {
+        throw new Error(
+          `This account is registered as a ${userRole}. Please select the correct account type and try again.`
+        );
+      }
+
+      // Show success toast and set status
+      toast({
+        title: "Welcome back! 👋",
+        description: "Successfully logged in to your account",
+        duration: 5000,
+      });
+
+      // Set success status and prepare for redirect
+      setStatusMessage({
+        type: "success",
+        message: "Login successful! Redirecting...",
+      });
+
+      // Delay redirect slightly to ensure toast is visible
+      setTimeout(() => {
+        if (userType === "trainer") {
+          router.push("/trainer/dashboard");
+        } else {
+          router.push("/client/dashboard");
+        }
+      }, 1000);
+    } catch (error: any) {
+      console.log("[LOGIN FORM] Login error", error);
+
+      // Only show error toast for user-facing errors
+      if (
+        !error.message.includes("cookies()") &&
+        !error.message.includes("dynamic-apis")
+      ) {
+        setStatusMessage({ type: "error", message: error.message });
+
+        let errorTitle = "Login Failed";
+        // Determine more specific error title based on the error message
+        if (error.message.includes("registered as a")) {
+          errorTitle = "Incorrect Account Type";
+        } else if (error.message.includes("Invalid login credentials")) {
+          errorTitle = "Invalid Credentials";
+        } else if (error.message.includes("Email not confirmed")) {
+          errorTitle = "Email Not Verified";
+        } else if (error.message.toLowerCase().includes("password")) {
+          errorTitle = "Password Error";
+        } else if (error.message.toLowerCase().includes("email")) {
+          errorTitle = "Email Error";
+        }
+
+        toast({
+          title: errorTitle,
+          description: error.message,
+          variant: "destructive",
+          duration: 5000,
+        });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setStatusMessage({ type: null, message: "" });
+
+    try {
+      const response = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...formData,
+          role: userType,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to create account");
+      }
+
+      setStatusMessage({
+        type: "success",
+        message:
+          "Account created successfully! Please check your email to confirm.",
+      });
+
+      // Clear form
+      setFormData({
+        email: "",
+        password: "",
+        full_name: "",
+      });
+    } catch (error: any) {
+      let friendlyMessage = error.message;
+
+      if (error.message.includes("User already registered")) {
+        friendlyMessage =
+          "An account with this email already exists. Please log in or use a different email.";
+      } else if (
+        error.message.includes("Password should be at least 6 characters")
+      ) {
+        friendlyMessage = "Password must be at least 6 characters long.";
+      } else if (error.message.includes("Invalid email")) {
+        friendlyMessage = "Please enter a valid email address.";
+      }
+
+      setStatusMessage({
+        type: "error",
+        message: friendlyMessage,
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -96,17 +268,25 @@ export default function LoginPage() {
             </div>
 
             <TabsContent value="login">
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
                       id="email"
+                      name="email"
                       type="email"
                       placeholder="Enter your email"
                       className="pl-10"
                       required
+                      value={loginData.email}
+                      onChange={(e) =>
+                        setLoginData((prev) => ({
+                          ...prev,
+                          email: e.target.value,
+                        }))
+                      }
                     />
                   </div>
                 </div>
@@ -116,70 +296,101 @@ export default function LoginPage() {
                     <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
                       id="password"
+                      name="password"
                       type="password"
                       placeholder="Enter your password"
                       className="pl-10"
                       required
+                      value={loginData.password}
+                      onChange={(e) =>
+                        setLoginData((prev) => ({
+                          ...prev,
+                          password: e.target.value,
+                        }))
+                      }
                     />
                   </div>
                 </div>
                 <Button
                   type="submit"
                   className="w-full bg-red-600 hover:bg-red-700"
+                  disabled={isLoading}
                 >
-                  Sign In as {userType === "trainer" ? "Trainer" : "Client"}
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Signing in...
+                    </>
+                  ) : (
+                    `Sign In as ${
+                      userType === "trainer" ? "Trainer" : "Client"
+                    }`
+                  )}
                 </Button>
               </form>
             </TabsContent>
 
             <TabsContent value="signup">
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Full Name</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <Input
-                      id="name"
-                      type="text"
-                      placeholder="Enter your full name"
-                      className="pl-10"
-                      required
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-email">Email</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <Input
-                      id="signup-email"
-                      type="email"
-                      placeholder="Enter your email"
-                      className="pl-10"
-                      required
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-password">Password</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <Input
-                      id="signup-password"
-                      type="password"
-                      placeholder="Create a password"
-                      className="pl-10"
-                      required
-                    />
-                  </div>
-                </div>
-                <Button
-                  type="submit"
-                  className="w-full bg-red-600 hover:bg-red-700"
-                >
-                  Create {userType === "trainer" ? "Trainer" : "Client"} Account
-                </Button>
-              </form>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Create Account</CardTitle>
+                  <CardDescription>Sign up for a new account</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleSignup}>
+                    <div className="grid w-full items-center gap-4">
+                      <div className="flex flex-col space-y-1.5">
+                        <Label htmlFor="full_name">Full Name</Label>
+                        <Input
+                          id="full_name"
+                          name="full_name"
+                          value={formData.full_name}
+                          onChange={handleInputChange}
+                          placeholder="Enter your full name"
+                          required
+                        />
+                      </div>
+                      <div className="flex flex-col space-y-1.5">
+                        <Label htmlFor="email">Email</Label>
+                        <Input
+                          id="email"
+                          name="email"
+                          type="email"
+                          value={formData.email}
+                          onChange={handleInputChange}
+                          placeholder="Enter your email"
+                          required
+                        />
+                      </div>
+                      <div className="flex flex-col space-y-1.5">
+                        <Label htmlFor="password">Password</Label>
+                        <Input
+                          id="password"
+                          name="password"
+                          type="password"
+                          value={formData.password}
+                          onChange={handleInputChange}
+                          placeholder="Create a password"
+                          required
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Password must be at least 6 characters long.
+                        </p>
+                      </div>
+                      <Button type="submit" disabled={isLoading}>
+                        {isLoading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Creating account...
+                          </>
+                        ) : (
+                          "Create Account"
+                        )}
+                      </Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
             </TabsContent>
           </Tabs>
 
@@ -196,6 +407,33 @@ export default function LoginPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Status Dialog */}
+      <Dialog
+        open={statusMessage.type !== null}
+        onOpenChange={() => setStatusMessage({ type: null, message: "" })}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {statusMessage.type === "success" && isLogin
+                ? "Welcome Back!"
+                : statusMessage.type === "success"
+                ? "Account Created!"
+                : "Error"}
+            </DialogTitle>
+            <DialogDescription>{statusMessage.message}</DialogDescription>
+          </DialogHeader>
+          {statusMessage.type === "error" && (
+            <Button
+              onClick={() => setStatusMessage({ type: null, message: "" })}
+              className="mt-4"
+            >
+              Dismiss
+            </Button>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
