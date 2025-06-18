@@ -24,7 +24,6 @@ import Image from "next/image";
 import { DashboardWrapper } from "./DashboardWrapper";
 import { useEffect, useState } from "react";
 import { ContractModal } from "@/components/ContractModal";
-import { GoogleCalendarPopup } from "@/components/GoogleCalendarPopup";
 import { createClient } from "@/lib/supabaseClient";
 
 const mockUpcomingSessions = [
@@ -65,7 +64,6 @@ interface ModalProps {
 
 export default function ClientDashboard() {
   const [showContractModal, setShowContractModal] = useState(false);
-  const [showCalendarPopup, setShowCalendarPopup] = useState(false);
   const [userStatus, setUserStatus] = useState({
     contractAccepted: false,
     googleConnected: false,
@@ -110,7 +108,6 @@ export default function ClientDashboard() {
         } else if (!userData.google_account_connected) {
           // If contract is accepted but Google not connected, show calendar popup
           console.log("Showing calendar popup - Google not connected");
-          setShowCalendarPopup(true);
         }
       } catch (error) {
         console.error("Error checking user status:", error);
@@ -145,7 +142,6 @@ export default function ClientDashboard() {
 
       // Show Google Calendar popup if not connected
       if (!userStatus.googleConnected) {
-        setShowCalendarPopup(true);
       }
     } catch (error) {
       console.error("Error updating contract status:", error);
@@ -417,27 +413,9 @@ export default function ClientDashboard() {
             onAccept={handleContractAccepted}
             onOpenChange={(open: boolean) => {
               setShowContractModal(open);
-              // If contract modal is closed and contract is accepted, show calendar popup
-              if (
-                !open &&
-                userStatus.contractAccepted &&
-                !userStatus.googleConnected
-              ) {
-                setShowCalendarPopup(true);
-              }
             }}
           />
         )}
-        <GoogleCalendarPopup
-          open={showCalendarPopup}
-          onOpenChange={(open: boolean) => {
-            setShowCalendarPopup(open);
-            if (!open) {
-              // Update local state when calendar is connected
-              setUserStatus((prev) => ({ ...prev, googleConnected: true }));
-            }
-          }}
-        />
       </div>
     </DashboardWrapper>
   );
