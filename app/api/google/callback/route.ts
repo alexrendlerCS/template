@@ -205,8 +205,8 @@ export async function GET(request: Request) {
         </head>
         <body>
           <script>
-            window.close();
             window.opener.postMessage({ type: 'GOOGLE_AUTH_SUCCESS' }, '*');
+            window.close();
           </script>
         </body>
       </html>
@@ -219,6 +219,7 @@ export async function GET(request: Request) {
       }
     );
   } catch (error) {
+    console.error("Error in Google callback:", error);
     return new Response(
       `
       <html>
@@ -227,8 +228,8 @@ export async function GET(request: Request) {
         </head>
         <body>
           <script>
+            window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: 'Internal server error' }, '*');
             window.close();
-            window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: 'Unknown error occurred' }, '*');
           </script>
         </body>
       </html>

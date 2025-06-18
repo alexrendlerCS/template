@@ -26,7 +26,7 @@ import {
   BarChart3,
 } from "lucide-react";
 import { ContractModal } from "@/components/ContractModal";
-import { GoogleCalendarPopup } from "@/components/GoogleCalendarPopup";
+import GoogleCalendarPopup from "@/components/GoogleCalendarPopup";
 import { createClient } from "@/lib/supabaseClient";
 
 const mockClients = [

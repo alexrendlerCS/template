@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -11,60 +11,49 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Calendar,
+  Calendar as CalendarIcon,
   List,
   ArrowLeft,
   User,
   ChevronLeft,
   ChevronRight,
+  Loader2,
 } from "lucide-react";
 import Link from "next/link";
 import { ClientNavigation } from "@/components/client-navigation";
 
-const mockSessions = [
-  {
-    id: 1,
-    date: "2024-01-15",
-    time: "10:00 AM",
-    type: "Personal Training",
-    status: "confirmed",
-  },
-  {
-    id: 2,
-    date: "2024-01-17",
-    time: "2:00 PM",
-    type: "Strength Training",
-    status: "confirmed",
-  },
-  {
-    id: 3,
-    date: "2024-01-19",
-    time: "11:00 AM",
-    type: "Cardio Session",
-    status: "confirmed",
-  },
-  {
-    id: 4,
-    date: "2024-01-22",
-    time: "9:00 AM",
-    type: "Personal Training",
-    status: "pending",
-  },
-  {
-    id: 5,
-    date: "2024-01-24",
-    time: "3:00 PM",
-    type: "Flexibility Training",
-    status: "confirmed",
-  },
-  {
-    id: 6,
-    date: "2024-01-26",
-    time: "10:30 AM",
-    type: "Strength Training",
-    status: "confirmed",
-  },
-];
+interface GoogleEvent {
+  id: string;
+  summary: string;
+  start: {
+    dateTime: string;
+  };
+  status: string;
+}
+
+// Helper function to format event time
+function formatEventTime(dateTimeStr: string) {
+  const date = new Date(dateTimeStr);
+  return date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
+// Helper function to get event status color
+function getEventStatusColor(status: string) {
+  switch (status.toLowerCase()) {
+    case "confirmed":
+      return "bg-green-100 text-green-800";
+    case "tentative":
+      return "bg-yellow-100 text-yellow-800";
+    case "cancelled":
+      return "bg-red-100 text-red-800";
+    default:
+      return "bg-gray-100 text-gray-800";
+  }
+}
 
 const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const months = [
@@ -84,7 +73,40 @@ const months = [
 
 export default function ClientCalendarPage() {
   const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar");
-  const [currentDate, setCurrentDate] = useState(new Date(2024, 0, 1)); // January 2024
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [events, setEvents] = useState<GoogleEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isGoogleConnected, setIsGoogleConnected] = useState(true);
+
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await fetch("/api/google/events");
+
+        if (!response.ok) {
+          if (response.status === 400) {
+            setIsGoogleConnected(false);
+            return;
+          }
+          throw new Error("Failed to fetch events");
+        }
+
+        const data = await response.json();
+        setEvents(data);
+        setIsGoogleConnected(true);
+      } catch (err) {
+        setError("Failed to load calendar events");
+        console.error("Error fetching events:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchEvents();
+  }, [currentDate]);
 
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
@@ -114,7 +136,11 @@ export default function ClientCalendarPage() {
     const dateStr = `${currentDate.getFullYear()}-${String(
       currentDate.getMonth() + 1
     ).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    return mockSessions.filter((session) => session.date === dateStr);
+
+    return events.filter((event) => {
+      const eventDate = new Date(event.start.dateTime);
+      return eventDate.toISOString().split("T")[0] === dateStr;
+    });
   };
 
   const navigateMonth = (direction: "prev" | "next") => {
@@ -130,6 +156,48 @@ export default function ClientCalendarPage() {
   };
 
   const days = getDaysInMonth(currentDate);
+
+  const renderEvent = (event: GoogleEvent) => (
+    <div
+      key={event.id}
+      className="p-2 mb-1 rounded-md border border-gray-200 bg-white shadow-sm"
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex-1">
+          <p className="text-sm font-medium text-gray-900">{event.summary}</p>
+          <p className="text-xs text-gray-500">
+            {formatEventTime(event.start.dateTime)}
+          </p>
+        </div>
+        <Badge className={getEventStatusColor(event.status)}>
+          {event.status}
+        </Badge>
+      </div>
+    </div>
+  );
+
+  if (!isGoogleConnected) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-8">
+        <Card className="max-w-2xl mx-auto">
+          <CardHeader>
+            <CardTitle>Connect Google Calendar</CardTitle>
+            <CardDescription>
+              To view your training sessions, please connect your Google
+              Calendar account.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/client/dashboard">
+              <Button className="bg-red-600 hover:bg-red-700">
+                Go to Dashboard to Connect
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -156,7 +224,7 @@ export default function ClientCalendarPage() {
                   viewMode === "calendar" ? "bg-red-600 hover:bg-red-700" : ""
                 }
               >
-                <Calendar className="h-4 w-4 mr-2" />
+                <CalendarIcon className="h-4 w-4 mr-2" />
                 Calendar
               </Button>
               <Button
@@ -176,184 +244,104 @@ export default function ClientCalendarPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {viewMode === "calendar" ? (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-2xl">
+        {/* Calendar View */}
+        {viewMode === "calendar" && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-xl font-bold">
                   {months[currentDate.getMonth()]} {currentDate.getFullYear()}
                 </CardTitle>
                 <div className="flex items-center space-x-2">
                   <Button
                     variant="outline"
-                    size="sm"
+                    size="icon"
                     onClick={() => navigateMonth("prev")}
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
                   <Button
                     variant="outline"
-                    size="sm"
+                    size="icon"
                     onClick={() => navigateMonth("next")}
                   >
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
-              </div>
-              <CardDescription>
-                Your training sessions and appointments
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-7 gap-1 mb-4">
-                {daysOfWeek.map((day) => (
-                  <div
-                    key={day}
-                    className="p-2 text-center font-medium text-gray-600 text-sm"
-                  >
-                    {day}
-                  </div>
-                ))}
-              </div>
-              <div className="grid grid-cols-7 gap-1">
-                {days.map((day, index) => {
-                  const sessions = getSessionsForDate(day);
-                  const isToday =
-                    day &&
-                    currentDate.getFullYear() === new Date().getFullYear() &&
-                    currentDate.getMonth() === new Date().getMonth() &&
-                    day === new Date().getDate();
-
-                  return (
-                    <div
-                      key={index}
-                      className={`min-h-[100px] p-2 border border-gray-200 ${
-                        day ? "bg-white hover:bg-gray-50" : "bg-gray-50"
-                      } ${isToday ? "ring-2 ring-red-600" : ""}`}
-                    >
-                      {day && (
-                        <>
-                          <div
-                            className={`text-sm font-medium mb-1 ${
-                              isToday ? "text-red-600" : "text-gray-900"
-                            }`}
-                          >
-                            {day}
-                          </div>
-                          <div className="space-y-1">
-                            {sessions.map((session) => (
-                              <div
-                                key={session.id}
-                                className={`text-xs p-1 rounded cursor-pointer ${
-                                  session.status === "confirmed"
-                                    ? "bg-red-100 text-red-800 hover:bg-red-200"
-                                    : "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
-                                }`}
-                              >
-                                <div className="font-medium">
-                                  {session.time}
-                                </div>
-                                <div className="truncate">{session.type}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Upcoming Sessions</CardTitle>
-                <CardDescription>
-                  All your scheduled training sessions
-                </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {mockSessions.map((session) => (
-                    <div
-                      key={session.id}
-                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                    >
-                      <div className="flex items-center space-x-4">
-                        <div className="text-center">
-                          <p className="font-medium text-red-600">
-                            {session.time}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {new Date(session.date).toLocaleDateString(
-                              "en-US",
-                              {
-                                month: "short",
-                                day: "numeric",
-                              }
-                            )}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="font-medium">{session.type}</p>
-                          <div className="flex items-center space-x-2 text-sm text-gray-500">
-                            <User className="h-4 w-4" />
-                            <span>with John Doe</span>
-                          </div>
-                        </div>
+                {loading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                  </div>
+                ) : error ? (
+                  <div className="text-center py-8 text-red-600">{error}</div>
+                ) : (
+                  <div className="grid grid-cols-7 gap-2">
+                    {/* Day headers */}
+                    {daysOfWeek.map((day) => (
+                      <div
+                        key={day}
+                        className="text-center font-medium text-gray-500 py-2"
+                      >
+                        {day}
                       </div>
-                      <div className="flex items-center space-x-3">
-                        <Badge
-                          variant={
-                            session.status === "confirmed"
-                              ? "default"
-                              : "secondary"
-                          }
-                          className={
-                            session.status === "confirmed"
-                              ? "bg-green-100 text-green-800"
-                              : ""
-                          }
+                    ))}
+                    {/* Calendar days */}
+                    {days.map((day, index) => {
+                      const sessions = getSessionsForDate(day);
+                      return (
+                        <div
+                          key={index}
+                          className={`min-h-[100px] p-2 border rounded-lg ${
+                            day ? "bg-white" : "bg-gray-50"
+                          }`}
                         >
-                          {session.status === "confirmed"
-                            ? "Confirmed"
-                            : "Pending"}
-                        </Badge>
-                        <Button size="sm" variant="outline">
-                          Reschedule
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                          {day && (
+                            <>
+                              <div className="font-medium text-gray-900">
+                                {day}
+                              </div>
+                              <div className="space-y-1 mt-1">
+                                {sessions.map(renderEvent)}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </CardContent>
             </Card>
+          </div>
+        )}
 
-            {/* Quick Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Card>
-                <CardContent className="p-6 text-center">
-                  <div className="text-2xl font-bold text-red-600 mb-2">6</div>
-                  <p className="text-sm text-gray-600">Sessions This Month</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-6 text-center">
-                  <div className="text-2xl font-bold text-green-600 mb-2">
-                    4
+        {/* List View */}
+        {viewMode === "list" && (
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  {months[currentDate.getMonth()]} {currentDate.getFullYear()}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
                   </div>
-                  <p className="text-sm text-gray-600">Completed Sessions</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-6 text-center">
-                  <div className="text-2xl font-bold text-blue-600 mb-2">2</div>
-                  <p className="text-sm text-gray-600">Upcoming Sessions</p>
-                </CardContent>
-              </Card>
-            </div>
+                ) : error ? (
+                  <div className="text-center py-8 text-red-600">{error}</div>
+                ) : events.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    No training sessions scheduled for this month
+                  </div>
+                ) : (
+                  <div className="space-y-4">{events.map(renderEvent)}</div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         )}
       </main>

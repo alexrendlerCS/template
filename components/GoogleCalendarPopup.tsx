@@ -12,32 +12,51 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { CalendarIcon } from "lucide-react";
+import GoogleCalendarSuccessDialog from "./GoogleCalendarSuccessDialog";
 
 interface GoogleCalendarPopupProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-export function GoogleCalendarPopup({
+export default function GoogleCalendarPopup({
   open,
   onOpenChange,
 }: GoogleCalendarPopupProps) {
   const router = useRouter();
   const [isConnecting, setIsConnecting] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
   const { toast } = useToast();
 
   // Handle messages from the popup window
   useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
+    const handleMessage = async (event: MessageEvent) => {
       if (event.data.type === "GOOGLE_AUTH_SUCCESS") {
-        setIsConnecting(false);
-        onOpenChange(false);
-        toast({
-          title: "Success!",
-          description: "Google Calendar connected successfully.",
-          duration: 5000,
-        });
-        router.refresh();
+        try {
+          // Create dedicated calendar
+          const response = await fetch("/api/google/calendar/create", {
+            method: "POST",
+          });
+
+          if (!response.ok) {
+            throw new Error("Failed to create calendar");
+          }
+
+          setIsConnecting(false);
+          onOpenChange(false);
+          setShowSuccess(true);
+          router.refresh();
+        } catch (error) {
+          console.error("Error creating calendar:", error);
+          toast({
+            title: "Warning",
+            description:
+              "Connected to Google Calendar but failed to create dedicated calendar. Please try reconnecting.",
+            variant: "destructive",
+            duration: 5000,
+          });
+          setIsConnecting(false);
+        }
       } else if (event.data.type === "GOOGLE_AUTH_ERROR") {
         setIsConnecting(false);
         toast({
@@ -97,24 +116,35 @@ export function GoogleCalendarPopup({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <CalendarIcon className="h-5 w-5" />
-            Connect Google Calendar
-          </DialogTitle>
-          <DialogDescription>
-            Connect your Google Calendar to automatically sync your training
-            sessions and receive reminders.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex justify-end">
-          <Button onClick={handleConnectCalendar} disabled={isConnecting}>
-            {isConnecting ? "Connecting..." : "Connect Calendar"}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarIcon className="h-5 w-5" />
+              Connect Google Calendar
+            </DialogTitle>
+            <DialogDescription>
+              Connect your Google Calendar to automatically sync your training
+              sessions and receive reminders.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end">
+            <Button onClick={handleConnectCalendar} disabled={isConnecting}>
+              {isConnecting ? "Connecting..." : "Connect Calendar"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <GoogleCalendarSuccessDialog
+        open={showSuccess}
+        onOpenChange={(open) => {
+          setShowSuccess(open);
+          if (!open) {
+            router.refresh();
+          }
+        }}
+      />
+    </>
   );
 }

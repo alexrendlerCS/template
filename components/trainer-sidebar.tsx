@@ -23,6 +23,7 @@ import {
   BarChart3,
   MessageSquare,
   LogOut,
+  Clock,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -43,6 +44,11 @@ const menuItems = [
     title: "Schedule",
     url: "/trainer/schedule",
     icon: Calendar,
+  },
+  {
+    title: "Availability",
+    url: "/trainer/availability",
+    icon: Clock,
   },
   {
     title: "Payments",

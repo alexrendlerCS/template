@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { GoogleCalendarPopup } from "@/components/GoogleCalendarPopup";
+import GoogleCalendarPopup from "@/components/GoogleCalendarPopup";
 import { createClient } from "@/lib/supabaseClient";
 
 export function DashboardWrapper({ children }: { children: React.ReactNode }) {
