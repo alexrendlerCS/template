@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase-server";
-import { getCalendarClient } from "@/lib/google";
+import { getGoogleCalendarClient } from "@/lib/google";
 import { cookies } from "next/headers";
 
 export async function DELETE(
@@ -55,10 +55,9 @@ export async function DELETE(
 
     // Delete Google Calendar event if exists
     if (session.google_event_id) {
-      const calendar = getCalendarClient({
-        access_token: trainer.google_access_token,
-        refresh_token: trainer.google_refresh_token,
-      });
+      const calendar = await getGoogleCalendarClient(
+        trainer.google_refresh_token
+      );
 
       await calendar.events.delete({
         calendarId: trainer.google_calendar_id || "primary",

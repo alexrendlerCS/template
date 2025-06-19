@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase-server";
-import { getCalendarClient, oauth2Client } from "@/lib/google";
+import { getGoogleCalendarClient } from "@/lib/google";
 
 export async function POST(req: Request) {
   try {
@@ -53,10 +53,9 @@ export async function POST(req: Request) {
     );
 
     // Set up Google Calendar client
-    const calendar = getCalendarClient({
-      access_token: trainer.google_access_token,
-      refresh_token: trainer.google_refresh_token,
-    });
+    const calendar = await getGoogleCalendarClient(
+      trainer.google_refresh_token
+    );
 
     // Create Google Calendar event
     const event = await calendar.events.insert({

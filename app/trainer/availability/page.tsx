@@ -54,6 +54,10 @@ interface DaySchedule {
   timeRanges: TimeRange[];
 }
 
+interface Schedule {
+  [key: string]: DaySchedule;
+}
+
 interface UnavailableSlot {
   id?: number;
   trainer_id: string;
@@ -292,7 +296,7 @@ function WeeklyAvailabilityEditor({
   onTimeRangeRemove,
   isSaving,
 }: {
-  schedule: Record<string, DaySchedule>;
+  schedule: Schedule;
   onScheduleChange: (day: string, enabled: boolean) => void;
   onTimeRangeAdd: (day: string, start: string, end: string) => void;
   onTimeRangeRemove: (day: string, index: number) => void;
@@ -305,7 +309,7 @@ function WeeklyAvailabilityEditor({
           key={day}
           className={cn(
             "transition-all duration-200",
-            schedule[day].enabled
+            schedule[day]?.enabled
               ? "border-green-200 bg-green-50"
               : "border-gray-200 bg-gray-50"
           )}
@@ -315,20 +319,20 @@ function WeeklyAvailabilityEditor({
               <CalendarIcon
                 className={cn(
                   "h-4 w-4",
-                  schedule[day].enabled ? "text-green-600" : "text-gray-400"
+                  schedule[day]?.enabled ? "text-green-600" : "text-gray-400"
                 )}
               />
               <h3
                 className={cn(
                   "font-medium",
-                  schedule[day].enabled ? "text-gray-900" : "text-gray-500"
+                  schedule[day]?.enabled ? "text-gray-900" : "text-gray-500"
                 )}
               >
                 {day}
               </h3>
             </div>
             <Switch
-              checked={schedule[day].enabled}
+              checked={schedule[day]?.enabled}
               onCheckedChange={(checked) => onScheduleChange(day, checked)}
               aria-label={`Enable ${day} availability`}
               disabled={isSaving}
@@ -336,7 +340,7 @@ function WeeklyAvailabilityEditor({
           </CardHeader>
           <CardContent>
             <div className="space-y-2 min-h-[100px]">
-              {schedule[day].timeRanges.map((range, index) => (
+              {schedule[day]?.timeRanges.map((range, index) => (
                 <div
                   key={index}
                   className={cn(
@@ -363,7 +367,7 @@ function WeeklyAvailabilityEditor({
                   </Badge>
                 </div>
               ))}
-              {schedule[day].enabled && (
+              {schedule[day]?.enabled && (
                 <TimeSlotDialog
                   day={day}
                   onAdd={(start, end) => onTimeRangeAdd(day, start, end)}
@@ -377,14 +381,10 @@ function WeeklyAvailabilityEditor({
   );
 }
 
-function AvailabilitySummary({
-  schedule,
-}: {
-  schedule: Record<string, DaySchedule>;
-}) {
-  const summary = DAYS.filter((day) => schedule[day].enabled).map((day) => ({
+function AvailabilitySummary({ schedule }: { schedule: Schedule }) {
+  const summary = DAYS.filter((day) => schedule[day]?.enabled).map((day) => ({
     day,
-    slots: schedule[day].timeRanges.map(
+    slots: schedule[day]?.timeRanges.map(
       (range) =>
         `${formatTime(range.start_time)} – ${formatTime(range.end_time)}`
     ),
@@ -421,8 +421,8 @@ function AvailabilitySummary({
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {DAYS.map((day) => {
-          const isEnabled = schedule[day].enabled;
-          const timeSlots = schedule[day].timeRanges;
+          const isEnabled = schedule[day]?.enabled;
+          const timeSlots = schedule[day]?.timeRanges;
 
           return (
             <Card
@@ -510,32 +510,20 @@ function formatTime(time: string) {
 }
 
 export default function TrainerAvailabilityPage() {
-  const [schedule, setSchedule] = useState<Record<string, DaySchedule>>(
-    DAYS.reduce(
-      (acc, day) => ({
-        ...acc,
-        [day]: { enabled: false, timeRanges: [] },
-      }),
-      {}
-    )
-  );
+  const [loading, setLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [schedule, setSchedule] = useState<Schedule>({});
   const [unavailableSlots, setUnavailableSlots] = useState<UnavailableSlot[]>(
     []
   );
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(
-    new Date()
-  );
-  const [newOverride, setNewOverride] = useState<{
-    start_time: string;
-    end_time: string;
-    reason: string;
-  }>({
+  const [newOverride, setNewOverride] = useState<
+    Omit<UnavailableSlot, "id" | "trainer_id" | "date">
+  >({
     start_time: "09:00",
     end_time: "17:00",
     reason: "",
   });
-  const [loading, setLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
   const [isUnavailableDialogOpen, setIsUnavailableDialogOpen] = useState(false);
   const supabase = createClient();
   const { toast } = useToast();
@@ -547,6 +535,7 @@ export default function TrainerAvailabilityPage() {
 
   const loadAvailability = async () => {
     try {
+      setLoading(true);
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -559,22 +548,24 @@ export default function TrainerAvailabilityPage() {
 
       if (error) throw error;
 
-      const newSchedule = DAYS.reduce(
+      const newSchedule: Schedule = DAYS.reduce(
         (acc, day) => ({
           ...acc,
           [day]: { enabled: false, timeRanges: [] },
         }),
-        {}
+        {} as Schedule
       );
 
       data.forEach((slot) => {
         const day = DAYS[slot.weekday];
-        newSchedule[day].enabled = true;
-        newSchedule[day].timeRanges.push({
-          id: slot.id,
-          start_time: slot.start_time,
-          end_time: slot.end_time,
-        });
+        if (newSchedule[day]) {
+          newSchedule[day].enabled = true;
+          newSchedule[day].timeRanges.push({
+            id: slot.id,
+            start_time: slot.start_time,
+            end_time: slot.end_time,
+          });
+        }
       });
 
       setSchedule(newSchedule);
@@ -644,13 +635,15 @@ export default function TrainerAvailabilityPage() {
       if (deleteError) throw deleteError;
 
       const slots = DAYS.flatMap((day, index) => {
-        if (!schedule[day].enabled) return [];
-        return schedule[day].timeRanges.map((range) => ({
-          trainer_id: session.user.id,
-          weekday: index,
-          start_time: range.start_time,
-          end_time: range.end_time,
-        }));
+        if (!schedule[day]?.enabled) return [];
+        return (
+          schedule[day]?.timeRanges.map((range) => ({
+            trainer_id: session.user.id,
+            weekday: index,
+            start_time: range.start_time,
+            end_time: range.end_time,
+          })) || []
+        );
       });
 
       console.log("Inserting new availability slots:", slots.length);
@@ -666,12 +659,7 @@ export default function TrainerAvailabilityPage() {
       console.log("Showing success toast...");
       toast({
         variant: "default",
-        title: (
-          <div className="flex items-center gap-2 text-green-600">
-            <Check className="h-5 w-5" />
-            <span>Success!</span>
-          </div>
-        ),
+        title: "Success!",
         description: "Your availability schedule has been successfully updated",
         className: "border-2 border-green-500/50 bg-green-50",
         duration: 3000,
