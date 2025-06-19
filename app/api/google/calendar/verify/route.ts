@@ -4,22 +4,25 @@ import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
   try {
-    console.log("Calendar creation request received");
+    console.log("Calendar verification request received");
     const supabase = createClient();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
 
-    if (!session) {
-      console.log("No session found");
+    // Use getUser() instead of getSession() for better security
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.log("No authenticated user found:", authError?.message);
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    // Get user's Google refresh token
+    // Get user's Google refresh token and other details
     const { data: userData, error: userError } = await supabase
       .from("users")
       .select("google_refresh_token, full_name, role")
-      .eq("id", session.user.id)
+      .eq("id", user.id)
       .single();
 
     if (userError) {
@@ -34,6 +37,7 @@ export async function POST(request: Request) {
       });
     }
 
+    // Try to create a calendar client and set up the calendar
     try {
       console.log("Creating calendar client");
       const calendar = await getGoogleCalendarClient(
@@ -67,7 +71,7 @@ export async function POST(request: Request) {
           google_calendar_id: newCalendar.data.id,
           google_account_connected: true,
         })
-        .eq("id", session.user.id);
+        .eq("id", user.id);
 
       if (updateError) {
         console.error("Failed to update user with calendar ID:", updateError);
@@ -85,21 +89,22 @@ export async function POST(request: Request) {
         throw updateError;
       }
 
-      console.log("Calendar created successfully");
+      console.log("Calendar setup completed successfully");
       return NextResponse.json({
+        success: true,
         calendarId: newCalendar.data.id,
         calendarName: calendarName,
       });
     } catch (error) {
-      console.error("Calendar creation error:", error);
-      return new NextResponse("Failed to create calendar", {
+      console.error("Calendar setup error:", error);
+      return new NextResponse("Failed to setup calendar", {
         status: 500,
       });
     }
   } catch (error) {
-    console.error("Calendar setup error:", error);
+    console.error("Calendar verification error:", error);
     return new NextResponse(
-      `Failed to setup calendar: ${
+      `Failed to verify calendar connection: ${
         error instanceof Error ? error.message : "Unknown error"
       }`,
       { status: 500 }

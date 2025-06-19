@@ -26,6 +26,7 @@ export default function GoogleCalendarPopup({
   const router = useRouter();
   const [isConnecting, setIsConnecting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [calendarName, setCalendarName] = useState<string>("");
   const { toast } = useToast();
 
   // Handle messages from the popup window
@@ -33,25 +34,30 @@ export default function GoogleCalendarPopup({
     const handleMessage = async (event: MessageEvent) => {
       if (event.data.type === "GOOGLE_AUTH_SUCCESS") {
         try {
-          // Create dedicated calendar
-          const response = await fetch("/api/google/calendar/create", {
+          // Verify calendar connection
+          const response = await fetch("/api/google/calendar/verify", {
             method: "POST",
           });
 
           if (!response.ok) {
-            throw new Error("Failed to create calendar");
+            const errorText = await response.text();
+            throw new Error(
+              errorText || "Failed to verify calendar connection"
+            );
           }
 
+          const data = await response.json();
           setIsConnecting(false);
           onOpenChange(false);
           setShowSuccess(true);
+          setCalendarName(data.calendarName);
           router.refresh();
         } catch (error) {
-          console.error("Error creating calendar:", error);
+          console.error("Error verifying calendar:", error);
           toast({
             title: "Warning",
             description:
-              "Connected to Google Calendar but failed to create dedicated calendar. Please try reconnecting.",
+              "Connected to Google Calendar but failed to verify connection. Please try reconnecting.",
             variant: "destructive",
             duration: 5000,
           });
@@ -144,6 +150,7 @@ export default function GoogleCalendarPopup({
             router.refresh();
           }
         }}
+        calendarName={calendarName}
       />
     </>
   );

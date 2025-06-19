@@ -17,6 +17,7 @@ export interface Database {
           role: "client" | "trainer";
           contract_accepted: boolean;
           google_account_connected: boolean;
+          google_calendar_id?: string;
           created_at: string;
           updated_at?: string;
         };
@@ -27,6 +28,7 @@ export interface Database {
           role: "client" | "trainer";
           contract_accepted?: boolean;
           google_account_connected?: boolean;
+          google_calendar_id?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -37,6 +39,7 @@ export interface Database {
           role?: "client" | "trainer";
           contract_accepted?: boolean;
           google_account_connected?: boolean;
+          google_calendar_id?: string;
           created_at?: string;
           updated_at?: string;
         };

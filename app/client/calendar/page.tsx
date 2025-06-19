@@ -26,10 +26,19 @@ import Link from "next/link";
 interface GoogleEvent {
   id: string;
   summary: string;
+  description?: string;
   start: {
     dateTime: string;
   };
+  end: {
+    dateTime: string;
+  };
   status: string;
+  attendees?: Array<{
+    email: string;
+    displayName?: string;
+    responseStatus?: string;
+  }>;
 }
 
 // Helper function to format event time
@@ -40,6 +49,22 @@ function formatEventTime(dateTimeStr: string) {
     minute: "2-digit",
     hour12: true,
   });
+}
+
+// Helper function to format event duration
+function formatEventDuration(startStr: string, endStr: string) {
+  const start = new Date(startStr);
+  const end = new Date(endStr);
+  const durationMs = end.getTime() - start.getTime();
+  const durationMins = Math.round(durationMs / (1000 * 60));
+
+  if (durationMins < 60) {
+    return `${durationMins} min`;
+  }
+
+  const hours = Math.floor(durationMins / 60);
+  const mins = durationMins % 60;
+  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
 }
 
 // Helper function to get event status color
@@ -158,24 +183,40 @@ export default function ClientCalendarPage() {
 
   const days = getDaysInMonth(currentDate);
 
-  const renderEvent = (event: GoogleEvent) => (
-    <div
-      key={event.id}
-      className="p-2 mb-1 rounded-md border border-gray-200 bg-white shadow-sm"
-    >
-      <div className="flex items-center justify-between">
-        <div className="flex-1">
-          <p className="text-sm font-medium text-gray-900">{event.summary}</p>
-          <p className="text-xs text-gray-500">
-            {formatEventTime(event.start.dateTime)}
-          </p>
+  const renderEvent = (event: GoogleEvent) => {
+    // Extract session type from the summary if it exists
+    const sessionType = event.summary?.split(":")[1]?.trim() || event.summary;
+
+    return (
+      <div
+        key={event.id}
+        className="p-1.5 mb-1 rounded-md border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow text-xs"
+      >
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center justify-between gap-1">
+            <Badge
+              variant="outline"
+              className={`${getEventStatusColor(
+                event.status
+              )} text-[10px] px-1 py-0`}
+            >
+              {formatEventTime(event.start.dateTime)}
+            </Badge>
+            <Badge
+              className={`${getEventStatusColor(
+                event.status
+              )} text-[10px] px-1 py-0`}
+            >
+              {formatEventDuration(event.start.dateTime, event.end.dateTime)}
+            </Badge>
+          </div>
+          <div className="font-medium text-gray-900 truncate">
+            {sessionType}
+          </div>
         </div>
-        <Badge className={getEventStatusColor(event.status)}>
-          {event.status}
-        </Badge>
       </div>
-    </div>
-  );
+    );
+  };
 
   if (!isGoogleConnected) {
     return (
@@ -253,107 +294,70 @@ export default function ClientCalendarPage() {
         </div>
       </div>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Calendar View */}
-        {viewMode === "calendar" && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-xl font-bold">
+      <main className="p-4">
+        <Card>
+          <CardHeader className="space-y-1">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <h2 className="text-2xl font-bold tracking-tight">
                   {months[currentDate.getMonth()]} {currentDate.getFullYear()}
-                </CardTitle>
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => navigateMonth("prev")}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => navigateMonth("next")}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
+                </h2>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => navigateMonth("prev")}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => navigateMonth("next")}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-7 gap-px bg-gray-200 rounded-lg overflow-hidden">
+              {/* Day headers */}
+              {daysOfWeek.map((day) => (
+                <div
+                  key={day}
+                  className="bg-gray-50 p-2 text-center text-sm font-medium text-gray-500"
+                >
+                  {day}
                 </div>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-                  </div>
-                ) : error ? (
-                  <div className="text-center py-8 text-red-600">{error}</div>
-                ) : (
-                  <div className="grid grid-cols-7 gap-2">
-                    {/* Day headers */}
-                    {daysOfWeek.map((day) => (
-                      <div
-                        key={day}
-                        className="text-center font-medium text-gray-500 py-2"
-                      >
+              ))}
+
+              {/* Calendar days */}
+              {days.map((day, index) => (
+                <div
+                  key={index}
+                  className={`bg-white p-1 min-h-[120px] ${
+                    !day ? "bg-gray-50" : ""
+                  }`}
+                >
+                  {day && (
+                    <>
+                      <div className="font-medium text-sm mb-1 sticky top-0 bg-white z-10">
                         {day}
                       </div>
-                    ))}
-                    {/* Calendar days */}
-                    {days.map((day, index) => {
-                      const sessions = getSessionsForDate(day);
-                      return (
-                        <div
-                          key={index}
-                          className={`min-h-[100px] p-2 border rounded-lg ${
-                            day ? "bg-white" : "bg-gray-50"
-                          }`}
-                        >
-                          {day && (
-                            <>
-                              <div className="font-medium text-gray-900">
-                                {day}
-                              </div>
-                              <div className="space-y-1 mt-1">
-                                {sessions.map(renderEvent)}
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* List View */}
-        {viewMode === "list" && (
-          <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  {months[currentDate.getMonth()]} {currentDate.getFullYear()}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-                  </div>
-                ) : error ? (
-                  <div className="text-center py-8 text-red-600">{error}</div>
-                ) : events.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    No training sessions scheduled for this month
-                  </div>
-                ) : (
-                  <div className="space-y-4">{events.map(renderEvent)}</div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        )}
+                      <div className="space-y-1 max-h-[100px] overflow-y-auto">
+                        {getSessionsForDate(day).map((event) =>
+                          renderEvent(event)
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </main>
     </div>
   );

@@ -66,7 +66,10 @@ async function fetchGoogleEvents(accessToken: string, calendarId: string) {
     id: event.id,
     summary: event.summary,
     start: event.start,
+    end: event.end,
     status: event.status,
+    description: event.description,
+    attendees: event.attendees,
   }));
 }
 
@@ -75,13 +78,14 @@ export async function GET() {
     // Initialize Supabase client
     const supabase = createClient();
 
-    // Get current session
+    // Use getUser() instead of getSession() for better security
     const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
-    if (sessionError || !session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    if (authError || !user) {
+      console.log("No authenticated user found:", authError?.message);
+      return new NextResponse("Unauthorized", { status: 401 });
     }
 
     // Get user's Google tokens and calendar ID
@@ -90,7 +94,7 @@ export async function GET() {
       .select(
         "google_access_token, google_refresh_token, google_calendar_id, role"
       )
-      .eq("id", session.user.id)
+      .eq("id", user.id)
       .single();
 
     if (
@@ -112,15 +116,9 @@ export async function GET() {
         userData.google_calendar_id
       );
 
-      // Filter events based on user role
-      const filteredEvents =
-        userData.role === "client"
-          ? events.filter((event: any) =>
-              event.summary?.includes("Training Session")
-            )
-          : events;
-
-      return NextResponse.json(filteredEvents);
+      // Since we're using a dedicated calendar for training sessions,
+      // we don't need to filter by summary anymore
+      return NextResponse.json(events);
     } catch (error: any) {
       // If token expired, refresh and retry once
       if (error.message === "Token expired") {
@@ -134,11 +132,11 @@ export async function GET() {
           .from("users")
           .update({
             google_access_token: access_token,
-            google_token_expires_at: new Date(
+            google_token_expiry: new Date(
               Date.now() + expires_in * 1000
             ).toISOString(),
           })
-          .eq("id", session.user.id);
+          .eq("id", user.id);
 
         // Retry with new token
         const events = await fetchGoogleEvents(
@@ -146,15 +144,9 @@ export async function GET() {
           userData.google_calendar_id
         );
 
-        // Filter events based on user role
-        const filteredEvents =
-          userData.role === "client"
-            ? events.filter((event: any) =>
-                event.summary?.includes("Training Session")
-              )
-            : events;
-
-        return NextResponse.json(filteredEvents);
+        // Since we're using a dedicated calendar for training sessions,
+        // we don't need to filter by summary anymore
+        return NextResponse.json(events);
       }
       throw error;
     }

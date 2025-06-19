@@ -15,11 +15,13 @@ import { createClient } from "@/lib/supabaseClient";
 interface GoogleCalendarSuccessDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  calendarName: string;
 }
 
 export default function GoogleCalendarSuccessDialog({
   open,
   onOpenChange,
+  calendarName,
 }: GoogleCalendarSuccessDialogProps) {
   const [userRole, setUserRole] = useState<"trainer" | "client" | null>(null);
   const supabase = createClient();
@@ -49,9 +51,9 @@ export default function GoogleCalendarSuccessDialog({
 
   const getMessage = () => {
     if (userRole === "trainer") {
-      return "Your Google Calendar has been successfully connected and a dedicated calendar for managing your client training sessions has been created. All your training sessions will now be automatically synced to this calendar.";
+      return `Your Google Calendar has been successfully connected and a dedicated calendar "${calendarName}" has been created for managing your client training sessions. All your training sessions will now be automatically synced to this calendar.`;
     } else {
-      return "Your Google Calendar has been successfully connected and a dedicated calendar for your training sessions has been created. All your scheduled sessions will now be automatically synced to this calendar.";
+      return `Your Google Calendar has been successfully connected and a dedicated calendar "${calendarName}" has been created for your training sessions. All your scheduled sessions will now be automatically synced to this calendar.`;
     }
   };
 

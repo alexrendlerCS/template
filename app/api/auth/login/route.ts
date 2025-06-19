@@ -88,6 +88,24 @@ export async function POST(req: Request) {
       return new Response(JSON.stringify({ error: "User lookup failed" }), {
         status: 500,
       });
+    } else {
+      // User exists, check if email needs to be updated
+      if (userData.email !== user.email) {
+        console.log("[LOGIN] Updating user email to match auth email", {
+          oldEmail: userData.email,
+          newEmail: user.email,
+        });
+        const { error: updateError } = await supabase
+          .from("users")
+          .update({ email: user.email })
+          .eq("id", user.id);
+
+        if (updateError) {
+          console.log("[LOGIN] Error updating user email", updateError);
+        } else {
+          userData.email = user.email;
+        }
+      }
     }
 
     // Merge auth user and users table data
