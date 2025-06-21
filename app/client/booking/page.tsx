@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabaseClient";
+import { Database } from "@/lib/database.types";
 import {
   addMinutes,
   format,
@@ -66,6 +67,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+
+type UserProfile = Database["public"]["Tables"]["users"]["Row"];
 
 const mockAvailableSlots = [
   { date: "2024-01-15", slots: ["9:00 AM", "10:00 AM", "2:00 PM", "4:00 PM"] },
@@ -288,6 +291,7 @@ export default function BookingPage() {
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [showErrorDialog, setShowErrorDialog] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
   const supabase = createClient();
 
@@ -480,6 +484,27 @@ export default function BookingPage() {
     fetchTrainers();
   }, [supabase]);
 
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (!user) return;
+
+      const { data: profile, error } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", user.id)
+        .single();
+
+      if (error) {
+        console.error("Error fetching user profile:", error);
+        return;
+      }
+
+      setUserProfile(profile);
+    };
+
+    fetchUserProfile();
+  }, [user, supabase]);
+
   const handleTrainerSelect = (trainer: Trainer) => {
     setSelectedTrainer(trainer);
     setShowTrainerModal(false);
@@ -581,7 +606,8 @@ export default function BookingPage() {
       !selectedDate ||
       !selectedTimeSlot ||
       !selectedType ||
-      !session?.user
+      !session?.user ||
+      !userProfile
     ) {
       console.log("Missing required fields:", {
         hasTrainer: !!selectedTrainer,
@@ -589,6 +615,7 @@ export default function BookingPage() {
         hasTimeSlot: !!selectedTimeSlot,
         hasType: !!selectedType,
         hasUser: !!session?.user,
+        hasUserProfile: !!userProfile,
       });
       setErrorMessage(
         "Please select all booking details and ensure you're logged in"
@@ -662,7 +689,7 @@ export default function BookingPage() {
       const emailPayload = {
         trainer_email: selectedTrainer.email,
         trainer_name: selectedTrainer.full_name,
-        client_name: user?.full_name || "Client",
+        client_name: userProfile.full_name,
         date: selectedDate,
         start_time: format(
           parseISO(`2000-01-01T${selectedTimeSlot.startTime}`),
