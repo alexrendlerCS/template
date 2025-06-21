@@ -81,6 +81,64 @@ function getEventStatusColor(status: string) {
   }
 }
 
+// Add color palette for trainers
+const trainerColorPalette = [
+  {
+    bg: "bg-blue-50",
+    border: "border-blue-200",
+    text: "text-blue-700",
+    hover: "hover:bg-blue-100",
+  },
+  {
+    bg: "bg-purple-50",
+    border: "border-purple-200",
+    text: "text-purple-700",
+    hover: "hover:bg-purple-100",
+  },
+  {
+    bg: "bg-green-50",
+    border: "border-green-200",
+    text: "text-green-700",
+    hover: "hover:bg-green-100",
+  },
+  {
+    bg: "bg-amber-50",
+    border: "border-amber-200",
+    text: "text-amber-700",
+    hover: "hover:bg-amber-100",
+  },
+  {
+    bg: "bg-rose-50",
+    border: "border-rose-200",
+    text: "text-rose-700",
+    hover: "hover:bg-rose-100",
+  },
+  {
+    bg: "bg-indigo-50",
+    border: "border-indigo-200",
+    text: "text-indigo-700",
+    hover: "hover:bg-indigo-100",
+  },
+];
+
+// Add a default color scheme
+const defaultColorScheme = {
+  bg: "bg-gray-50",
+  border: "border-gray-200",
+  text: "text-gray-700",
+  hover: "hover:bg-gray-100",
+};
+
+// Function to get consistent color for a trainer
+const getTrainerColors = (trainerId: string | undefined) => {
+  if (!trainerId) return defaultColorScheme;
+
+  // Use the last character of the UUID to select a color
+  const colorIndex =
+    parseInt(trainerId.slice(-1), 16) % trainerColorPalette.length;
+  return trainerColorPalette[colorIndex];
+};
+
 const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const months = [
   "January",
@@ -157,6 +215,17 @@ export default function ClientCalendarPage() {
     return days;
   };
 
+  // Add helper function to check if a day is today
+  const isToday = (day: number | null) => {
+    if (!day) return false;
+    const today = new Date();
+    return (
+      today.getDate() === day &&
+      today.getMonth() === currentDate.getMonth() &&
+      today.getFullYear() === currentDate.getFullYear()
+    );
+  };
+
   const getSessionsForDate = (day: number | null) => {
     if (!day) return [];
     const dateStr = `${currentDate.getFullYear()}-${String(
@@ -184,38 +253,91 @@ export default function ClientCalendarPage() {
   const days = getDaysInMonth(currentDate);
 
   const renderEvent = (event: GoogleEvent) => {
-    // Extract session type from the summary if it exists
-    const sessionType = event.summary?.split(":")[1]?.trim() || event.summary;
+    console.log("Rendering event:", event);
 
-    return (
-      <div
-        key={event.id}
-        className="p-1.5 mb-1 rounded-md border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow text-xs"
-      >
-        <div className="flex flex-col gap-0.5">
-          <div className="flex items-center justify-between gap-1">
-            <Badge
-              variant="outline"
-              className={`${getEventStatusColor(
-                event.status
-              )} text-[10px] px-1 py-0`}
-            >
-              {formatEventTime(event.start.dateTime)}
-            </Badge>
-            <Badge
-              className={`${getEventStatusColor(
-                event.status
-              )} text-[10px] px-1 py-0`}
-            >
-              {formatEventDuration(event.start.dateTime, event.end.dateTime)}
-            </Badge>
+    // Default values
+    let colors = defaultColorScheme;
+    let sessionType = "Unknown Session";
+    let trainerName = "Unknown Trainer";
+
+    try {
+      // Extract session type and trainer name from the summary if it exists
+      const parts = event?.summary?.split(" with ") || [];
+      sessionType = parts[0]?.trim() || "Unknown Session";
+      trainerName = parts[1]?.trim() || "Unknown Trainer";
+
+      // Generate a consistent hash for the trainer name to use as color index
+      const getHashCode = (str: string) => {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+          const char = str.charCodeAt(i);
+          hash = (hash << 5) - hash + char;
+          hash = hash & hash; // Convert to 32-bit integer
+        }
+        return Math.abs(hash);
+      };
+
+      // Use trainer name for color consistency
+      const trainerHash = getHashCode(trainerName);
+      colors = trainerColorPalette[trainerHash % trainerColorPalette.length];
+
+      console.log("Event processing:", {
+        summary: event?.summary,
+        sessionType,
+        trainerName,
+        colors,
+      });
+
+      return (
+        <div
+          key={event.id}
+          className={`group relative p-2 mb-1 rounded-lg border ${colors.border} ${colors.bg} ${colors.hover} transition-all duration-200 shadow-sm hover:shadow-md`}
+        >
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center justify-between">
+              <span className={`text-xs font-semibold ${colors.text}`}>
+                {formatEventTime(event.start.dateTime)}
+              </span>
+              <span className={`text-xs ${colors.text} opacity-75`}>
+                {formatEventDuration(event.start.dateTime, event.end.dateTime)}
+              </span>
+            </div>
+            <div className={`font-medium ${colors.text} text-sm truncate`}>
+              {sessionType}
+            </div>
+            <div className="flex items-center gap-2">
+              <User className={`h-3 w-3 ${colors.text} opacity-75`} />
+              <span className={`text-xs ${colors.text} opacity-75 truncate`}>
+                {trainerName}
+              </span>
+            </div>
           </div>
-          <div className="font-medium text-gray-900 truncate">
-            {sessionType}
-          </div>
+
+          {/* Status indicator dot */}
+          <div
+            className={`absolute top-2 right-2 h-2 w-2 rounded-full 
+              ${
+                event?.status?.toLowerCase() === "confirmed"
+                  ? "bg-green-500"
+                  : event?.status?.toLowerCase() === "tentative"
+                  ? "bg-yellow-500"
+                  : "bg-red-500"
+              }`}
+          />
         </div>
-      </div>
-    );
+      );
+    } catch (error) {
+      console.error("Error rendering event:", error, event);
+      // Render a fallback UI for failed events
+      return (
+        <div
+          key={event.id}
+          className="p-2 mb-1 rounded-lg border border-red-200 bg-red-50"
+        >
+          <div className="text-xs text-red-700">Error displaying event</div>
+        </div>
+      );
+    }
   };
 
   if (!isGoogleConnected) {
@@ -336,17 +458,25 @@ export default function ClientCalendarPage() {
               {/* Calendar days */}
               {days.map((day, index) => (
                 <div
-                  key={index}
-                  className={`bg-white p-1 min-h-[120px] ${
-                    !day ? "bg-gray-50" : ""
+                  key={`day-${currentDate.getFullYear()}-${currentDate.getMonth()}-${index}`}
+                  className={`relative p-2 min-h-[120px] ${
+                    !day
+                      ? "bg-gray-50"
+                      : isToday(day)
+                      ? "bg-red-50 ring-2 ring-red-500 ring-inset"
+                      : "bg-white"
                   }`}
                 >
                   {day && (
                     <>
-                      <div className="font-medium text-sm mb-1 sticky top-0 bg-white z-10">
+                      <div
+                        className={`font-medium text-sm mb-2 sticky top-0 z-10 ${
+                          isToday(day) ? "text-red-900 font-semibold" : ""
+                        }`}
+                      >
                         {day}
                       </div>
-                      <div className="space-y-1 max-h-[100px] overflow-y-auto">
+                      <div className="space-y-2 max-h-[100px] overflow-y-auto">
                         {getSessionsForDate(day).map((event) =>
                           renderEvent(event)
                         )}
