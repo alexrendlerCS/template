@@ -658,6 +658,42 @@ export default function BookingPage() {
 
       console.log("Session created:", sessionData);
 
+      // Send email notification to trainer
+      const emailPayload = {
+        trainer_email: selectedTrainer.email,
+        trainer_name: selectedTrainer.full_name,
+        client_name: user?.full_name || "Client",
+        date: selectedDate,
+        start_time: format(
+          parseISO(`2000-01-01T${selectedTimeSlot.startTime}`),
+          "h:mm a"
+        ),
+        end_time: format(
+          parseISO(`2000-01-01T${selectedTimeSlot.endTime}`),
+          "h:mm a"
+        ),
+        session_type: getSelectedSessionType()?.name || selectedType,
+      };
+
+      console.log("Sending email notification...", emailPayload);
+      const emailRes = await fetch("/api/email/session-created", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(emailPayload),
+      });
+
+      if (!emailRes.ok) {
+        console.warn(
+          "Failed to send email notification:",
+          await emailRes.text()
+        );
+        // Don't throw error here, as the session was created successfully
+      } else {
+        console.log("Email notification sent successfully");
+      }
+
       // 2. Add to Google Calendar for both client and trainer
       const sessionDetails = {
         summary: `${getSelectedSessionType()?.name} with ${
