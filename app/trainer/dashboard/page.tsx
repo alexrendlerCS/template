@@ -25,9 +25,10 @@ import {
   CreditCard,
   BarChart3,
 } from "lucide-react";
-import { ContractModal } from "@/components/ContractModal";
+import { ContractFlowModal } from "@/components/ContractFlowModal";
 import GoogleCalendarPopup from "@/components/GoogleCalendarPopup";
 import { createClient } from "@/lib/supabaseClient";
+import { useRouter } from "next/navigation";
 
 const mockClients = [
   {
@@ -117,86 +118,76 @@ export default function TrainerDashboard() {
     googleConnected: false,
   });
   const supabase = createClient();
+  const router = useRouter();
 
   useEffect(() => {
-    async function checkUserStatus() {
+    const checkUserStatus = async () => {
       try {
         const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) return;
+          data: { session },
+        } = await supabase.auth.getSession();
 
-        const { data: userData, error } = await supabase
-          .from("users")
-          .select(
-            "contract_accepted, google_account_connected, contract_signed_at"
-          )
-          .eq("id", user.id)
-          .single();
-
-        if (error) {
-          console.error("Error fetching user data:", error);
+        if (!session?.user) {
+          router.push("/login");
           return;
         }
 
-        console.log("User data for modals:", userData);
+        const { data: userData } = await supabase
+          .from("users")
+          .select("contract_accepted, google_calendar_connected")
+          .eq("id", session.user.id)
+          .single();
 
-        // Only consider contract accepted if contract_accepted is true
-        const hasAcceptedContract = userData.contract_accepted === true;
+        if (userData) {
+          const contractAccepted = userData.contract_accepted || false;
+          const googleConnected = userData.google_calendar_connected || false;
 
-        setUserStatus({
-          contractAccepted: hasAcceptedContract,
-          googleConnected: userData.google_account_connected,
-        });
+          setUserStatus({
+            contractAccepted,
+            googleConnected,
+          });
 
-        // Show contract modal if contract not accepted
-        if (!hasAcceptedContract) {
-          console.log("Showing contract modal - contract not accepted");
-          setShowContractModal(true);
-        } else if (!userData.google_account_connected) {
-          // If contract is accepted but Google not connected, show calendar popup
-          console.log("Showing calendar popup - Google not connected");
-          setShowCalendarPopup(true);
+          // Show contract modal immediately if contract not accepted
+          if (!contractAccepted) {
+            setShowContractModal(true);
+          }
+          // Show calendar popup if contract accepted but Google not connected
+          else if (!googleConnected) {
+            setShowCalendarPopup(true);
+          }
         }
       } catch (error) {
         console.error("Error checking user status:", error);
       }
-    }
+    };
 
     checkUserStatus();
-  }, [supabase]);
+  }, []);
 
-  // Handle contract acceptance
-  const handleContractAccepted = async () => {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-
-      // Update the contract status in the database
-      const { error } = await supabase
-        .from("users")
-        .update({
-          contract_accepted: true,
-          contract_signed_at: new Date().toISOString(),
-        })
-        .eq("id", user.id);
-
-      if (error) throw error;
-
-      // Update local state
-      setUserStatus((prev) => ({ ...prev, contractAccepted: true }));
-      setShowContractModal(false);
-
-      // Show Google Calendar popup if not connected
-      if (!userStatus.googleConnected) {
-        setShowCalendarPopup(true);
-      }
-    } catch (error) {
-      console.error("Error updating contract status:", error);
-    }
-  };
+  // Prevent rendering dashboard content until contract is accepted
+  if (!userStatus.contractAccepted && showContractModal) {
+    return (
+      <ContractFlowModal
+        open={showContractModal}
+        onOpenChange={(open) => {
+          setShowContractModal(open);
+          if (!open) {
+            // If they try to close without accepting, redirect to login
+            router.push("/login");
+          }
+        }}
+        onComplete={async () => {
+          setUserStatus((prev) => ({ ...prev, contractAccepted: true }));
+          await router.refresh();
+          setShowContractModal(false);
+          // Show calendar popup after contract is accepted
+          if (!userStatus.googleConnected) {
+            setShowCalendarPopup(true);
+          }
+        }}
+      />
+    );
+  }
 
   const filteredClients = mockClients.filter(
     (client) =>
@@ -478,28 +469,30 @@ export default function TrainerDashboard() {
             </div>
           </main>
         </div>
-        {showContractModal && (
-          <ContractModal
-            onAccept={handleContractAccepted}
-            onOpenChange={(open: boolean) => {
-              setShowContractModal(open);
-              // If contract modal is closed and contract is accepted, show calendar popup
-              if (
-                !open &&
-                userStatus.contractAccepted &&
-                !userStatus.googleConnected
-              ) {
-                setShowCalendarPopup(true);
-              }
-            }}
-          />
-        )}
+
+        {/* Modals */}
+        <ContractFlowModal
+          open={showContractModal}
+          onOpenChange={(open) => {
+            setShowContractModal(open);
+            if (!open && !userStatus.contractAccepted) {
+              router.push("/login");
+            }
+          }}
+          onComplete={async () => {
+            setUserStatus((prev) => ({ ...prev, contractAccepted: true }));
+            setShowContractModal(false);
+            if (!userStatus.googleConnected) {
+              setShowCalendarPopup(true);
+            }
+          }}
+        />
+
         <GoogleCalendarPopup
           open={showCalendarPopup}
-          onOpenChange={(open: boolean) => {
+          onOpenChange={(open) => {
             setShowCalendarPopup(open);
             if (!open) {
-              // Update local state when calendar is connected
               setUserStatus((prev) => ({ ...prev, googleConnected: true }));
             }
           }}

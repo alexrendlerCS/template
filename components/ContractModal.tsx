@@ -3,49 +3,40 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
-import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
-  Dialog,
-  DialogContent as BaseDialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogPortal,
-  DialogOverlay,
 } from "@/components/ui/dialog";
-import { Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import type { Database } from "@/lib/database.types";
-import { cn } from "@/lib/utils";
-import { forwardRef } from "react";
-
-// Custom DialogContent without close button
-const DialogContent = forwardRef<
-  React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
-  <DialogPortal>
-    <DialogOverlay />
-    <DialogPrimitive.Content
-      ref={ref}
-      className={cn(
-        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
-        className
-      )}
-      {...props}
-    >
-      {children}
-    </DialogPrimitive.Content>
-  </DialogPortal>
-));
-DialogContent.displayName = "DialogContent";
+import { ContractTemplate } from "./ContractTemplate";
 
 interface ContractModalProps {
   onAccept?: () => Promise<void>;
+  onBack?: () => void;
   onOpenChange?: (open: boolean) => void;
+  clientName: string;
+  email: string;
+  phone: string;
+  startDate: string;
+  location: string;
+  signature: string;
+  isMinor?: boolean;
 }
 
-export function ContractModal({ onAccept, onOpenChange }: ContractModalProps) {
+export function ContractModal({
+  onAccept,
+  onBack,
+  onOpenChange,
+  clientName,
+  email,
+  phone,
+  startDate,
+  location,
+  signature,
+  isMinor = false,
+}: ContractModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -70,6 +61,28 @@ export function ContractModal({ onAccept, onOpenChange }: ContractModalProps) {
         throw new Error("Not authenticated");
       }
 
+      // Generate and send the contract
+      const response = await fetch("/api/contract/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          clientName,
+          email,
+          phone,
+          startDate,
+          location,
+          signature,
+          signatureDate: new Date().toISOString().split("T")[0],
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to generate contract");
+      }
+
       // Update the user's contract acceptance status
       const { error: updateError } = await supabase
         .from("users")
@@ -87,14 +100,6 @@ export function ContractModal({ onAccept, onOpenChange }: ContractModalProps) {
       if (onAccept) {
         await onAccept();
       }
-
-      // Close the modal
-      if (onOpenChange) {
-        onOpenChange(false);
-      }
-
-      // Refresh the page to update UI state
-      router.refresh();
     } catch (error) {
       console.error("Error accepting contract:", error);
       setError(
@@ -106,9 +111,12 @@ export function ContractModal({ onAccept, onOpenChange }: ContractModalProps) {
   };
 
   return (
-    <Dialog open={true} onOpenChange={undefined}>
-      <DialogContent className="max-w-3xl h-[80vh] flex flex-col">
-        <DialogHeader>
+    <>
+      <DialogHeader className="flex flex-row items-center">
+        <Button variant="ghost" size="icon" className="mr-2" onClick={onBack}>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <div>
           <DialogTitle className="text-2xl font-bold">
             Client Agreement
           </DialogTitle>
@@ -120,73 +128,44 @@ export function ContractModal({ onAccept, onOpenChange }: ContractModalProps) {
               using the platform. You cannot skip this step.
             </span>
           </DialogDescription>
-        </DialogHeader>
-
-        <div className="flex-1 overflow-y-auto my-4 p-4 border rounded-lg">
-          <h2 className="text-xl font-semibold mb-4">Terms and Conditions</h2>
-          <div className="space-y-4">
-            <p>
-              This agreement ("Agreement") is entered into between the personal
-              trainer ("Trainer") and the client ("Client") for the provision of
-              personal training services.
-            </p>
-
-            <h3 className="font-semibold">1. Services</h3>
-            <p>
-              The Trainer agrees to provide personal training services to the
-              Client, including but not limited to fitness assessments, exercise
-              programming, and nutritional guidance.
-            </p>
-
-            <h3 className="font-semibold">2. Client Responsibilities</h3>
-            <p>
-              The Client agrees to: - Attend scheduled sessions on time - Follow
-              the exercise and nutrition program provided - Provide accurate
-              health information - Notify the Trainer of any health concerns
-            </p>
-
-            <h3 className="font-semibold">3. Cancellation Policy</h3>
-            <p>
-              Sessions must be cancelled at least 24 hours in advance. Late
-              cancellations or no-shows may result in session forfeiture.
-            </p>
-
-            <h3 className="font-semibold">4. Payment Terms</h3>
-            <p>
-              Payment is due at the time of booking. Packages are non-refundable
-              and expire within the specified timeframe.
-            </p>
-
-            <h3 className="font-semibold">5. Liability</h3>
-            <p>
-              The Client acknowledges that participation in physical activity
-              involves inherent risks and agrees to hold the Trainer harmless
-              for any injuries or damages.
-            </p>
-          </div>
         </div>
+      </DialogHeader>
 
-        {error && (
-          <div className="text-red-600 text-sm mb-4 text-center">{error}</div>
-        )}
+      <div className="flex-1 overflow-y-auto my-4 p-4 border rounded-lg">
+        <ContractTemplate
+          clientName={clientName}
+          email={email}
+          phone={phone}
+          startDate={startDate}
+          location={location}
+          signature={signature}
+          signatureDate={new Date().toISOString().split("T")[0]}
+          isMinor={isMinor}
+          trainerSignature=""
+          trainerSignatureDate=""
+        />
+      </div>
 
-        <div className="flex justify-center mt-4">
-          <Button
-            onClick={handleAgree}
-            disabled={isLoading}
-            className="w-full max-w-md"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Processing...
-              </>
-            ) : (
-              "I Agree"
-            )}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+      {error && (
+        <div className="text-red-600 text-sm mb-4 text-center">{error}</div>
+      )}
+
+      <div className="flex justify-center mt-4">
+        <Button
+          onClick={handleAgree}
+          disabled={isLoading}
+          className="w-full max-w-md"
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Processing...
+            </>
+          ) : (
+            "I Agree"
+          )}
+        </Button>
+      </div>
+    </>
   );
 }

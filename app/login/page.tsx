@@ -26,6 +26,8 @@ import {
 } from "@/components/ui/dialog";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { createClient } from "@/lib/supabaseClient";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface FormData {
   email: string;
@@ -49,6 +51,7 @@ export default function LoginPage() {
     message: string;
   }>({ type: null, message: "" });
   const [loginData, setLoginData] = useState({ email: "", password: "" });
+  const supabase = createClient();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -59,88 +62,23 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
     setStatusMessage({ type: null, message: "" });
+
     try {
-      console.log("[LOGIN FORM] Attempting login", {
+      const { error } = await supabase.auth.signInWithPassword({
         email: loginData.email,
-        userType,
+        password: loginData.password,
       });
 
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: loginData.email,
-          password: loginData.password,
-        }),
-      });
+      if (error) throw error;
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        const errorMessage = data.error || "Login failed";
-        throw new Error(errorMessage);
-      }
-
-      // Check if user's role matches selected type
-      const userRole = data.user.role?.toLowerCase();
-      if (userRole !== userType) {
-        throw new Error(
-          `This account is registered as a ${userRole}. Please select the correct account type and try again.`
-        );
-      }
-
-      // Show success toast and set status
-      toast({
-        title: "Welcome back! 👋",
-        description: "Successfully logged in to your account",
-        duration: 5000,
-      });
-
-      // Set success status and prepare for redirect
+      // Always redirect to client dashboard - the dashboard will handle showing the contract modal if needed
+      router.push("/client/dashboard");
+    } catch (error) {
+      console.error("Error logging in:", error);
       setStatusMessage({
-        type: "success",
-        message: "Login successful! Redirecting...",
+        type: "error",
+        message: error instanceof Error ? error.message : "Failed to log in",
       });
-
-      // Delay redirect slightly to ensure toast is visible
-      setTimeout(() => {
-        if (userType === "trainer") {
-          router.push("/trainer/dashboard");
-        } else {
-          router.push("/client/dashboard");
-        }
-      }, 1000);
-    } catch (error: any) {
-      console.log("[LOGIN FORM] Login error", error);
-
-      // Only show error toast for user-facing errors
-      if (
-        !error.message.includes("cookies()") &&
-        !error.message.includes("dynamic-apis")
-      ) {
-        setStatusMessage({ type: "error", message: error.message });
-
-        let errorTitle = "Login Failed";
-        // Determine more specific error title based on the error message
-        if (error.message.includes("registered as a")) {
-          errorTitle = "Incorrect Account Type";
-        } else if (error.message.includes("Invalid login credentials")) {
-          errorTitle = "Invalid Credentials";
-        } else if (error.message.includes("Email not confirmed")) {
-          errorTitle = "Email Not Verified";
-        } else if (error.message.toLowerCase().includes("password")) {
-          errorTitle = "Password Error";
-        } else if (error.message.toLowerCase().includes("email")) {
-          errorTitle = "Email Error";
-        }
-
-        toast({
-          title: errorTitle,
-          description: error.message,
-          variant: "destructive",
-          duration: 5000,
-        });
-      }
     } finally {
       setIsLoading(false);
     }
@@ -269,6 +207,11 @@ export default function LoginPage() {
 
             <TabsContent value="login">
               <form onSubmit={handleLogin} className="space-y-4">
+                {statusMessage.type === "error" && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{statusMessage.message}</AlertDescription>
+                  </Alert>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
                   <div className="relative">

@@ -24,8 +24,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { DashboardWrapper } from "./DashboardWrapper";
 import { useEffect, useState } from "react";
-import { ContractModal } from "@/components/ContractModal";
+import { ContractFlowModal } from "@/components/ContractFlowModal";
 import { createClient } from "@/lib/supabaseClient";
+import { useRouter } from "next/navigation";
+import GoogleCalendarPopup from "@/components/GoogleCalendarPopup";
 
 const mockUpcomingSessions = [
   {
@@ -57,34 +59,43 @@ const mockPaymentHistory = [
   { id: 3, date: "2023-11-20", amount: 300, sessions: 5, status: "completed" },
 ];
 
-interface ModalProps {
-  onAccept?: () => Promise<void>;
-  onOpenChange?: (open: boolean) => void;
-  open?: boolean;
+interface UserStatus {
+  contractAccepted: boolean;
+  googleConnected: boolean;
+  userName: string;
 }
 
 export default function ClientDashboard() {
+  const [loading, setLoading] = useState(true);
   const [showContractModal, setShowContractModal] = useState(false);
-  const [userStatus, setUserStatus] = useState({
+  const [showCalendarPopup, setShowCalendarPopup] = useState(false);
+  const [userStatus, setUserStatus] = useState<UserStatus>({
     contractAccepted: false,
     googleConnected: false,
+    userName: "Client",
   });
   const supabase = createClient();
+  const router = useRouter();
 
   useEffect(() => {
-    async function checkUserStatus() {
+    const checkUserStatus = async () => {
       try {
         const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) return;
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!session?.user) {
+          console.log("No session found, redirecting to login");
+          router.push("/login");
+          return;
+        }
+
+        console.log("Fetching user data for auth ID:", session.user.id);
 
         const { data: userData, error } = await supabase
           .from("users")
-          .select(
-            "contract_accepted, google_account_connected, contract_signed_at"
-          )
-          .eq("id", user.id)
+          .select("contract_accepted, google_account_connected, full_name")
+          .eq("id", session.user.id)
           .single();
 
         if (error) {
@@ -92,62 +103,71 @@ export default function ClientDashboard() {
           return;
         }
 
-        console.log("User data for modals:", userData);
+        console.log("User data from Supabase:", userData);
 
-        // Only consider contract accepted if contract_accepted is true
-        const hasAcceptedContract = userData.contract_accepted === true;
+        if (userData) {
+          // Explicitly check for null/undefined before using ||
+          const contractAccepted =
+            userData.contract_accepted === null
+              ? false
+              : userData.contract_accepted;
+          const googleConnected =
+            userData.google_account_connected === null
+              ? false
+              : userData.google_account_connected;
 
-        setUserStatus({
-          contractAccepted: hasAcceptedContract,
-          googleConnected: userData.google_account_connected,
-        });
+          console.log("Setting user status:", {
+            contractAccepted,
+            googleConnected,
+            userName: userData.full_name || "Client",
+          });
 
-        // Show contract modal if contract not accepted
-        if (!hasAcceptedContract) {
-          console.log("Showing contract modal - contract not accepted");
-          setShowContractModal(true);
-        } else if (!userData.google_account_connected) {
-          // If contract is accepted but Google not connected, show calendar popup
-          console.log("Showing calendar popup - Google not connected");
+          setUserStatus({
+            contractAccepted,
+            googleConnected,
+            userName: userData.full_name || "Client",
+          });
+
+          // Directly check contract status from the fresh data
+          if (
+            userData.contract_accepted === false ||
+            userData.contract_accepted === null
+          ) {
+            console.log("Contract not accepted, showing modal");
+            setShowContractModal(true);
+          } else if (!googleConnected) {
+            console.log(
+              "Contract accepted but Google not connected, showing calendar popup"
+            );
+            setShowCalendarPopup(true);
+          }
+        } else {
+          console.log("No user data found for auth ID:", session.user.id);
         }
       } catch (error) {
         console.error("Error checking user status:", error);
+      } finally {
+        setLoading(false);
       }
-    }
+    };
 
     checkUserStatus();
-  }, [supabase]);
+  }, []);
 
-  // Handle contract acceptance
-  const handleContractAccepted = async () => {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
+  console.log("Rendering dashboard:", {
+    loading,
+    showContractModal,
+    contractAccepted: userStatus.contractAccepted,
+    googleConnected: userStatus.googleConnected,
+  });
 
-      // Update the contract status in the database
-      const { error } = await supabase
-        .from("users")
-        .update({
-          contract_accepted: true,
-          contract_signed_at: new Date().toISOString(),
-        })
-        .eq("id", user.id);
-
-      if (error) throw error;
-
-      // Update local state
-      setUserStatus((prev) => ({ ...prev, contractAccepted: true }));
-      setShowContractModal(false);
-
-      // Show Google Calendar popup if not connected
-      if (!userStatus.googleConnected) {
-      }
-    } catch (error) {
-      console.error("Error updating contract status:", error);
-    }
-  };
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-lg font-medium">Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <DashboardWrapper>
@@ -168,11 +188,16 @@ export default function ClientDashboard() {
                 <Avatar className="h-16 w-16">
                   <AvatarImage src="/placeholder.svg?height=64&width=64" />
                   <AvatarFallback className="bg-white text-red-600 text-xl font-bold">
-                    JD
+                    {userStatus.userName
+                      .split(" ")
+                      .map((n) => n[0])
+                      .join("")}
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <h2 className="text-2xl font-bold">Welcome back, Sarah!</h2>
+                  <h2 className="text-2xl font-bold">
+                    Welcome back, {userStatus.userName}!
+                  </h2>
                   <p className="text-red-100">
                     Your next training session is scheduled for tomorrow at
                     10:00 AM
@@ -379,12 +404,30 @@ export default function ClientDashboard() {
           </div>
         </main>
 
-        {showContractModal && (
-          <ContractModal
-            onAccept={handleContractAccepted}
-            onOpenChange={(open: boolean) => setShowContractModal(open)}
-          />
-        )}
+        {/* Move ContractFlowModal outside of layout containers */}
+        <ContractFlowModal
+          open={showContractModal}
+          onOpenChange={(open) => {
+            setShowContractModal(open);
+            // Only redirect to login if the contract wasn't accepted
+            if (!open && !userStatus.contractAccepted) {
+              router.push("/login");
+            }
+          }}
+          onComplete={async () => {
+            setUserStatus((prev) => ({ ...prev, contractAccepted: true }));
+            setShowContractModal(false);
+            if (!userStatus.googleConnected) {
+              setShowCalendarPopup(true);
+            }
+          }}
+        />
+
+        {/* Keep GoogleCalendarPopup */}
+        <GoogleCalendarPopup
+          open={showCalendarPopup}
+          onOpenChange={setShowCalendarPopup}
+        />
       </div>
     </DashboardWrapper>
   );
