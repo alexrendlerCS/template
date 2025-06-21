@@ -29,29 +29,29 @@ import { createClient } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 import GoogleCalendarPopup from "@/components/GoogleCalendarPopup";
 
-const mockUpcomingSessions = [
-  {
-    id: 1,
-    date: "2024-01-15",
-    time: "10:00 AM",
-    type: "Personal Training",
-    trainer: "John Doe",
-  },
-  {
-    id: 2,
-    date: "2024-01-17",
-    time: "2:00 PM",
-    type: "Strength Training",
-    trainer: "John Doe",
-  },
-  {
-    id: 3,
-    date: "2024-01-19",
-    time: "11:00 AM",
-    type: "Cardio Session",
-    trainer: "John Doe",
-  },
-];
+// Interface for the final processed session
+interface Session {
+  id: string; // Updated to string since Supabase IDs are UUIDs
+  date: string;
+  start_time: string;
+  type: string;
+  trainer_id: string;
+  users: {
+    full_name: string;
+  };
+}
+
+// Interface for the raw Supabase response
+interface RawSupabaseSession {
+  id: string; // Updated to string since Supabase IDs are UUIDs
+  date: string;
+  start_time: string;
+  type: string;
+  trainer_id: string;
+  users: {
+    full_name: string;
+  };
+}
 
 const mockPaymentHistory = [
   { id: 1, date: "2024-01-10", amount: 240, sessions: 4, status: "completed" },
@@ -63,21 +63,142 @@ interface UserStatus {
   contractAccepted: boolean;
   googleConnected: boolean;
   userName: string;
+  avatarUrl: string | null;
 }
+
+// Add helper functions for date and time formatting
+const formatDate = (dateStr: string) => {
+  // Create date object and adjust for timezone
+  const date = new Date(dateStr);
+  date.setMinutes(date.getMinutes() + date.getTimezoneOffset());
+  return date.toLocaleDateString();
+};
+
+const formatTime = (timeStr: string) => {
+  // Parse the time string (expected format: "HH:MM:SS")
+  const [hours, minutes] = timeStr.split(":");
+  const hour = parseInt(hours, 10);
+  const period = hour >= 12 ? "PM" : "AM";
+  const formattedHour = hour % 12 || 12; // Convert 0 to 12 for 12 AM
+  return `${formattedHour}:${minutes} ${period}`;
+};
+
+// Add helper function to format the next session message
+const getNextSessionMessage = (sessions: Session[]) => {
+  if (!sessions.length) {
+    return "You have no upcoming sessions scheduled";
+  }
+
+  const nextSession = sessions[0];
+  const date = new Date(nextSession.date);
+  date.setMinutes(date.getMinutes() + date.getTimezoneOffset());
+
+  // Get relative date description
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const sessionDate = new Date(date);
+  sessionDate.setHours(0, 0, 0, 0);
+
+  let dateText;
+  const diffDays = Math.round(
+    (sessionDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+  );
+
+  switch (diffDays) {
+    case 0:
+      dateText = "today";
+      break;
+    case 1:
+      dateText = "tomorrow";
+      break;
+    default:
+      dateText = `on ${date.toLocaleDateString("en-US", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+      })}`;
+  }
+
+  return `Your next training session is ${dateText} at ${formatTime(
+    nextSession.start_time
+  )} with ${nextSession.users.full_name}`;
+};
 
 export default function ClientDashboard() {
   const [loading, setLoading] = useState(true);
   const [showContractModal, setShowContractModal] = useState(false);
   const [showCalendarPopup, setShowCalendarPopup] = useState(false);
+  const [upcomingSessions, setUpcomingSessions] = useState<Session[]>([]);
   const [userStatus, setUserStatus] = useState<UserStatus>({
     contractAccepted: false,
     googleConnected: false,
     userName: "Client",
+    avatarUrl: null,
   });
   const supabase = createClient();
   const router = useRouter();
 
   useEffect(() => {
+    const fetchUpcomingSessions = async (userId: string) => {
+      try {
+        console.log("Fetching upcoming sessions for user:", userId);
+
+        const { data: sessions, error } = await supabase
+          .from("sessions")
+          .select(
+            "id, date, start_time, type, trainer_id, users!sessions_trainer_id_fkey(full_name)"
+          )
+          .eq("client_id", userId)
+          .gte("date", new Date().toISOString().split("T")[0])
+          .order("date", { ascending: true })
+          .order("start_time", { ascending: true })
+          .limit(3);
+
+        if (error) {
+          console.error("Error fetching sessions:", error);
+          return;
+        }
+
+        console.log("Raw sessions data:", sessions);
+
+        // Transform the raw response to match our Session interface
+        const typedSessions =
+          sessions?.map((session) => {
+            // First cast to unknown, then to our expected type
+            const rawSession = session as unknown as RawSupabaseSession;
+
+            console.log("Processing session:", {
+              sessionId: rawSession.id,
+              trainerId: rawSession.trainer_id,
+              usersData: rawSession.users,
+            });
+
+            // The users data is already in the correct format
+            const trainerName =
+              rawSession.users?.full_name || "Unknown Trainer";
+            if (trainerName === "Unknown Trainer") {
+              console.warn("Trainer name not found for session:", {
+                sessionId: rawSession.id,
+                trainerId: rawSession.trainer_id,
+                usersData: rawSession.users,
+              });
+            }
+
+            return {
+              ...rawSession,
+              users: {
+                full_name: trainerName,
+              },
+            };
+          }) || [];
+
+        console.log("Processed sessions:", typedSessions);
+        setUpcomingSessions(typedSessions);
+      } catch (error) {
+        console.error("Error in fetchUpcomingSessions:", error);
+      }
+    };
+
     const checkUserStatus = async () => {
       try {
         const {
@@ -94,7 +215,9 @@ export default function ClientDashboard() {
 
         const { data: userData, error } = await supabase
           .from("users")
-          .select("contract_accepted, google_account_connected, full_name")
+          .select(
+            "contract_accepted, google_account_connected, full_name, avatar_url"
+          )
           .eq("id", session.user.id)
           .single();
 
@@ -106,7 +229,6 @@ export default function ClientDashboard() {
         console.log("User data from Supabase:", userData);
 
         if (userData) {
-          // Explicitly check for null/undefined before using ||
           const contractAccepted =
             userData.contract_accepted === null
               ? false
@@ -116,19 +238,13 @@ export default function ClientDashboard() {
               ? false
               : userData.google_account_connected;
 
-          console.log("Setting user status:", {
-            contractAccepted,
-            googleConnected,
-            userName: userData.full_name || "Client",
-          });
-
           setUserStatus({
             contractAccepted,
             googleConnected,
             userName: userData.full_name || "Client",
+            avatarUrl: userData.avatar_url,
           });
 
-          // Directly check contract status from the fresh data
           if (
             userData.contract_accepted === false ||
             userData.contract_accepted === null
@@ -141,6 +257,9 @@ export default function ClientDashboard() {
             );
             setShowCalendarPopup(true);
           }
+
+          // Fetch upcoming sessions after user data is confirmed
+          await fetchUpcomingSessions(session.user.id);
         } else {
           console.log("No user data found for auth ID:", session.user.id);
         }
@@ -160,6 +279,13 @@ export default function ClientDashboard() {
     contractAccepted: userStatus.contractAccepted,
     googleConnected: userStatus.googleConnected,
   });
+
+  // Get initials from user name
+  const initials = userStatus.userName
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase();
 
   if (loading) {
     return (
@@ -186,12 +312,12 @@ export default function ClientDashboard() {
             <CardContent className="p-6">
               <div className="flex items-center space-x-4">
                 <Avatar className="h-16 w-16">
-                  <AvatarImage src="/placeholder.svg?height=64&width=64" />
+                  <AvatarImage
+                    src={userStatus.avatarUrl || "/placeholder-user.jpg"}
+                    alt={userStatus.userName}
+                  />
                   <AvatarFallback className="bg-white text-red-600 text-xl font-bold">
-                    {userStatus.userName
-                      .split(" ")
-                      .map((n) => n[0])
-                      .join("")}
+                    {initials}
                   </AvatarFallback>
                 </Avatar>
                 <div>
@@ -199,8 +325,7 @@ export default function ClientDashboard() {
                     Welcome back, {userStatus.userName}!
                   </h2>
                   <p className="text-red-100">
-                    Your next training session is scheduled for tomorrow at
-                    10:00 AM
+                    {getNextSessionMessage(upcomingSessions)}
                   </p>
                 </div>
               </div>
@@ -223,40 +348,46 @@ export default function ClientDashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {mockUpcomingSessions.map((session) => (
-                      <div
-                        key={session.id}
-                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="flex items-center space-x-4">
-                          <div className="text-center">
-                            <p className="font-medium text-red-600">
-                              {session.time}
-                            </p>
-                            <p className="text-sm text-gray-500">
-                              {session.date}
-                            </p>
+                    {upcomingSessions.length > 0 ? (
+                      upcomingSessions.map((session) => (
+                        <div
+                          key={session.id}
+                          className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                          <div className="flex items-center space-x-4">
+                            <div className="text-center">
+                              <p className="font-medium text-red-600">
+                                {formatTime(session.start_time)}
+                              </p>
+                              <p className="text-sm text-gray-500">
+                                {formatDate(session.date)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="font-medium">{session.type}</p>
+                              <p className="text-sm text-gray-500">
+                                with {session.users.full_name}
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-medium">{session.type}</p>
-                            <p className="text-sm text-gray-500">
-                              with {session.trainer}
-                            </p>
+                          <div className="flex items-center space-x-2">
+                            <Badge
+                              variant="default"
+                              className="bg-green-100 text-green-800"
+                            >
+                              Confirmed
+                            </Badge>
+                            <Button size="sm" variant="outline">
+                              Reschedule
+                            </Button>
                           </div>
                         </div>
-                        <div className="flex items-center space-x-2">
-                          <Badge
-                            variant="default"
-                            className="bg-green-100 text-green-800"
-                          >
-                            Confirmed
-                          </Badge>
-                          <Button size="sm" variant="outline">
-                            Reschedule
-                          </Button>
-                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-6 text-gray-500">
+                        No upcoming sessions scheduled
                       </div>
-                    ))}
+                    )}
                   </div>
                   <div className="mt-6 pt-4 border-t">
                     <Link href="/client/booking">

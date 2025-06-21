@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -55,10 +56,52 @@ const menuItems = [
   },
 ];
 
+interface UserData {
+  full_name: string;
+  avatar_url: string | null;
+}
+
 export function ClientSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
+  const [userData, setUserData] = useState<UserData>({
+    full_name: "Client",
+    avatar_url: null,
+  });
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session?.user) return;
+
+        const { data, error } = await supabase
+          .from("users")
+          .select("full_name, avatar_url")
+          .eq("id", session.user.id)
+          .single();
+
+        if (error) {
+          console.error("Error fetching user data:", error);
+          return;
+        }
+
+        if (data) {
+          setUserData({
+            full_name: data.full_name || "Client",
+            avatar_url: data.avatar_url,
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+      }
+    };
+
+    fetchUserData();
+  }, []);
 
   const handleSignOut = async () => {
     try {
@@ -68,6 +111,13 @@ export function ClientSidebar() {
       console.error("Error signing out:", error);
     }
   };
+
+  // Get initials from full name
+  const initials = userData.full_name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase();
 
   return (
     <Sidebar>
@@ -119,14 +169,17 @@ export function ClientSidebar() {
           <SidebarMenuItem>
             <div className="flex items-center space-x-3 px-2 py-2">
               <Avatar className="h-8 w-8">
-                <AvatarImage src="/placeholder.svg?height=32&width=32" />
+                <AvatarImage
+                  src={userData.avatar_url || "/placeholder-user.jpg"}
+                  alt={userData.full_name}
+                />
                 <AvatarFallback className="bg-red-600 text-white text-sm">
-                  CL
+                  {initials}
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-sidebar-foreground truncate">
-                  Client Name
+                  {userData.full_name}
                 </p>
                 <p className="text-xs text-sidebar-foreground/70 truncate">
                   Member
