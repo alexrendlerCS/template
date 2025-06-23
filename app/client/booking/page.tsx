@@ -269,7 +269,8 @@ export default function BookingPage() {
   const [selectedType, setSelectedType] = useState("");
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState("");
-  const [showTrainerModal, setShowTrainerModal] = useState(true);
+  const [showTrainerModal, setShowTrainerModal] = useState(false);
+  const [showNoSessionsDialog, setShowNoSessionsDialog] = useState(false);
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [selectedTrainer, setSelectedTrainer] = useState<Trainer | null>(null);
   const [loading, setLoading] = useState(true);
@@ -292,6 +293,8 @@ export default function BookingPage() {
   const [showErrorDialog, setShowErrorDialog] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const [sessionsRemaining, setSessionsRemaining] = useState<number>(0);
 
   const supabase = createClient();
 
@@ -504,6 +507,68 @@ export default function BookingPage() {
 
     fetchUserProfile();
   }, [user, supabase]);
+
+  useEffect(() => {
+    const checkRemainingSession = async () => {
+      console.log("Starting session check...");
+      setIsCheckingSession(true);
+
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        console.log("Auth check result:", { userId: user?.id });
+
+        if (!user) {
+          console.log("No authenticated user found");
+          return;
+        }
+
+        const { data, error } = await supabase.rpc(
+          "get_sessions_remaining_for_client"
+        );
+
+        console.log("Sessions remaining query result:", {
+          data,
+          error,
+          sessionsRemaining: data?.[0]?.sessions_remaining,
+        });
+
+        if (error) {
+          console.error("Failed to fetch sessions remaining:", error);
+          setSessionsRemaining(0);
+          setShowNoSessionsDialog(true);
+          setIsCheckingSession(false);
+          return;
+        }
+
+        if (data && data.length > 0) {
+          const remaining = data[0].sessions_remaining ?? 0;
+          console.log("Fetched sessions remaining:", remaining);
+          setSessionsRemaining(remaining);
+
+          if (remaining === 0) {
+            setShowNoSessionsDialog(true);
+          } else {
+            setShowTrainerModal(true);
+          }
+        } else {
+          console.log("No sessions record found, treating as 0 sessions");
+          setSessionsRemaining(0);
+          setShowNoSessionsDialog(true);
+        }
+      } catch (error) {
+        console.error("Session check error:", error);
+        setSessionsRemaining(0);
+        setShowNoSessionsDialog(true);
+      } finally {
+        setIsCheckingSession(false);
+      }
+    };
+
+    checkRemainingSession();
+  }, [supabase]);
 
   const handleTrainerSelect = (trainer: Trainer) => {
     setSelectedTrainer(trainer);
@@ -810,6 +875,18 @@ export default function BookingPage() {
       setIsBooking(false);
     }
   };
+
+  // Add loading state display
+  if (isCheckingSession) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
+          <p className="mt-2 text-gray-600">Checking session availability...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -1269,6 +1346,37 @@ export default function BookingPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* No Sessions Dialog */}
+      <Dialog
+        open={showNoSessionsDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            router.push("/client/dashboard");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>No Sessions Remaining</DialogTitle>
+            <DialogDescription>
+              You currently don't have any sessions left. Please purchase a new
+              package before booking another session.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end space-x-2 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => router.push("/client/dashboard")}
+            >
+              Back to Dashboard
+            </Button>
+            <Button onClick={() => router.push("/client/payment-methods")}>
+              Go to Payment
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
