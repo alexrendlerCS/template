@@ -31,6 +31,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  AlertCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabaseClient";
@@ -271,6 +272,8 @@ export default function BookingPage() {
   const [selectedTime, setSelectedTime] = useState("");
   const [showTrainerModal, setShowTrainerModal] = useState(false);
   const [showNoSessionsDialog, setShowNoSessionsDialog] = useState(false);
+  const [showCurrentSessionsDialog, setShowCurrentSessionsDialog] =
+    useState(false);
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [selectedTrainer, setSelectedTrainer] = useState<Trainer | null>(null);
   const [loading, setLoading] = useState(true);
@@ -551,7 +554,7 @@ export default function BookingPage() {
           if (remaining === 0) {
             setShowNoSessionsDialog(true);
           } else {
-            setShowTrainerModal(true);
+            setShowCurrentSessionsDialog(true); // Show the current sessions dialog first
           }
         } else {
           console.log("No sessions record found, treating as 0 sessions");
@@ -1347,6 +1350,52 @@ export default function BookingPage() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Current Sessions Dialog */}
+      <Dialog
+        open={showCurrentSessionsDialog}
+        onOpenChange={(open) => {
+          setShowCurrentSessionsDialog(open);
+          if (!open) {
+            setShowTrainerModal(true); // Show trainer modal after closing this one
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-500" />
+              Available Training Sessions
+            </DialogTitle>
+            <DialogDescription>
+              You have {sessionsRemaining} training{" "}
+              {sessionsRemaining === 1 ? "session" : "sessions"} remaining in
+              your current package.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="bg-green-50 p-4 rounded-lg text-center">
+              <p className="text-3xl font-bold text-green-600 mb-1">
+                {sessionsRemaining}
+              </p>
+              <p className="text-sm text-green-700">Available Sessions</p>
+            </div>
+            <p className="text-sm text-gray-500 mt-4 text-center">
+              Click continue to proceed with booking your next session.
+            </p>
+          </div>
+          <div className="flex justify-end space-x-2 pt-4">
+            <Button
+              onClick={() => {
+                setShowCurrentSessionsDialog(false);
+                setShowTrainerModal(true);
+              }}
+            >
+              Continue to Booking
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* No Sessions Dialog */}
       <Dialog
         open={showNoSessionsDialog}
@@ -1358,12 +1407,24 @@ export default function BookingPage() {
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>No Sessions Remaining</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-red-500" />
+              No Available Sessions
+            </DialogTitle>
             <DialogDescription>
               You currently don't have any sessions left. Please purchase a new
               package before booking another session.
             </DialogDescription>
           </DialogHeader>
+          <div className="py-4">
+            <div className="bg-red-50 p-4 rounded-lg text-center">
+              <p className="text-3xl font-bold text-red-600 mb-1">0</p>
+              <p className="text-sm text-red-700">Available Sessions</p>
+            </div>
+            <p className="text-sm text-gray-500 mt-4 text-center">
+              Purchase more sessions to continue booking training sessions.
+            </p>
+          </div>
           <div className="flex justify-end space-x-2 pt-4">
             <Button
               variant="outline"
