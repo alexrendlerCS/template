@@ -71,8 +71,23 @@ export default function LoginPage() {
 
       if (error) throw error;
 
-      // Always redirect to client dashboard - the dashboard will handle showing the contract modal if needed
-      router.push("/client/dashboard");
+      // Get user's role from the database
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .select("role")
+        .eq("email", loginData.email)
+        .single();
+
+      if (userError) {
+        throw new Error("Failed to fetch user role");
+      }
+
+      // Redirect based on role
+      const redirectTo =
+        userData?.role === "trainer"
+          ? "/trainer/dashboard"
+          : "/client/dashboard";
+      router.push(redirectTo);
     } catch (error) {
       console.error("Error logging in:", error);
       setStatusMessage({
