@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -23,6 +23,14 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   CreditCard,
   Plus,
   ArrowLeft,
@@ -32,8 +40,10 @@ import {
   Trash2,
   Shield,
   Menu,
+  CheckCircle,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 const mockPaymentMethods = [
   {
@@ -84,6 +94,18 @@ const mockPurchaseHistory = [
 export default function PaymentMethodsPage() {
   const [autopayEnabled, setAutopayEnabled] = useState(true);
   const [isAddCardOpen, setIsAddCardOpen] = useState(false);
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const router = useRouter();
+
+  // Check URL parameters for success state
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("success") === "true") {
+      setShowSuccessDialog(true);
+      // Clean up the URL
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -333,6 +355,45 @@ export default function PaymentMethodsPage() {
           </Card>
         </div>
       </main>
+
+      {/* Payment Success Dialog */}
+      <AlertDialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
+        <AlertDialogContent className="sm:max-w-md">
+          <AlertDialogHeader>
+            <div className="flex items-center gap-4">
+              <div className="bg-green-100 p-3 rounded-full">
+                <CheckCircle className="h-6 w-6 text-green-600" />
+              </div>
+              <div>
+                <AlertDialogTitle>Payment Successful!</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Your payment has been processed successfully. Your training
+                  sessions have been added to your account.
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </AlertDialogHeader>
+          <div className="bg-green-50 p-4 rounded-lg mt-4">
+            <div className="text-center">
+              <p className="text-2xl font-bold text-green-600 mb-1">
+                {/* This would come from the session metadata */}8 Sessions
+              </p>
+              <p className="text-sm text-green-700">Added to your account</p>
+            </div>
+          </div>
+          <div className="flex justify-end space-x-2 mt-6">
+            <AlertDialogAction
+              onClick={() => {
+                setShowSuccessDialog(false);
+                router.push("/client/dashboard");
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Go to Dashboard
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useUser } from "@/lib/store/user";
 import {
   Card,
   CardContent,
@@ -14,6 +15,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Menu } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { toast } from "sonner";
+import { createClient } from "@/lib/supabaseClient";
 
 interface Package {
   id: string;
@@ -167,17 +170,54 @@ const packageSections: PackageSection[] = [
 export default function PackagesPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState<string | null>(null);
+  const { user, setUser } = useUser();
+  const supabase = createClient();
+
+  useEffect(() => {
+    const initializeUser = async () => {
+      try {
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
+        if (error) {
+          console.error("Error getting session:", error);
+          router.push("/login");
+          return;
+        }
+
+        if (!session?.user) {
+          console.log("No session found, redirecting to login");
+          router.push("/login");
+          return;
+        }
+
+        setUser(session.user);
+      } catch (error) {
+        console.error("Error initializing user:", error);
+        router.push("/login");
+      }
+    };
+
+    initializeUser();
+  }, []);
 
   const handleCheckout = async (pkg: Package, section: PackageSection) => {
     try {
-      setIsLoading(pkg.priceId);
+      if (!user?.id) {
+        toast.error("Please log in to purchase a package");
+        router.push("/login");
+        return;
+      }
+
+      setIsLoading(pkg.id);
       const response = await fetch("/api/stripe/checkout-session", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          priceId: pkg.priceId,
+          userId: user.id,
           packageType: section.title,
           sessionsIncluded: pkg.monthlySessionCount,
         }),
@@ -188,10 +228,14 @@ export default function PackagesPage() {
       }
 
       const { url } = await response.json();
-      router.push(url);
+      if (url) {
+        window.location.href = url;
+      } else {
+        throw new Error("No checkout URL received");
+      }
     } catch (error) {
       console.error("Checkout error:", error);
-      // You might want to show an error toast here
+      toast.error("Failed to start checkout process. Please try again.");
     } finally {
       setIsLoading(null);
     }
@@ -266,9 +310,9 @@ export default function PackagesPage() {
                       <Button
                         className="w-full bg-red-600 hover:bg-red-700 text-white py-6"
                         onClick={() => handleCheckout(pkg, section)}
-                        disabled={isLoading === pkg.priceId}
+                        disabled={isLoading === pkg.id}
                       >
-                        {isLoading === pkg.priceId
+                        {isLoading === pkg.id
                           ? "Loading..."
                           : "Purchase Package"}
                       </Button>

@@ -9,59 +9,58 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2025-05-28.basil",
 });
 
-export async function POST(request: Request) {
+export async function POST(req: Request) {
   try {
-    console.log("Creating checkout session...");
-
-    const supabase = createClient();
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser();
-
-    if (error || !user) {
-      console.error("Authentication error:", error);
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
-    const { priceId, packageType, sessionsIncluded } = await request.json();
-
-    if (!priceId || !packageType || !sessionsIncluded) {
-      console.error("Missing required fields:", {
-        priceId,
-        packageType,
-        sessionsIncluded,
-      });
-      return new NextResponse("Missing required fields", { status: 400 });
-    }
+    const { userId, packageType, sessionsIncluded } = await req.json();
 
     console.log("Creating Stripe checkout session for:", {
-      userId: user.id,
+      userId,
       packageType,
       sessionsIncluded,
     });
 
+    // Calculate price based on package type and sessions
+    // This is a simplified example - you would typically look up prices from your database
+    const unitPrice = 6000; // $60.00 per session
+    const totalAmount = unitPrice * sessionsIncluded;
+
+    // Get the origin for success and cancel URLs
+    const origin =
+      process.env.NODE_ENV === "development"
+        ? "http://localhost:3000"
+        : process.env.NEXT_PUBLIC_SITE_URL || "https://your-production-url.com";
+
     const session = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      payment_method_types: ["card"],
-      line_items: [{ price: priceId, quantity: 1 }],
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: `${packageType} - ${sessionsIncluded} Sessions`,
+              description: `Package of ${sessionsIncluded} personal training sessions`,
+            },
+            unit_amount: unitPrice,
+          },
+          quantity: sessionsIncluded,
+        },
+      ],
+      mode: "payment",
+      success_url: `${origin}/client/payment-methods?success=true`,
+      cancel_url: `${origin}/client/payment-methods?canceled=true`,
       metadata: {
-        user_id: user.id,
-        package_type: packageType,
+        user_id: userId,
         sessions_included: sessionsIncluded.toString(),
+        package_type: packageType,
       },
-      customer_email: user.email!,
-      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/client/dashboard?success=true`,
-      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/client/packages?canceled=true`,
     });
 
     console.log("Checkout session created successfully:", session.id);
 
     return NextResponse.json({ url: session.url });
-  } catch (err) {
-    console.error("Failed to create checkout session:", err);
-    return new NextResponse(
-      `Checkout Error: ${err instanceof Error ? err.message : "Unknown Error"}`,
+  } catch (error) {
+    console.error("Error creating checkout session:", error);
+    return NextResponse.json(
+      { error: "Failed to create checkout session" },
       { status: 500 }
     );
   }
