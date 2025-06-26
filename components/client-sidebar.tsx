@@ -45,6 +45,11 @@ const menuItems = [
     icon: CalendarPlus,
   },
   {
+    title: "Packages",
+    url: "/client/packages",
+    icon: DollarSign,
+  },
+  {
     title: "Payment Methods",
     url: "/client/payment-methods",
     icon: DollarSign,
