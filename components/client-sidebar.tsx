@@ -50,11 +50,6 @@ const menuItems = [
     icon: DollarSign,
   },
   {
-    title: "Payment Methods",
-    url: "/client/payment-methods",
-    icon: DollarSign,
-  },
-  {
     title: "Messages",
     url: "/client/messages",
     icon: MessageSquare,

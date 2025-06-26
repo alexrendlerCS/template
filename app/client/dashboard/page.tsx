@@ -53,11 +53,14 @@ interface RawSupabaseSession {
   };
 }
 
-const mockPaymentHistory = [
-  { id: 1, date: "2024-01-10", amount: 240, sessions: 4, status: "completed" },
-  { id: 2, date: "2023-12-15", amount: 180, sessions: 3, status: "completed" },
-  { id: 3, date: "2023-11-20", amount: 300, sessions: 5, status: "completed" },
-];
+// Add payment history interface
+interface Payment {
+  id: string;
+  paid_at: string;
+  amount: number;
+  session_count: number;
+  status: string;
+}
 
 interface UserStatus {
   contractAccepted: boolean;
@@ -124,17 +127,27 @@ const getNextSessionMessage = (sessions: Session[]) => {
   )} with ${nextSession.users.full_name}`;
 };
 
+interface PackageTypeCount {
+  type: string;
+  remaining: number;
+  total: number;
+}
+
 export default function ClientDashboard() {
   const [loading, setLoading] = useState(true);
   const [showContractModal, setShowContractModal] = useState(false);
   const [showCalendarPopup, setShowCalendarPopup] = useState(false);
   const [upcomingSessions, setUpcomingSessions] = useState<Session[]>([]);
+  const [paymentHistory, setPaymentHistory] = useState<Payment[]>([]);
   const [userStatus, setUserStatus] = useState<UserStatus>({
     contractAccepted: false,
     googleConnected: false,
     userName: "Client",
     avatarUrl: null,
   });
+  const [sessionsByType, setSessionsByType] = useState<PackageTypeCount[]>([]);
+  const [totalSessionsRemaining, setTotalSessionsRemaining] = useState(0);
+  const [totalSessionsUsed, setTotalSessionsUsed] = useState(0);
   const supabase = createClient();
   const router = useRouter();
 
@@ -272,6 +285,105 @@ export default function ClientDashboard() {
 
     checkUserStatus();
   }, []);
+
+  // Add this effect to fetch package information
+  useEffect(() => {
+    const fetchPackageInfo = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session?.user) return;
+
+        const { data: packages, error: packagesError } = await supabase
+          .from("packages")
+          .select("*")
+          .eq("client_id", session.user.id)
+          .order("purchase_date", { ascending: false });
+
+        if (packagesError) {
+          console.error("Failed to fetch packages:", packagesError);
+          return;
+        }
+
+        // Group packages by type and calculate remaining sessions
+        const packageTypes: Record<string, PackageTypeCount> = {
+          "In-Person Training": {
+            type: "In-Person Training",
+            remaining: 0,
+            total: 0,
+          },
+          "Virtual Training": {
+            type: "Virtual Training",
+            remaining: 0,
+            total: 0,
+          },
+          "Partner Training": {
+            type: "Partner Training",
+            remaining: 0,
+            total: 0,
+          },
+        };
+
+        let totalUsed = 0;
+        let totalRemaining = 0;
+
+        if (packages && packages.length > 0) {
+          packages.forEach((pkg) => {
+            const type = pkg.package_type;
+            if (packageTypes[type]) {
+              const remaining =
+                (pkg.sessions_included || 0) - (pkg.sessions_used || 0);
+              packageTypes[type].remaining += remaining;
+              packageTypes[type].total += pkg.sessions_included || 0;
+              totalUsed += pkg.sessions_used || 0;
+              totalRemaining += remaining;
+            }
+          });
+        }
+
+        setSessionsByType(Object.values(packageTypes));
+        setTotalSessionsRemaining(totalRemaining);
+        setTotalSessionsUsed(totalUsed);
+      } catch (error) {
+        console.error("Error fetching package info:", error);
+      }
+    };
+
+    fetchPackageInfo();
+  }, [supabase]);
+
+  // Add new effect for fetching payment history
+  useEffect(() => {
+    const fetchPaymentHistory = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!session?.user) return;
+
+        const { data: payments, error } = await supabase
+          .from("payments")
+          .select("*")
+          .eq("client_id", session.user.id)
+          .eq("status", "completed")
+          .order("paid_at", { ascending: false })
+          .limit(5);
+
+        if (error) {
+          console.error("Error fetching payment history:", error);
+          return;
+        }
+
+        setPaymentHistory(payments || []);
+      } catch (error) {
+        console.error("Error in fetchPaymentHistory:", error);
+      }
+    };
+
+    fetchPaymentHistory();
+  }, [supabase]);
 
   console.log("Rendering dashboard:", {
     loading,
@@ -411,28 +523,39 @@ export default function ClientDashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {mockPaymentHistory.map((payment) => (
-                      <div
-                        key={payment.id}
-                        className="flex items-center justify-between p-3 border rounded-lg"
-                      >
-                        <div>
-                          <p className="font-medium">
-                            {payment.sessions} Training Sessions
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {payment.date}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-bold">${payment.amount}</p>
-                          <div className="flex items-center space-x-1">
-                            <CheckCircle className="h-4 w-4 text-green-600" />
-                            <span className="text-sm text-green-600">Paid</span>
+                    {paymentHistory.length > 0 ? (
+                      paymentHistory.map((payment) => (
+                        <div
+                          key={payment.id}
+                          className="flex items-center justify-between p-3 border rounded-lg"
+                        >
+                          <div>
+                            <p className="font-medium">
+                              {payment.session_count} Training Sessions
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              {new Date(payment.paid_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold">
+                              ${payment.amount.toFixed(2)}
+                            </p>
+                            <div className="flex items-center space-x-1">
+                              <CheckCircle className="h-4 w-4 text-green-600" />
+                              <span className="text-sm text-green-600">
+                                {payment.status.charAt(0).toUpperCase() +
+                                  payment.status.slice(1)}
+                              </span>
+                            </div>
                           </div>
                         </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-6 text-gray-500">
+                        No payment history available
                       </div>
-                    ))}
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -449,34 +572,72 @@ export default function ClientDashboard() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="text-center p-4 bg-green-50 rounded-lg">
-                    <p className="text-2xl font-bold text-green-600">8</p>
+                  <div
+                    className={`text-center p-4 ${
+                      totalSessionsRemaining <= 1 ? "bg-red-50" : "bg-green-50"
+                    } rounded-lg`}
+                  >
+                    <p
+                      className={`text-2xl font-bold ${
+                        totalSessionsRemaining <= 1
+                          ? "text-red-600"
+                          : "text-green-600"
+                      }`}
+                    >
+                      {totalSessionsRemaining}
+                    </p>
                     <p className="text-sm text-gray-600">Sessions Remaining</p>
                   </div>
 
                   <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Current Package:</span>
-                      <span className="font-medium">10 Sessions</span>
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600">Current Packages:</span>
+                        <span className="font-medium">
+                          {sessionsByType[0]?.remaining}{" "}
+                          {sessionsByType[0]?.type.split(" ")[0]}
+                        </span>
+                      </div>
+                      <div className="flex flex-col items-end text-right">
+                        {sessionsByType.slice(1).map((type) => (
+                          <span key={type.type} className="font-medium">
+                            {type.remaining} {type.type.split(" ")[0]}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Sessions Used:</span>
-                      <span className="font-medium">2</span>
+                      <span className="font-medium">{totalSessionsUsed}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Package Expires:</span>
-                      <span className="font-medium">March 15, 2024</span>
+                      <span className="font-medium">
+                        {new Date(
+                          new Date().getFullYear(),
+                          new Date().getMonth() + 1,
+                          1
+                        ).toLocaleDateString("en-US", {
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                        })}
+                      </span>
                     </div>
                   </div>
 
                   <div className="pt-4 border-t">
-                    <Button className="w-full bg-red-600 hover:bg-red-700 mb-2">
-                      <CreditCard className="h-4 w-4 mr-2" />
-                      Buy More Sessions
-                    </Button>
-                    <Button variant="outline" className="w-full">
-                      View Pricing Plans
-                    </Button>
+                    <Link href="/client/packages">
+                      <Button className="w-full bg-red-600 hover:bg-red-700 mb-2">
+                        <CreditCard className="h-4 w-4 mr-2" />
+                        Buy More Sessions
+                      </Button>
+                    </Link>
+                    <Link href="/client/packages">
+                      <Button variant="outline" className="w-full">
+                        View Pricing Plans
+                      </Button>
+                    </Link>
                   </div>
                 </CardContent>
               </Card>
@@ -499,10 +660,10 @@ export default function ClientDashboard() {
                       View Full Calendar
                     </Button>
                   </Link>
-                  <Link href="/client/payment-methods">
+                  <Link href="/client/packages">
                     <Button variant="outline" className="w-full justify-start">
                       <CreditCard className="h-4 w-4 mr-2" />
-                      Payment Methods
+                      View Packages
                     </Button>
                   </Link>
                 </CardContent>

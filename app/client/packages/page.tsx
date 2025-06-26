@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useUser } from "@/lib/store/user";
 import {
@@ -13,10 +13,17 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Menu } from "lucide-react";
+import { ArrowLeft, Menu, CheckCircle, Loader2 } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { toast } from "sonner";
 import { createClient } from "@/lib/supabaseClient";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface Package {
   id: string;
@@ -34,6 +41,21 @@ interface PackageSection {
   icon: string;
   packages: Package[];
 }
+
+interface PackageTypeCount {
+  type: string;
+  remaining: number;
+  total: number;
+}
+
+type PackageType =
+  | "In-Person Training"
+  | "Virtual Training"
+  | "Partner Training";
+
+type PackageTypeCounts = {
+  [K in PackageType]: PackageTypeCount;
+};
 
 const packageSections: PackageSection[] = [
   {
@@ -91,7 +113,7 @@ const packageSections: PackageSection[] = [
         hourlyRate: 115,
         monthlySessionCount: 8,
         monthlyPrice: 920,
-        priceId: "price_PLACEHOLDER_5",
+        priceId: "price_1ReKRuEKMzESB1YeSGoCqnWe",
       },
       {
         id: "virtual-3",
@@ -167,11 +189,269 @@ const packageSections: PackageSection[] = [
   },
 ];
 
+interface PurchasedPackageInfo {
+  type: string;
+  sessions: number;
+}
+
 export default function PackagesPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState<string | null>(null);
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [showCanceledDialog, setShowCanceledDialog] = useState(false);
+  const [hasShownMessage, setHasShownMessage] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+  const [loadingPackages, setLoadingPackages] = useState(false);
+  const [sessionsByType, setSessionsByType] = useState<PackageTypeCount[]>([]);
+  const [purchasedPackage, setPurchasedPackage] =
+    useState<PurchasedPackageInfo | null>(null);
+  const [shouldFetchPackages, setShouldFetchPackages] = useState(false);
   const { user, setUser } = useUser();
   const supabase = createClient();
+
+  // Function to fetch user's package information
+  const fetchPackageInformation = async () => {
+    console.log("=== Starting fetchPackageInformation ===");
+    console.log("Current user state:", {
+      userId: user?.id,
+      isAuthenticated: !!user,
+      email: user?.email,
+    });
+
+    if (!user?.id) {
+      console.log(
+        "❌ No user ID found for fetching packages - will retry when user is available"
+      );
+      setShouldFetchPackages(true);
+      return;
+    }
+
+    setLoadingPackages(true);
+    try {
+      console.log("🔍 Fetching most recent package...");
+      const { data: latestPayment, error: paymentError } = await supabase
+        .from("payments")
+        .select("*")
+        .eq("client_id", user.id)
+        .order("paid_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (paymentError) {
+        console.error("❌ Error fetching latest payment:", paymentError);
+        return;
+      }
+
+      console.log("💳 Raw payment data:", {
+        payment: latestPayment,
+        package_type: latestPayment?.package_type,
+        package_type_type: typeof latestPayment?.package_type,
+        has_package_type: "package_type" in (latestPayment || {}),
+        keys: latestPayment ? Object.keys(latestPayment) : [],
+      });
+
+      // If package_type is null, try to get it from the packages table
+      let packageType = latestPayment.package_type;
+      if (!packageType && latestPayment) {
+        console.log("🔍 Package type is null, looking up in packages table...");
+        const { data: relatedPackage } = await supabase
+          .from("packages")
+          .select("package_type")
+          .eq("client_id", user.id)
+          .eq("sessions_included", latestPayment.session_count)
+          .eq(
+            "purchase_date",
+            new Date(latestPayment.paid_at).toISOString().split("T")[0]
+          )
+          .single();
+
+        if (relatedPackage) {
+          console.log(
+            "✅ Found package type from packages table:",
+            relatedPackage.package_type
+          );
+          packageType = relatedPackage.package_type;
+        }
+      }
+
+      // Convert the payment data into a package format
+      const latestPaymentWithType = {
+        ...latestPayment,
+        package_type: packageType,
+        paidAtObj: new Date(latestPayment.paid_at).toISOString(),
+      };
+
+      console.log("✅ Latest payment found:", {
+        payment: latestPaymentWithType,
+        package_type: latestPaymentWithType.package_type,
+        has_package_type: "package_type" in latestPaymentWithType,
+        source:
+          packageType === latestPayment.package_type ? "payment" : "packages",
+      });
+
+      // Set the purchased package info for the success dialog
+      if (packageType) {
+        const purchasedPackage = {
+          type: packageType,
+          sessions: latestPayment.session_count,
+        };
+
+        console.log("🎁 Setting purchased package:", {
+          package: purchasedPackage,
+          original_type: packageType,
+          payment_type: latestPayment.package_type,
+          found_in:
+            packageType === latestPayment.package_type ? "payment" : "packages",
+        });
+        setPurchasedPackage(purchasedPackage);
+      }
+
+      // Get all packages and group by type
+      const { data: packages, error: packagesError } = await supabase
+        .from("packages")
+        .select("*")
+        .eq("client_id", user.id)
+        .order("purchase_date", { ascending: false });
+
+      if (packagesError) {
+        console.error("❌ Failed to fetch all packages:", packagesError);
+        return;
+      }
+
+      console.log("✅ All packages fetched:", packages);
+
+      // Group packages by type and calculate remaining sessions
+      const packageTypes: Record<string, PackageTypeCount> = {
+        "In-Person Training": {
+          type: "In-Person Training",
+          remaining: 0,
+          total: 0,
+        },
+        "Virtual Training": {
+          type: "Virtual Training",
+          remaining: 0,
+          total: 0,
+        },
+        "Partner Training": {
+          type: "Partner Training",
+          remaining: 0,
+          total: 0,
+        },
+      };
+
+      if (packages) {
+        packages.forEach((pkg) => {
+          const type = pkg.package_type;
+          if (packageTypes[type]) {
+            const remaining =
+              (pkg.sessions_included || 0) - (pkg.sessions_used || 0);
+            packageTypes[type].remaining += remaining;
+            packageTypes[type].total += pkg.sessions_included || 0;
+          }
+        });
+      }
+
+      const sessionTypesArray = Object.values(packageTypes);
+      console.log("Session types after processing:", sessionTypesArray);
+      setSessionsByType(sessionTypesArray);
+    } catch (error) {
+      console.error("Error in fetchPackageInformation:", error);
+    } finally {
+      setLoadingPackages(false);
+      setShouldFetchPackages(false);
+    }
+  };
+
+  // Effect to handle initial mount and URL parameters
+  useEffect(() => {
+    const success = searchParams.get("success");
+    const canceled = searchParams.get("canceled");
+
+    console.log("🔄 Initial mount effect:", {
+      success,
+      canceled,
+      hasShownMessage,
+      isClient,
+      hasUser: !!user,
+      userId: user?.id,
+    });
+
+    setIsClient(true);
+
+    if (!hasShownMessage) {
+      if (success === "true") {
+        console.log("✨ Success parameter detected on mount - showing dialog");
+        setShowSuccessDialog(true);
+        setHasShownMessage(true);
+        setShouldFetchPackages(true);
+      } else if (canceled === "true") {
+        console.log("❌ Canceled parameter detected on mount");
+        setShowCanceledDialog(true);
+        setHasShownMessage(true);
+      }
+    }
+  }, []);
+
+  // Effect to watch for user data and fetch packages when ready
+  useEffect(() => {
+    console.log("👤 User state changed:", {
+      hasUser: !!user,
+      userId: user?.id,
+      shouldFetch: shouldFetchPackages,
+    });
+
+    if (user?.id && shouldFetchPackages) {
+      console.log("✅ User data available, fetching packages...");
+      fetchPackageInformation();
+    }
+  }, [user, shouldFetchPackages]);
+
+  // Effect to handle URL parameter changes
+  useEffect(() => {
+    if (!isClient) return;
+
+    const success = searchParams.get("success");
+    const canceled = searchParams.get("canceled");
+
+    console.log("🔄 URL parameters changed:", {
+      success,
+      canceled,
+      hasShownMessage,
+      showSuccessDialog,
+      hasUser: !!user,
+      userId: user?.id,
+    });
+
+    if (!hasShownMessage) {
+      if (success === "true") {
+        console.log("✨ Success parameter detected from URL change");
+        setShowSuccessDialog(true);
+        setHasShownMessage(true);
+        setShouldFetchPackages(true);
+      } else if (canceled === "true") {
+        console.log("❌ Canceled parameter detected from URL change");
+        setShowCanceledDialog(true);
+        setHasShownMessage(true);
+      }
+    }
+  }, [searchParams, isClient]);
+
+  // Clean up URL when dialog is closed
+  useEffect(() => {
+    if (!isClient) return;
+
+    // Only clean up if we've shown the message and the dialog is now closed
+    if (hasShownMessage && !showSuccessDialog && !showCanceledDialog) {
+      const success = searchParams.get("success");
+      const canceled = searchParams.get("canceled");
+
+      if (success === "true" || canceled === "true") {
+        console.log("Cleaning up URL parameters");
+        window.history.replaceState({}, "", "/client/packages");
+      }
+    }
+  }, [hasShownMessage, showSuccessDialog, showCanceledDialog, isClient]);
 
   useEffect(() => {
     const initializeUser = async () => {
@@ -205,12 +485,30 @@ export default function PackagesPage() {
   const handleCheckout = async (pkg: Package, section: PackageSection) => {
     try {
       if (!user?.id) {
-        toast.error("Please log in to purchase a package");
+        console.error("User not logged in");
         router.push("/login");
         return;
       }
 
       setIsLoading(pkg.id);
+
+      // Ensure the package type is correctly formatted
+      const packageType = section.title.endsWith("Training")
+        ? section.title
+        : `${section.title} Training`;
+
+      console.log("🛍️ Creating checkout session with:", {
+        userId: user.id,
+        packageType,
+        sessionsIncluded: pkg.monthlySessionCount,
+        sectionTitle: section.title,
+        validTypes: [
+          "In-Person Training",
+          "Virtual Training",
+          "Partner Training",
+        ],
+      });
+
       const response = await fetch("/api/stripe/checkout-session", {
         method: "POST",
         headers: {
@@ -218,7 +516,7 @@ export default function PackagesPage() {
         },
         body: JSON.stringify({
           userId: user.id,
-          packageType: section.title,
+          packageType: packageType,
           sessionsIncluded: pkg.monthlySessionCount,
         }),
       });
@@ -235,7 +533,8 @@ export default function PackagesPage() {
       }
     } catch (error) {
       console.error("Checkout error:", error);
-      toast.error("Failed to start checkout process. Please try again.");
+      console.error("Error initializing user:", error);
+      router.push("/login");
     } finally {
       setIsLoading(null);
     }
@@ -243,6 +542,173 @@ export default function PackagesPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Success Dialog */}
+      <Dialog
+        open={showSuccessDialog}
+        onOpenChange={(open) => {
+          console.log("🔄 Dialog state changing:", {
+            open,
+            loadingPackages,
+            hasPackages: sessionsByType.length > 0,
+            purchasedPackage,
+            hasUser: !!user,
+            userId: user?.id,
+          });
+
+          if (!open) {
+            setShowSuccessDialog(false);
+            window.history.replaceState({}, "", "/client/packages");
+            router.push("/client/booking");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-center gap-2 text-xl">
+              <span className="text-2xl">🎉</span>
+              Successful Purchase!
+            </DialogTitle>
+            <DialogDescription className="text-center pt-2">
+              Thank you for investing in your fitness journey!
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-6">
+            {loadingPackages ? (
+              <div className="flex items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Newly Purchased Package Highlight */}
+                {purchasedPackage && (
+                  <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4 text-center animate-fade-in">
+                    <div className="text-green-600 text-sm font-medium mb-1">
+                      Just Added
+                    </div>
+                    <div className="text-2xl font-bold text-green-700 mb-2">
+                      +{purchasedPackage.sessions} Sessions
+                    </div>
+                    <div className="text-green-600 font-medium">
+                      {purchasedPackage.type}
+                    </div>
+                  </div>
+                )}
+
+                {/* Session summary */}
+                <div className="space-y-3">
+                  <div className="text-gray-600 text-sm font-medium text-center mb-2">
+                    Your Available Sessions
+                  </div>
+                  {sessionsByType.map((packageType) => {
+                    const isNewlyPurchased =
+                      purchasedPackage?.type === packageType.type;
+                    return (
+                      <div
+                        key={packageType.type}
+                        className={`p-4 rounded-lg ${
+                          isNewlyPurchased
+                            ? "bg-green-50 border-2 border-green-200"
+                            : packageType.remaining > 0
+                            ? "bg-gray-50 border border-gray-200"
+                            : "bg-gray-50 border border-gray-100"
+                        }`}
+                      >
+                        <div className="flex justify-between items-center">
+                          <span
+                            className={`font-medium ${
+                              isNewlyPurchased
+                                ? "text-green-700"
+                                : packageType.remaining > 0
+                                ? "text-gray-700"
+                                : "text-gray-500"
+                            }`}
+                          >
+                            {packageType.type}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`${
+                                isNewlyPurchased
+                                  ? "text-green-600"
+                                  : packageType.remaining > 0
+                                  ? "text-gray-600"
+                                  : "text-gray-500"
+                              } font-medium`}
+                            >
+                              {packageType.remaining} sessions
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="text-center space-y-2">
+                  <p className="text-sm text-gray-600 font-medium">
+                    Time to crush those fitness goals! 💪
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Your trainer can't wait to get started with you
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="flex justify-end space-x-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowSuccessDialog(false);
+                router.push("/client/dashboard");
+              }}
+            >
+              Go to Dashboard
+            </Button>
+            <Button
+              className="bg-green-600 hover:bg-green-700"
+              onClick={() => {
+                setShowSuccessDialog(false);
+                router.push("/client/booking");
+              }}
+            >
+              Book Your First Session
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Canceled Dialog */}
+      <Dialog
+        open={showCanceledDialog}
+        onOpenChange={(open) => {
+          setShowCanceledDialog(open);
+          if (!open) {
+            router.push("/client/packages");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Purchase Canceled</DialogTitle>
+            <DialogDescription>
+              Your package purchase was canceled. No charges have been made to
+              your account.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              onClick={() => {
+                setShowCanceledDialog(false);
+                router.push("/client/packages");
+              }}
+            >
+              Return to Packages
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
         <SidebarTrigger>
           <Button variant="ghost" size="icon" className="md:hidden">

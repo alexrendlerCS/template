@@ -13,14 +13,33 @@ export async function POST(req: Request) {
   try {
     const { userId, packageType, sessionsIncluded } = await req.json();
 
-    console.log("Creating Stripe checkout session for:", {
+    console.log("🛒 Creating Stripe checkout session:", {
       userId,
       packageType,
       sessionsIncluded,
+      validTypes: [
+        "In-Person Training",
+        "Virtual Training",
+        "Partner Training",
+      ],
     });
 
+    // Validate package type
+    const validPackageTypes = [
+      "In-Person Training",
+      "Virtual Training",
+      "Partner Training",
+    ];
+
+    if (!validPackageTypes.includes(packageType)) {
+      console.error("❌ Invalid package type:", packageType);
+      return NextResponse.json(
+        { error: "Invalid package type" },
+        { status: 400 }
+      );
+    }
+
     // Calculate price based on package type and sessions
-    // This is a simplified example - you would typically look up prices from your database
     const unitPrice = 6000; // $60.00 per session
     const totalAmount = unitPrice * sessionsIncluded;
 
@@ -45,8 +64,8 @@ export async function POST(req: Request) {
         },
       ],
       mode: "payment",
-      success_url: `${origin}/client/payment-methods?success=true`,
-      cancel_url: `${origin}/client/payment-methods?canceled=true`,
+      success_url: `${origin}/client/packages?success=true`,
+      cancel_url: `${origin}/client/packages?canceled=true`,
       metadata: {
         user_id: userId,
         sessions_included: sessionsIncluded.toString(),
@@ -54,7 +73,11 @@ export async function POST(req: Request) {
       },
     });
 
-    console.log("Checkout session created successfully:", session.id);
+    console.log("✅ Checkout session created:", {
+      sessionId: session.id,
+      metadata: session.metadata,
+      packageType,
+    });
 
     return NextResponse.json({ url: session.url });
   } catch (error) {

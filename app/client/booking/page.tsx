@@ -68,6 +68,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import CountUp from "react-countup";
 
 type UserProfile = Database["public"]["Tables"]["users"]["Row"];
 
@@ -81,28 +82,22 @@ const mockAvailableSlots = [
 
 const sessionTypes = [
   {
-    id: "personal",
-    name: "Personal Training",
+    id: "In-Person Training",
+    name: "In-Person Training",
     duration: "60 min",
-    description: "One-on-one focused training",
+    description: "One-on-one personal training sessions at our facility",
   },
   {
-    id: "strength",
-    name: "Strength Training",
+    id: "Virtual Training",
+    name: "Virtual Training",
     duration: "60 min",
-    description: "Build muscle and power",
+    description: "Live online training sessions from the comfort of your home",
   },
   {
-    id: "cardio",
-    name: "Cardio Session",
+    id: "Partner Training",
+    name: "Partner Training",
     duration: "60 min",
-    description: "High-intensity cardiovascular training",
-  },
-  {
-    id: "flexibility",
-    name: "Flexibility & Mobility",
-    duration: "60 min",
-    description: "Enhance range of motion and flexibility",
+    description: "Train with a partner for a more engaging workout experience",
   },
 ];
 
@@ -508,7 +503,12 @@ export default function BookingPage() {
 
   useEffect(() => {
     const fetchUserProfile = async () => {
-      if (!user) return;
+      if (!user) {
+        console.log("No user found for profile fetch");
+        return;
+      }
+
+      console.log("Fetching user profile for ID:", user.id);
 
       const { data: profile, error } = await supabase
         .from("users")
@@ -521,11 +521,31 @@ export default function BookingPage() {
         return;
       }
 
+      if (!profile) {
+        console.error("No profile found for user:", user.id);
+        return;
+      }
+
+      console.log("Successfully fetched user profile:", {
+        id: profile.id,
+        full_name: profile.full_name,
+        role: profile.role,
+      });
+
       setUserProfile(profile);
     };
 
     fetchUserProfile();
   }, [user, supabase]);
+
+  // Add an additional effect to monitor profile state
+  useEffect(() => {
+    console.log("User profile state updated:", {
+      exists: !!userProfile,
+      id: userProfile?.id,
+      name: userProfile?.full_name,
+    });
+  }, [userProfile]);
 
   useEffect(() => {
     const checkRemainingSession = async () => {
@@ -594,10 +614,8 @@ export default function BookingPage() {
           });
         }
 
-        // Convert to array and filter out types with 0 total sessions
-        const sessionSummary = Object.values(packageTypes).filter(
-          (type) => type.total > 0
-        );
+        // Convert to array and include all types
+        const sessionSummary = Object.values(packageTypes);
 
         console.log("Sessions by type:", sessionSummary);
         setSessionsByType(sessionSummary);
@@ -717,75 +735,65 @@ export default function BookingPage() {
 
   const handleBookingConfirmation = async () => {
     console.log("Starting booking process...");
-
-    // Get the current session
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (
-      !selectedTrainer ||
-      !selectedDate ||
-      !selectedTimeSlot ||
-      !selectedType ||
-      !session?.user ||
-      !userProfile
-    ) {
-      console.log("Missing required fields:", {
-        hasTrainer: !!selectedTrainer,
-        hasDate: !!selectedDate,
-        hasTimeSlot: !!selectedTimeSlot,
-        hasType: !!selectedType,
-        hasUser: !!session?.user,
-        hasUserProfile: !!userProfile,
-      });
-      setErrorMessage(
-        "Please select all booking details and ensure you're logged in"
-      );
-      setShowErrorDialog(true);
-      return;
-    }
-
-    // Check if user has connected Google Calendar
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("google_refresh_token, google_account_connected")
-      .eq("id", session.user.id)
-      .single();
-
-    if (
-      !userData?.google_account_connected ||
-      !userData?.google_refresh_token
-    ) {
-      setErrorMessage(
-        "Please connect your Google Calendar first to enable booking. Go to Settings to connect."
-      );
-      setShowErrorDialog(true);
-      return;
-    }
-
-    // Check if trainer has connected Google Calendar
-    const { data: trainerData, error: trainerError } = await supabase
-      .from("users")
-      .select("google_refresh_token, google_account_connected")
-      .eq("id", selectedTrainer.id)
-      .single();
-
-    if (
-      !trainerData?.google_account_connected ||
-      !trainerData?.google_refresh_token
-    ) {
-      setErrorMessage(
-        "The selected trainer hasn't connected their Google Calendar yet. Please try again later or select another trainer."
-      );
-      setShowErrorDialog(true);
-      return;
-    }
-
     setIsBooking(true);
+
     try {
-      console.log("Creating session in database...");
-      // 1. Create session in the database
+      // Get the current session
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.user) {
+        throw new Error("No authenticated user found");
+      }
+
+      // If profile is missing, fetch it
+      let currentProfile = userProfile;
+      if (!currentProfile) {
+        console.log("Fetching user profile...");
+        const { data: profile, error: profileError } = await supabase
+          .from("users")
+          .select("*")
+          .eq("id", session.user.id)
+          .single();
+
+        if (profileError) {
+          throw new Error(`Failed to load profile: ${profileError.message}`);
+        }
+
+        if (profile) {
+          console.log("Successfully fetched user profile:", profile);
+          currentProfile = profile;
+          setUserProfile(profile);
+        } else {
+          throw new Error("No profile found");
+        }
+      }
+
+      // Now validate with complete data
+      const errorDetails = {
+        missingTrainer: !selectedTrainer,
+        missingDate: !selectedDate,
+        missingTimeSlot: !selectedTimeSlot,
+        missingType: !selectedType,
+        missingUser: !session?.user,
+        missingProfile: !currentProfile,
+      };
+
+      const missingFields = Object.entries(errorDetails)
+        .filter(([_, isMissing]) => isMissing)
+        .map(([field]) => field.replace("missing", "").toLowerCase());
+
+      if (missingFields.length > 0) {
+        throw new Error(`Missing required fields: ${missingFields.join(", ")}`);
+      }
+
+      // At this point we know all these values exist due to validation above
+      if (!selectedTrainer || !selectedTimeSlot || !currentProfile) {
+        throw new Error("Required booking data is missing");
+      }
+
+      // TypeScript now knows these values are not null
       const { data: sessionData, error: sessionError } = await supabase
         .from("sessions")
         .insert({
@@ -801,17 +809,146 @@ export default function BookingPage() {
         .single();
 
       if (sessionError) {
-        console.error("Session creation error:", sessionError);
         throw sessionError;
       }
 
-      console.log("Session created:", sessionData);
+      // Find the corresponding package type for the session
+      const sessionType = sessionTypes.find((t) => t.id === selectedType);
+      const sessionTypeName = sessionType?.name;
 
-      // Send email notification to trainer
+      console.log("Session type mapping:", {
+        selectedTypeId: selectedType,
+        foundType: sessionType,
+        mappedName: sessionTypeName,
+        allTypes: sessionTypes.map((t) => ({ id: t.id, name: t.name })),
+      });
+
+      if (!sessionTypeName) {
+        throw new Error(`Invalid session type: ${selectedType}`);
+      }
+
+      console.log("Finding package for session type:", sessionTypeName);
+
+      // Get the user's packages
+      const { data: userPackages, error: packagesError } = await supabase
+        .from("packages")
+        .select("*")
+        .eq("client_id", session.user.id)
+        .eq("package_type", sessionTypeName)
+        .eq("status", "active")
+        .order("purchase_date", { ascending: false });
+
+      if (packagesError) {
+        throw packagesError;
+      }
+
+      console.log("Available packages:", userPackages);
+
+      // Find the first package with remaining sessions
+      const packageToUpdate = userPackages?.find(
+        (pkg) => (pkg.sessions_included || 0) - (pkg.sessions_used || 0) > 0
+      );
+
+      if (!packageToUpdate) {
+        throw new Error("No available package found for this session type");
+      }
+
+      console.log("Updating package:", {
+        packageId: packageToUpdate.id,
+        currentUsed: packageToUpdate.sessions_used,
+        newUsed: (packageToUpdate.sessions_used || 0) + 1,
+        packageType: packageToUpdate.package_type,
+        totalSessions: packageToUpdate.sessions_included,
+      });
+
+      // First get the current value to ensure we have the latest
+      const { data: currentPackage, error: getCurrentError } = await supabase
+        .from("packages")
+        .select("sessions_used")
+        .eq("id", packageToUpdate.id)
+        .single();
+
+      if (getCurrentError) {
+        throw new Error(
+          `Failed to get current package state: ${getCurrentError.message}`
+        );
+      }
+
+      console.log("Current package state:", currentPackage);
+
+      // Use RPC call to increment the sessions_used count
+      const { data: updateData, error: updateError } = await supabase.rpc(
+        "increment_sessions_used",
+        {
+          package_id: packageToUpdate.id,
+        }
+      );
+
+      console.log("Package update response:", {
+        success: !updateError,
+        error: updateError,
+        updatedData: updateData,
+      });
+
+      if (updateError) {
+        // If package update fails, delete the session to maintain consistency
+        console.error("Failed to update package:", {
+          error: updateError,
+          packageId: packageToUpdate.id,
+          currentValue: currentPackage?.sessions_used,
+        });
+
+        const { error: deleteError } = await supabase
+          .from("sessions")
+          .delete()
+          .eq("id", sessionData.id);
+
+        if (deleteError) {
+          console.error(
+            "Failed to delete session after package update failure:",
+            deleteError
+          );
+        }
+
+        throw new Error(`Failed to update package: ${updateError.message}`);
+      }
+
+      // Verify the update was successful
+      const { data: verifyData, error: verifyError } = await supabase
+        .from("packages")
+        .select("sessions_used")
+        .eq("id", packageToUpdate.id)
+        .single();
+
+      console.log("Package update verification:", {
+        success:
+          !verifyError &&
+          verifyData?.sessions_used ===
+            (currentPackage?.sessions_used || 0) + 1,
+        expectedUsed: (currentPackage?.sessions_used || 0) + 1,
+        actualUsed: verifyData?.sessions_used,
+        verifyError,
+      });
+
+      // If verification fails, we should roll back
+      if (
+        !verifyError &&
+        verifyData?.sessions_used !== (currentPackage?.sessions_used || 0) + 1
+      ) {
+        console.error(
+          "Package update verification failed - rolling back session"
+        );
+        await supabase.from("sessions").delete().eq("id", sessionData.id);
+        throw new Error(
+          "Failed to verify package update - session has been rolled back"
+        );
+      }
+
+      // Send email notification with type-safe values
       const emailPayload = {
         trainer_email: selectedTrainer.email,
         trainer_name: selectedTrainer.full_name,
-        client_name: userProfile.full_name,
+        client_name: currentProfile.full_name,
         date: selectedDate,
         start_time: format(
           parseISO(`2000-01-01T${selectedTimeSlot.startTime}`),
@@ -824,8 +961,7 @@ export default function BookingPage() {
         session_type: getSelectedSessionType()?.name || selectedType,
       };
 
-      console.log("Sending email notification...", emailPayload);
-      const emailRes = await fetch("/api/email/session-created", {
+      await fetch("/api/email/session-created", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -833,95 +969,10 @@ export default function BookingPage() {
         body: JSON.stringify(emailPayload),
       });
 
-      if (!emailRes.ok) {
-        console.warn(
-          "Failed to send email notification:",
-          await emailRes.text()
-        );
-        // Don't throw error here, as the session was created successfully
-      } else {
-        console.log("Email notification sent successfully");
-      }
-
-      // 2. Add to Google Calendar for both client and trainer
-      const sessionDetails = {
-        summary: `${getSelectedSessionType()?.name} with ${
-          selectedTrainer.full_name
-        }`,
-        description: `Training session: ${
-          getSelectedSessionType()?.name
-        }\nTrainer: ${selectedTrainer.full_name}`,
-        start: {
-          dateTime: `${selectedDate}T${selectedTimeSlot.startTime}`,
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        },
-        end: {
-          dateTime: `${selectedDate}T${selectedTimeSlot.endTime}`,
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        },
-      };
-
-      console.log("Adding to client calendar...", sessionDetails);
-
-      try {
-        // Create event in client's calendar
-        const clientCalendarRes = await fetch("/api/google/calendar/event", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(sessionDetails),
-        });
-
-        if (!clientCalendarRes.ok) {
-          const errorText = await clientCalendarRes.text();
-          console.error("Client calendar error:", errorText);
-          throw new Error(errorText || "Failed to add to client calendar");
-        }
-
-        const clientCalendarData = await clientCalendarRes.json();
-        console.log("Client calendar response:", clientCalendarData);
-
-        // Update session with client's Google Calendar event ID
-        const { error: updateError } = await supabase
-          .from("sessions")
-          .update({ google_event_id: clientCalendarData.eventId })
-          .eq("id", sessionData.id);
-
-        if (updateError) {
-          console.error("Session update error:", updateError);
-          throw updateError;
-        }
-
-        console.log("Adding to trainer calendar...");
-        // Create event in trainer's calendar
-        const trainerCalendarRes = await fetch(
-          `/api/google/calendar/event?trainerId=${selectedTrainer.id}`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(sessionDetails),
-          }
-        );
-
-        if (!trainerCalendarRes.ok) {
-          const errorText = await trainerCalendarRes.text();
-          console.error("Trainer calendar error:", errorText);
-          throw new Error(errorText || "Failed to add to trainer calendar");
-        }
-
-        console.log("Booking completed successfully!");
-        setShowBookingDialog(false);
-        setShowSuccessDialog(true);
-      } catch (error) {
-        // If calendar creation fails, delete the session
-        await supabase.from("sessions").delete().eq("id", sessionData.id);
-        throw error;
-      }
+      setShowBookingDialog(false);
+      setShowSuccessDialog(true);
     } catch (error) {
-      console.error("Booking error:", error);
+      console.error("Error during booking:", error);
       setErrorMessage(
         error instanceof Error
           ? error.message
@@ -1059,26 +1110,60 @@ export default function BookingPage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {sessionTypes.map((type) => (
-                  <div
-                    key={type.id}
-                    className={`p-4 border rounded-lg cursor-pointer transition-all ${
-                      selectedType === type.id
-                        ? "border-red-600 bg-red-50"
-                        : "border-gray-200 hover:border-gray-300"
-                    }`}
-                    onClick={() => setSelectedType(type.id)}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-medium">{type.name}</h3>
-                      <Badge variant="outline">{type.duration}</Badge>
+                {sessionTypes.map((type) => {
+                  // Find corresponding package type to check remaining sessions
+                  const packageType = sessionsByType.find(
+                    (pkg) => pkg.type === type.name
+                  );
+                  const sessionsRemaining = packageType?.remaining || 0;
+                  const isDisabled = sessionsRemaining === 0;
+
+                  return (
+                    <div
+                      key={type.id}
+                      className={`p-4 border rounded-lg transition-all ${
+                        isDisabled
+                          ? "opacity-50 cursor-not-allowed border-gray-200"
+                          : selectedType === type.id
+                          ? "border-red-600 bg-red-50 cursor-pointer"
+                          : "border-gray-200 hover:border-gray-300 cursor-pointer"
+                      }`}
+                      onClick={() => {
+                        if (!isDisabled) {
+                          setSelectedType(type.id);
+                        }
+                      }}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="font-medium">{type.name}</h3>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline">{type.duration}</Badge>
+                          <Badge
+                            variant={isDisabled ? "secondary" : "default"}
+                            className={
+                              isDisabled
+                                ? "bg-gray-100"
+                                : sessionsRemaining === 1
+                                ? "bg-red-100 text-red-700"
+                                : sessionsRemaining <= 3
+                                ? "bg-yellow-100 text-yellow-700"
+                                : "bg-green-100 text-green-700"
+                            }
+                          >
+                            <CountUp end={sessionsRemaining} duration={2} />{" "}
+                            remaining
+                          </Badge>
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-600">
+                        {type.description}
+                      </p>
+                      {selectedType === type.id && !isDisabled && (
+                        <CheckCircle className="h-5 w-5 text-red-600 mt-2" />
+                      )}
                     </div>
-                    <p className="text-sm text-gray-600">{type.description}</p>
-                    {selectedType === type.id && (
-                      <CheckCircle className="h-5 w-5 text-red-600 mt-2" />
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
@@ -1421,9 +1506,12 @@ export default function BookingPage() {
               Available Training Sessions
             </DialogTitle>
             <DialogDescription>
-              You have {sessionsRemaining} total training{" "}
-              {sessionsRemaining === 1 ? "session" : "sessions"} remaining
-              across your packages.
+              You have{" "}
+              <span className="font-semibold">
+                <CountUp end={sessionsRemaining} duration={2} />
+              </span>{" "}
+              total training {sessionsRemaining === 1 ? "session" : "sessions"}{" "}
+              remaining across your packages.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
@@ -1431,17 +1519,50 @@ export default function BookingPage() {
               {sessionsByType.map((packageType) => (
                 <div
                   key={packageType.type}
-                  className="bg-green-50 p-4 rounded-lg"
+                  className={`${
+                    packageType.remaining >= 4
+                      ? "bg-green-50"
+                      : packageType.remaining >= 2
+                      ? "bg-yellow-50"
+                      : "bg-red-50"
+                  } p-4 rounded-lg`}
                 >
-                  <h3 className="font-semibold text-green-700">
+                  <h3
+                    className={`font-semibold ${
+                      packageType.remaining >= 4
+                        ? "text-green-700"
+                        : packageType.remaining >= 2
+                        ? "text-yellow-700"
+                        : "text-red-700"
+                    }`}
+                  >
                     {packageType.type}
                   </h3>
                   <div className="mt-2 flex justify-between items-center">
-                    <span className="text-sm text-green-600">
-                      {packageType.remaining} remaining
+                    <span
+                      className={`text-sm ${
+                        packageType.remaining >= 4
+                          ? "text-green-600"
+                          : packageType.remaining >= 2
+                          ? "text-yellow-600"
+                          : "text-red-600"
+                      }`}
+                    >
+                      <CountUp end={packageType.remaining} duration={2} />{" "}
+                      remaining
                     </span>
-                    <Badge variant="secondary">
-                      {packageType.remaining}/{packageType.total} sessions
+                    <Badge
+                      variant="secondary"
+                      className={`${
+                        packageType.remaining >= 4
+                          ? "bg-green-100"
+                          : packageType.remaining >= 2
+                          ? "bg-yellow-100"
+                          : "bg-red-100"
+                      }`}
+                    >
+                      <CountUp end={packageType.remaining} duration={2} />/
+                      {packageType.total} sessions
                     </Badge>
                   </div>
                 </div>
@@ -1485,9 +1606,27 @@ export default function BookingPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <div className="bg-red-50 p-4 rounded-lg text-center">
-              <p className="text-3xl font-bold text-red-600 mb-1">0</p>
-              <p className="text-sm text-red-700">Available Sessions</p>
+            <div className="space-y-4">
+              {sessionsByType.map((packageType) => (
+                <div
+                  key={packageType.type}
+                  className="bg-red-50 p-4 rounded-lg"
+                >
+                  <h3 className="font-semibold text-red-700">
+                    {packageType.type}
+                  </h3>
+                  <div className="mt-2 flex justify-between items-center">
+                    <span className="text-sm text-red-600">
+                      <CountUp end={packageType.remaining} duration={2} />{" "}
+                      remaining
+                    </span>
+                    <Badge variant="secondary" className="bg-red-100">
+                      <CountUp end={packageType.remaining} duration={2} />/
+                      {packageType.total} sessions
+                    </Badge>
+                  </div>
+                </div>
+              ))}
             </div>
             <p className="text-sm text-gray-500 mt-4 text-center">
               Purchase more sessions to continue booking training sessions.
@@ -1500,8 +1639,8 @@ export default function BookingPage() {
             >
               Back to Dashboard
             </Button>
-            <Button onClick={() => router.push("/client/payment-methods")}>
-              Go to Payment
+            <Button onClick={() => router.push("/client/packages")}>
+              View Packages
             </Button>
           </div>
         </DialogContent>
