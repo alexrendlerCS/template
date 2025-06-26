@@ -24,6 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import CountUp from "react-countup";
 
 interface Package {
   id: string;
@@ -586,7 +587,8 @@ export default function PackagesPage() {
                       Just Added
                     </div>
                     <div className="text-2xl font-bold text-green-700 mb-2">
-                      +{purchasedPackage.sessions} Sessions
+                      +<CountUp end={purchasedPackage.sessions} duration={5} />{" "}
+                      Sessions
                     </div>
                     <div className="text-green-600 font-medium">
                       {purchasedPackage.type}
@@ -614,28 +616,28 @@ export default function PackagesPage() {
                         }`}
                       >
                         <div className="flex justify-between items-center">
-                          <span
-                            className={`font-medium ${
-                              isNewlyPurchased
-                                ? "text-green-700"
-                                : packageType.remaining > 0
-                                ? "text-gray-700"
-                                : "text-gray-500"
-                            }`}
-                          >
+                          <div className="text-gray-700 font-medium">
                             {packageType.type}
-                          </span>
-                          <div className="flex items-center gap-2">
+                          </div>
+                          <div className="text-sm">
                             <span
-                              className={`${
+                              className={`font-semibold ${
                                 isNewlyPurchased
                                   ? "text-green-600"
                                   : packageType.remaining > 0
-                                  ? "text-gray-600"
+                                  ? "text-gray-700"
                                   : "text-gray-500"
-                              } font-medium`}
+                              }`}
                             >
-                              {packageType.remaining} sessions
+                              {isNewlyPurchased ? (
+                                <CountUp
+                                  end={packageType.remaining}
+                                  duration={5}
+                                />
+                              ) : (
+                                packageType.remaining
+                              )}{" "}
+                              sessions
                             </span>
                           </div>
                         </div>

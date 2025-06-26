@@ -1150,8 +1150,7 @@ export default function BookingPage() {
                                 : "bg-green-100 text-green-700"
                             }
                           >
-                            <CountUp end={sessionsRemaining} duration={2} />{" "}
-                            remaining
+                            {sessionsRemaining} remaining
                           </Badge>
                         </div>
                       </div>
@@ -1507,10 +1506,8 @@ export default function BookingPage() {
             </DialogTitle>
             <DialogDescription>
               You have{" "}
-              <span className="font-semibold">
-                <CountUp end={sessionsRemaining} duration={2} />
-              </span>{" "}
-              total training {sessionsRemaining === 1 ? "session" : "sessions"}{" "}
+              <span className="font-semibold">{sessionsRemaining}</span> total
+              training {sessionsRemaining === 1 ? "session" : "sessions"}{" "}
               remaining across your packages.
             </DialogDescription>
           </DialogHeader>
@@ -1548,8 +1545,7 @@ export default function BookingPage() {
                           : "text-red-600"
                       }`}
                     >
-                      <CountUp end={packageType.remaining} duration={2} />{" "}
-                      remaining
+                      {packageType.remaining} remaining
                     </span>
                     <Badge
                       variant="secondary"
@@ -1561,8 +1557,7 @@ export default function BookingPage() {
                           : "bg-red-100"
                       }`}
                     >
-                      <CountUp end={packageType.remaining} duration={2} />/
-                      {packageType.total} sessions
+                      {packageType.remaining}/{packageType.total} sessions
                     </Badge>
                   </div>
                 </div>
@@ -1617,12 +1612,10 @@ export default function BookingPage() {
                   </h3>
                   <div className="mt-2 flex justify-between items-center">
                     <span className="text-sm text-red-600">
-                      <CountUp end={packageType.remaining} duration={2} />{" "}
-                      remaining
+                      {packageType.remaining} remaining
                     </span>
                     <Badge variant="secondary" className="bg-red-100">
-                      <CountUp end={packageType.remaining} duration={2} />/
-                      {packageType.total} sessions
+                      {packageType.remaining}/{packageType.total} sessions
                     </Badge>
                   </div>
                 </div>
