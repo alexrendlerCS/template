@@ -150,6 +150,21 @@ interface TimeSlot {
   isAvailable: boolean;
 }
 
+interface PackageTypeCount {
+  type: string;
+  remaining: number;
+  total: number;
+}
+
+type PackageType =
+  | "In-Person Training"
+  | "Virtual Training"
+  | "Partner Training";
+
+type PackageTypeCounts = {
+  [K in PackageType]: PackageTypeCount;
+};
+
 // Helper function to convert time string to minutes since midnight
 const timeToMinutes = (time: string): number => {
   const [hours, minutes] = time.split(":").map((num) => parseInt(num, 10));
@@ -298,6 +313,7 @@ export default function BookingPage() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [sessionsRemaining, setSessionsRemaining] = useState<number>(0);
+  const [sessionsByType, setSessionsByType] = useState<PackageTypeCount[]>([]);
 
   const supabase = createClient();
 
@@ -525,45 +541,83 @@ export default function BookingPage() {
 
         if (!user) {
           console.log("No authenticated user found");
+          setIsCheckingSession(false);
           return;
         }
 
-        const { data, error } = await supabase.rpc(
-          "get_sessions_remaining_for_client"
-        );
+        // Get all active packages for the user
+        const { data: packages, error: packagesError } = await supabase
+          .from("packages")
+          .select("*")
+          .eq("client_id", user.id)
+          .order("purchase_date", { ascending: false });
 
-        console.log("Sessions remaining query result:", {
-          data,
-          error,
-          sessionsRemaining: data?.[0]?.sessions_remaining,
-        });
-
-        if (error) {
-          console.error("Failed to fetch sessions remaining:", error);
+        if (packagesError) {
+          console.error("Failed to fetch packages:", packagesError);
           setSessionsRemaining(0);
+          setSessionsByType([]);
           setShowNoSessionsDialog(true);
           setIsCheckingSession(false);
           return;
         }
 
-        if (data && data.length > 0) {
-          const remaining = data[0].sessions_remaining ?? 0;
-          console.log("Fetched sessions remaining:", remaining);
-          setSessionsRemaining(remaining);
+        console.log("Fetched packages:", packages);
 
-          if (remaining === 0) {
-            setShowNoSessionsDialog(true);
-          } else {
-            setShowCurrentSessionsDialog(true); // Show the current sessions dialog first
-          }
-        } else {
-          console.log("No sessions record found, treating as 0 sessions");
-          setSessionsRemaining(0);
+        // Group packages by type and calculate remaining sessions
+        const packageTypes: PackageTypeCounts = {
+          "In-Person Training": {
+            type: "In-Person Training",
+            remaining: 0,
+            total: 0,
+          },
+          "Virtual Training": {
+            type: "Virtual Training",
+            remaining: 0,
+            total: 0,
+          },
+          "Partner Training": {
+            type: "Partner Training",
+            remaining: 0,
+            total: 0,
+          },
+        };
+
+        if (packages && packages.length > 0) {
+          packages.forEach((pkg) => {
+            const type = pkg.package_type as PackageType;
+            if (packageTypes[type]) {
+              const remaining =
+                (pkg.sessions_included || 0) - (pkg.sessions_used || 0);
+              packageTypes[type].remaining += remaining;
+              packageTypes[type].total += pkg.sessions_included || 0;
+            }
+          });
+        }
+
+        // Convert to array and filter out types with 0 total sessions
+        const sessionSummary = Object.values(packageTypes).filter(
+          (type) => type.total > 0
+        );
+
+        console.log("Sessions by type:", sessionSummary);
+        setSessionsByType(sessionSummary);
+
+        // Calculate total remaining sessions
+        const totalRemaining = sessionSummary.reduce(
+          (total, type) => total + type.remaining,
+          0
+        );
+        setSessionsRemaining(totalRemaining);
+
+        if (totalRemaining === 0) {
           setShowNoSessionsDialog(true);
+        } else {
+          setShowCurrentSessionsDialog(true);
         }
       } catch (error) {
         console.error("Session check error:", error);
         setSessionsRemaining(0);
+        setSessionsByType([]);
         setShowNoSessionsDialog(true);
       } finally {
         setIsCheckingSession(false);
@@ -1356,7 +1410,7 @@ export default function BookingPage() {
         onOpenChange={(open) => {
           setShowCurrentSessionsDialog(open);
           if (!open) {
-            setShowTrainerModal(true); // Show trainer modal after closing this one
+            setShowTrainerModal(true);
           }
         }}
       >
@@ -1367,17 +1421,31 @@ export default function BookingPage() {
               Available Training Sessions
             </DialogTitle>
             <DialogDescription>
-              You have {sessionsRemaining} training{" "}
-              {sessionsRemaining === 1 ? "session" : "sessions"} remaining in
-              your current package.
+              You have {sessionsRemaining} total training{" "}
+              {sessionsRemaining === 1 ? "session" : "sessions"} remaining
+              across your packages.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <div className="bg-green-50 p-4 rounded-lg text-center">
-              <p className="text-3xl font-bold text-green-600 mb-1">
-                {sessionsRemaining}
-              </p>
-              <p className="text-sm text-green-700">Available Sessions</p>
+            <div className="space-y-4">
+              {sessionsByType.map((packageType) => (
+                <div
+                  key={packageType.type}
+                  className="bg-green-50 p-4 rounded-lg"
+                >
+                  <h3 className="font-semibold text-green-700">
+                    {packageType.type}
+                  </h3>
+                  <div className="mt-2 flex justify-between items-center">
+                    <span className="text-sm text-green-600">
+                      {packageType.remaining} remaining
+                    </span>
+                    <Badge variant="secondary">
+                      {packageType.remaining}/{packageType.total} sessions
+                    </Badge>
+                  </div>
+                </div>
+              ))}
             </div>
             <p className="text-sm text-gray-500 mt-4 text-center">
               Click continue to proceed with booking your next session.
