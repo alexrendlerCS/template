@@ -1,17 +1,14 @@
-import type React from "react";
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import { Footer } from "@/components/ui/footer";
 import "./globals.css";
-import { Toaster } from "@/components/ui/sonner";
+import { Inter } from "next/font/google";
+import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
 
 const inter = Inter({ subsets: ["latin"] });
 
-export const metadata: Metadata = {
-  title: "FitCoach Pro - Personal Training Platform",
-  description:
-    "Professional fitness coaching platform for trainers and clients",
-  generator: "v0.dev",
+export const metadata = {
+  title: "Fitness Training Platform",
+  description: "Book and manage your personal training sessions",
 };
 
 export default function RootLayout({
@@ -20,11 +17,22 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="h-full">
-      <body className={`${inter.className} min-h-full flex flex-col`}>
-        <main className="flex-1">{children}</main>
-        <Footer />
-        <Toaster />
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </head>
+      <body className={inter.className}>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          {children}
+          <Toaster />
+          <Sonner />
+        </ThemeProvider>
       </body>
     </html>
   );

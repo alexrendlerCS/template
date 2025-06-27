@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useUser } from "@/lib/store/user";
@@ -195,7 +195,7 @@ interface PurchasedPackageInfo {
   sessions: number;
 }
 
-export default function PackagesPage() {
+function PackagesContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState<string | null>(null);
@@ -793,5 +793,22 @@ export default function PackagesPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function PackagesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin text-red-600 mx-auto" />
+            <p className="mt-2 text-gray-600">Loading packages...</p>
+          </div>
+        </div>
+      }
+    >
+      <PackagesContent />
+    </Suspense>
   );
 }

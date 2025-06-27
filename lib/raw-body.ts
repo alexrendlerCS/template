@@ -1,4 +1,4 @@
-export async function buffer(readable: ReadableStream<Uint8Array>) {
+export default async function buffer(readable: ReadableStream<Uint8Array>) {
   const reader = readable.getReader();
   const chunks: Uint8Array[] = [];
 

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
 import Stripe from "stripe";
 import { createClient, supabaseAdmin } from "@/lib/supabase-server";
+import buffer from "@/lib/raw-body";
 
 // Use the test webhook secret when in development
 const endpointSecret =
@@ -12,11 +14,14 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2025-05-28.basil",
 });
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-
-// This is important - we need to tell Next.js not to parse the body
-export const bodyParser = false;
+// Route Segment Config
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+  runtime: "nodejs",
+  dynamic: "force-dynamic",
+};
 
 export async function POST(req: Request) {
   try {
@@ -34,8 +39,8 @@ export async function POST(req: Request) {
       );
     }
 
-    // Get the raw body as text first
-    const rawBody = await req.text();
+    // Get the raw body
+    const rawBody = await buffer(req.body!);
     console.log("📦 Raw body length:", rawBody.length, "bytes");
 
     let event;
