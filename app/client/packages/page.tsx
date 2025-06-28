@@ -71,7 +71,7 @@ const packageSections: PackageSection[] = [
         hourlyRate: 125,
         monthlySessionCount: 8,
         monthlyPrice: 1000,
-        priceId: "price_1Re45TEKMzESB1Ye4taAItdk",
+        priceId: "price_1Re6vXEKMzESB1YewPm98DzS",
       },
       {
         id: "inperson-3",
@@ -80,7 +80,7 @@ const packageSections: PackageSection[] = [
         hourlyRate: 115,
         monthlySessionCount: 12,
         monthlyPrice: 1380,
-        priceId: "price_PLACEHOLDER_2",
+        priceId: "price_1Re6vXEKMzESB1YebU76tDfH",
       },
       {
         id: "inperson-4",
@@ -89,7 +89,7 @@ const packageSections: PackageSection[] = [
         hourlyRate: 110,
         monthlySessionCount: 16,
         monthlyPrice: 1760,
-        priceId: "price_PLACEHOLDER_3",
+        priceId: "price_1Re6vXEKMzESB1YerK6MPNU9",
       },
       {
         id: "inperson-5",
@@ -98,7 +98,7 @@ const packageSections: PackageSection[] = [
         hourlyRate: 100,
         monthlySessionCount: 20,
         monthlyPrice: 2000,
-        priceId: "price_PLACEHOLDER_4",
+        priceId: "price_1Re6vXEKMzESB1YehCkpeMxB",
       },
     ],
   },

@@ -10,9 +10,7 @@ const endpointSecret =
     ? "whsec_8c2b4dd5f85cfbd52646b3dc13f4e0b1f61240101b481c10cad5b134200eae84"
     : process.env.STRIPE_WEBHOOK_SECRET!;
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-05-28.basil",
-});
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 // Route Segment Config
 export const config = {
