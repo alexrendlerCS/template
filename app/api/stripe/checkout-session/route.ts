@@ -41,9 +41,9 @@ export async function POST(req: Request) {
       },
     };
 
-    const amount = pricingMatrix?.[packageType]?.[sessionsIncluded];
+    let baseAmount = pricingMatrix?.[packageType]?.[sessionsIncluded];
 
-    if (!amount) {
+    if (!baseAmount) {
       console.error("❌ Invalid pricing configuration", {
         packageType,
         sessionsIncluded,
@@ -54,39 +54,144 @@ export async function POST(req: Request) {
       );
     }
 
+    // Calculate prorated pricing based on remaining weeks in the month
+    const today = new Date();
+    const nextMonthStart = new Date(
+      today.getFullYear(),
+      today.getMonth() + 1,
+      1
+    );
+    const msInWeek = 1000 * 60 * 60 * 24 * 7;
+    const weeksRemaining = Math.max(
+      Math.floor((nextMonthStart.getTime() - today.getTime()) / msInWeek),
+      1
+    );
+
+    // Sessions per week (assume original sessions over 4 weeks)
+    const sessionsPerWeek = sessionsIncluded / 4;
+    const proratedSessions = Math.round(weeksRemaining * sessionsPerWeek);
+
+    // Rate per session (in cents)
+    const ratePerSession = baseAmount / sessionsIncluded;
+    const amount = Math.round(ratePerSession * proratedSessions);
+
+    // Log prorated pricing details
+    console.log("📉 Prorated Pricing Applied:", {
+      today: today.toISOString(),
+      nextMonthStart: nextMonthStart.toISOString(),
+      weeksRemaining,
+      sessionsPerWeek,
+      originalSessions: sessionsIncluded,
+      proratedSessions,
+      originalAmount: baseAmount,
+      proratedAmount: amount,
+      ratePerSession,
+    });
+
     const origin =
       process.env.NODE_ENV === "development"
         ? "http://localhost:3000"
         : process.env.NEXT_PUBLIC_SITE_URL || "https://your-production-url.com";
 
+    // Helper function for package description line
+    const getShortPackageLine = (type: string, count: number) => {
+      switch (type) {
+        case "In-Person Training":
+          return `🎯 Includes ${count} personalized in-person training sessions with your coach — book anytime after purchase!`;
+        case "Virtual Training":
+          return `🎯 Includes ${count} virtual live training sessions via video call — book anytime after purchase!`;
+        case "Partner Training":
+          return `🎯 Includes ${count} small group sessions — train with a partner and save!`;
+        default:
+          return `🎯 Includes ${count} training sessions — ready to schedule after checkout!`;
+      }
+    };
+
     // Get package-specific details
-    const getPackageDetails = (type: string) => {
+    const getPackageDetails = (
+      type: string,
+      sessions: number,
+      nextMonthDate: Date
+    ) => {
       const baseImageUrl = process.env.NEXT_PUBLIC_SITE_URL || origin;
+      const expiryDate = nextMonthDate.toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      });
+
+      // Get package-specific session description
+      const getSessionType = (packageType: string) => {
+        switch (packageType) {
+          case "In-Person Training":
+            return "personalized in-person training sessions";
+          case "Virtual Training":
+            return "live virtual training sessions";
+          case "Partner Training":
+            return "partner training sessions";
+          default:
+            return "training sessions";
+        }
+      };
+
+      // Format currency for prorated descriptions
+      const formatPrice = (cents: number) =>
+        `$${(cents / 100).toLocaleString("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`;
+
+      const sessionType = getSessionType(type);
+      let description: string;
+
+      // Check if package is prorated
+      if (sessions === sessionsIncluded) {
+        // Simple version for non-prorated packages
+        description = `🎯 Includes ${sessions} ${sessionType} — book after checkout! • ⏳ Expires ${expiryDate}`;
+      } else {
+        // Detailed version for prorated packages
+        const discountAmount = baseAmount - amount;
+        description = [
+          `🔥 Prorated Package: ${sessions} of ${sessionsIncluded} ${type} Sessions`,
+          `💸 Original: ${formatPrice(baseAmount)} |  Discount: ${formatPrice(
+            discountAmount
+          )} | Final: ${formatPrice(amount)}`,
+          `📆 You're joining mid-month — cost adjusted for ${weeksRemaining} week(s)`,
+          `🎯 ${sessions} ${sessionType}`,
+          `⏳ Book after checkout • Expires ${expiryDate}`,
+        ].join(" • ");
+      }
+
+      // Return package details with appropriate image and description
       switch (type) {
         case "In-Person Training":
           return {
             image: `${baseImageUrl}/placeholder.jpg`,
-            description: `Transform your fitness journey with ${sessionsIncluded} personalized in-person training sessions! Work directly with your dedicated trainer in our fully-equipped facility. Book your sessions instantly after checkout. Sessions expire at month-end with a 4-day grace period.`,
+            description,
           };
         case "Virtual Training":
           return {
             image: `${baseImageUrl}/placeholder-virtual.jpg`,
-            description: `Achieve your fitness goals from anywhere with ${sessionsIncluded} live virtual training sessions! Get expert guidance and real-time form corrections through high-quality video calls. Book your convenient online sessions right after checkout. Sessions expire at month-end with a 4-day grace period.`,
+            description,
           };
         case "Partner Training":
           return {
             image: `${baseImageUrl}/placeholder.jpg`,
-            description: `Double the motivation with ${sessionsIncluded} partner training sessions! Train together and save while getting personalized attention from your dedicated trainer. Book your sessions instantly after checkout. Sessions expire at month-end with a 4-day grace period.`,
+            description,
           };
         default:
           return {
             image: `${baseImageUrl}/placeholder.jpg`,
-            description: `Get started with ${sessionsIncluded} personalized training sessions! Book your workouts right after checkout. Sessions expire at month-end with a 4-day grace period.`,
+            description,
           };
       }
     };
 
-    const packageDetails = getPackageDetails(packageType);
+    const packageDetails = getPackageDetails(
+      packageType,
+      proratedSessions,
+      nextMonthStart
+    );
 
     const session = await stripe.checkout.sessions.create({
       line_items: [
@@ -94,9 +199,11 @@ export async function POST(req: Request) {
           price_data: {
             currency: "usd",
             product_data: {
-              name: `Transform with ${sessionsIncluded} ${packageType} Sessions 💪`,
+              name:
+                proratedSessions === sessionsIncluded
+                  ? `Transform with ${proratedSessions} ${packageType} Sessions 💪`
+                  : `Prorated Package: ${proratedSessions} of ${sessionsIncluded} ${packageType} Sessions 💪`,
               description: packageDetails.description,
-              images: [packageDetails.image],
             },
             unit_amount: amount,
           },
@@ -124,8 +231,11 @@ export async function POST(req: Request) {
       ],
       metadata: {
         user_id: userId,
-        sessions_included: sessionsIncluded.toString(),
+        sessions_included: proratedSessions.toString(), // actual # of sessions this user is buying
+        original_sessions: sessionsIncluded.toString(), // original full package size
+        is_prorated: proratedSessions !== sessionsIncluded ? "true" : "false",
         package_type: packageType,
+        expiry_date: nextMonthStart.toISOString(),
       },
     });
 

@@ -4,11 +4,8 @@ import Stripe from "stripe";
 import { createClient, supabaseAdmin } from "@/lib/supabase-server";
 import buffer from "@/lib/raw-body";
 
-// Use the test webhook secret when in development
-const endpointSecret =
-  process.env.NODE_ENV === "development"
-    ? "whsec_8c2b4dd5f85cfbd52646b3dc13f4e0b1f61240101b481c10cad5b134200eae84"
-    : process.env.STRIPE_WEBHOOK_SECRET!;
+// Use the webhook secret from environment variable
+const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -74,14 +71,20 @@ export async function POST(req: Request) {
         if (
           !session.metadata?.user_id ||
           !session.metadata?.sessions_included ||
-          !session.metadata?.package_type
+          !session.metadata?.package_type ||
+          !session.metadata?.original_sessions ||
+          !session.metadata?.is_prorated ||
+          !session.metadata?.expiry_date
         ) {
           console.error("❌ Missing required metadata:", {
             metadata: session.metadata,
             required: {
               user_id: session.metadata?.user_id,
               sessions_included: session.metadata?.sessions_included,
+              original_sessions: session.metadata?.original_sessions,
+              is_prorated: session.metadata?.is_prorated,
               package_type: session.metadata?.package_type,
+              expiry_date: session.metadata?.expiry_date,
             },
           });
           return NextResponse.json(
@@ -89,6 +92,13 @@ export async function POST(req: Request) {
             { status: 400 }
           );
         }
+
+        // Parse metadata values
+        const sessionsIncluded = parseInt(session.metadata.sessions_included);
+        const originalSessions = session.metadata.original_sessions
+          ? parseInt(session.metadata.original_sessions)
+          : sessionsIncluded;
+        const isProrated = session.metadata.is_prorated === "true";
 
         try {
           // Check if this transaction has already been processed
@@ -189,12 +199,12 @@ export async function POST(req: Request) {
                 client_id: session.metadata.user_id,
                 trainer_id: null,
                 amount: session.amount_total ? session.amount_total / 100 : 0,
-                session_count: parseInt(session.metadata.sessions_included),
+                session_count: sessionsIncluded,
+                package_type: packageType,
                 method: "stripe",
                 status: "completed",
                 transaction_id: session.id,
                 paid_at: new Date().toISOString(),
-                package_type: packageType,
               });
 
             if (createPaymentError) {
@@ -231,13 +241,12 @@ export async function POST(req: Request) {
             sessionCountType: typeof session.metadata.sessions_included,
           });
 
-          console.log("🔍 Package upsert parameters", {
-            clientId: session.metadata.user_id,
-            packageType: session.metadata.package_type,
-            sessionsIncluded: Number(session.metadata.sessions_included),
+          console.log("📦 Creating package with:", {
+            sessions_included: sessionsIncluded,
+            original_sessions: originalSessions,
+            is_prorated: isProrated,
             price: session.amount_total ? session.amount_total / 100 : 0,
-            purchaseDate: currentDate,
-            transactionId: session.id,
+            expiry_date: session.metadata.expiry_date,
           });
 
           console.log("📦 Existing package state", {
@@ -361,12 +370,15 @@ export async function POST(req: Request) {
               .insert({
                 client_id: session.metadata.user_id,
                 package_type: packageType,
-                sessions_included: parseInt(session.metadata.sessions_included),
+                sessions_included: sessionsIncluded,
+                original_sessions: originalSessions,
+                is_prorated: isProrated,
                 sessions_used: 0,
                 price: session.amount_total ? session.amount_total / 100 : 0,
                 purchase_date: currentDate,
-                status: "active",
                 transaction_id: session.id,
+                status: "active",
+                expiry_date: new Date(session.metadata.expiry_date),
               })
               .select()
               .single();

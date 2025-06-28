@@ -231,16 +231,23 @@ function PackagesContent() {
     setLoadingPackages(true);
     try {
       console.log("🔍 Fetching most recent package...");
-      const { data: latestPayment, error: paymentError } = await supabase
+      const { data: payments, error: paymentError } = await supabase
         .from("payments")
         .select("*")
         .eq("client_id", user.id)
         .order("paid_at", { ascending: false })
-        .limit(1)
-        .single();
+        .limit(1);
 
       if (paymentError) {
         console.error("❌ Error fetching latest payment:", paymentError);
+        return;
+      }
+
+      const latestPayment = payments?.[0];
+
+      if (!latestPayment) {
+        console.log("ℹ️ No payments found for user");
+        setLoadingPackages(false);
         return;
       }
 
