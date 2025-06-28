@@ -28,6 +28,7 @@ import { Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { createClient } from "@/lib/supabaseClient";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Footer } from "@/components/ui/footer";
 
 interface FormData {
   email: string;
