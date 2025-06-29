@@ -31,22 +31,21 @@ export default function GoogleCalendarPopup({
 
   // Check if we're in the middle of an OAuth flow
   useEffect(() => {
-    if (!open) return;
-
-    // Only set connecting state if we're not already showing success
     const checkOAuthStatus = () => {
       const urlParams = new URLSearchParams(window.location.search);
       const oauthState = urlParams.get("state");
       const oauthCode = urlParams.get("code");
 
       // If we have state and code params, we're in a redirect
-      if (oauthState && oauthCode && !showSuccess) {
+      if (oauthState && oauthCode) {
         setIsConnecting(true);
       }
     };
 
-    checkOAuthStatus();
-  }, [open, showSuccess]);
+    if (open) {
+      checkOAuthStatus();
+    }
+  }, [open]);
 
   // Handle messages from the popup window
   useEffect(() => {
@@ -71,14 +70,6 @@ export default function GoogleCalendarPopup({
           setShowSuccess(true);
           setCalendarName(data.calendarName);
           router.refresh();
-
-          // Clear OAuth params from URL if they exist
-          const url = new URL(window.location.href);
-          if (url.searchParams.has("state") || url.searchParams.has("code")) {
-            url.searchParams.delete("state");
-            url.searchParams.delete("code");
-            window.history.replaceState({}, "", url.toString());
-          }
         } catch (error) {
           console.error("Error verifying calendar:", error);
           toast({
