@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, Loader2 } from "lucide-react";
 import GoogleCalendarSuccessDialog from "./GoogleCalendarSuccessDialog";
 
 interface GoogleCalendarPopupProps {
@@ -28,6 +28,25 @@ export default function GoogleCalendarPopup({
   const [showSuccess, setShowSuccess] = useState(false);
   const [calendarName, setCalendarName] = useState<string>("");
   const { toast } = useToast();
+
+  // Check if we're in the middle of an OAuth flow
+  useEffect(() => {
+    if (!open) return;
+
+    // Only set connecting state if we're not already showing success
+    const checkOAuthStatus = () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const oauthState = urlParams.get("state");
+      const oauthCode = urlParams.get("code");
+
+      // If we have state and code params, we're in a redirect
+      if (oauthState && oauthCode && !showSuccess) {
+        setIsConnecting(true);
+      }
+    };
+
+    checkOAuthStatus();
+  }, [open, showSuccess]);
 
   // Handle messages from the popup window
   useEffect(() => {
@@ -52,6 +71,14 @@ export default function GoogleCalendarPopup({
           setShowSuccess(true);
           setCalendarName(data.calendarName);
           router.refresh();
+
+          // Clear OAuth params from URL if they exist
+          const url = new URL(window.location.href);
+          if (url.searchParams.has("state") || url.searchParams.has("code")) {
+            url.searchParams.delete("state");
+            url.searchParams.delete("code");
+            window.history.replaceState({}, "", url.toString());
+          }
         } catch (error) {
           console.error("Error verifying calendar:", error);
           toast({
@@ -106,7 +133,10 @@ export default function GoogleCalendarPopup({
       const pollTimer = setInterval(() => {
         if (popup?.closed) {
           clearInterval(pollTimer);
-          setIsConnecting(false);
+          // Only reset connecting state if we haven't received a success message
+          if (!showSuccess) {
+            setIsConnecting(false);
+          }
         }
       }, 500);
     } catch (error) {
@@ -123,7 +153,15 @@ export default function GoogleCalendarPopup({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog
+        open={open}
+        onOpenChange={(newOpen) => {
+          // Only allow closing if not in connecting state
+          if (!isConnecting || !newOpen) {
+            onOpenChange(newOpen);
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -135,10 +173,24 @@ export default function GoogleCalendarPopup({
               sessions and receive reminders.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex justify-end">
-            <Button onClick={handleConnectCalendar} disabled={isConnecting}>
-              {isConnecting ? "Connecting..." : "Connect Calendar"}
-            </Button>
+          <div className="flex flex-col items-center justify-center">
+            {isConnecting ? (
+              <div className="flex flex-col items-center gap-4 py-4">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground text-center">
+                  Connecting to Google Calendar...
+                  <br />
+                  Please complete the authentication in the popup window.
+                </p>
+              </div>
+            ) : (
+              <Button
+                onClick={handleConnectCalendar}
+                className="w-full max-w-sm"
+              >
+                Connect Calendar
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -155,4 +207,3 @@ export default function GoogleCalendarPopup({
     </>
   );
 }
- 

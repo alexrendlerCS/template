@@ -14,11 +14,19 @@ export async function GET(request: Request) {
         <html>
           <head>
             <title>Error</title>
+            <style>
+              body { font-family: system-ui; padding: 2rem; line-height: 1.5; }
+              .error { color: #dc2626; }
+            </style>
           </head>
           <body>
+            <h2 class="error">Google Calendar Connection Failed</h2>
+            <p>${error}</p>
             <script>
-              window.close();
-              window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: '${error}' }, '*');
+              if (window.opener) {
+                window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: '${error}' }, '*');
+                window.close();
+              }
             </script>
           </body>
         </html>
@@ -38,11 +46,19 @@ export async function GET(request: Request) {
         <html>
           <head>
             <title>Error</title>
+            <style>
+              body { font-family: system-ui; padding: 2rem; line-height: 1.5; }
+              .error { color: #dc2626; }
+            </style>
           </head>
           <body>
+            <h2 class="error">Google Calendar Connection Failed</h2>
+            <p>No authorization code received from Google. Please try again.</p>
             <script>
-              window.close();
-              window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: 'No code received' }, '*');
+              if (window.opener) {
+                window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: 'No code received' }, '*');
+                window.close();
+              }
             </script>
           </body>
         </html>
@@ -66,11 +82,19 @@ export async function GET(request: Request) {
         <html>
           <head>
             <title>Error</title>
+            <style>
+              body { font-family: system-ui; padding: 2rem; line-height: 1.5; }
+              .error { color: #dc2626; }
+            </style>
           </head>
           <body>
+            <h2 class="error">Google Calendar Connection Failed</h2>
+            <p>Invalid state parameter. This could be due to an expired session or security check failure.</p>
             <script>
-              window.close();
-              window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: 'Invalid state' }, '*');
+              if (window.opener) {
+                window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: 'Invalid state' }, '*');
+                window.close();
+              }
             </script>
           </body>
         </html>
@@ -105,11 +129,19 @@ export async function GET(request: Request) {
         <html>
           <head>
             <title>Error</title>
+            <style>
+              body { font-family: system-ui; padding: 2rem; line-height: 1.5; }
+              .error { color: #dc2626; }
+            </style>
           </head>
           <body>
+            <h2 class="error">Google Calendar Connection Failed</h2>
+            <p>Failed to exchange authorization code for tokens. Please try again.</p>
             <script>
-              window.close();
-              window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: 'Failed to exchange code for tokens' }, '*');
+              if (window.opener) {
+                window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: 'Failed to exchange code for tokens' }, '*');
+                window.close();
+              }
             </script>
           </body>
         </html>
@@ -138,11 +170,29 @@ export async function GET(request: Request) {
         <html>
           <head>
             <title>Error</title>
+            <style>
+              body { font-family: system-ui; padding: 2rem; line-height: 1.5; }
+              .error { color: #dc2626; }
+              .button { 
+                display: inline-block;
+                padding: 0.5rem 1rem;
+                background: #4f46e5;
+                color: white;
+                text-decoration: none;
+                border-radius: 0.375rem;
+                margin-top: 1rem;
+              }
+            </style>
           </head>
           <body>
+            <h2 class="error">Session Not Found</h2>
+            <p>Please ensure you're logged in on the original tab before connecting Google Calendar.</p>
+            <a href="/login" class="button" target="_blank">Go to Login</a>
             <script>
-              window.close();
-              window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: 'Not authenticated' }, '*');
+              if (window.opener) {
+                window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: 'Not authenticated' }, '*');
+                window.close();
+              }
             </script>
           </body>
         </html>
@@ -175,11 +225,19 @@ export async function GET(request: Request) {
         <html>
           <head>
             <title>Error</title>
+            <style>
+              body { font-family: system-ui; padding: 2rem; line-height: 1.5; }
+              .error { color: #dc2626; }
+            </style>
           </head>
           <body>
+            <h2 class="error">Google Calendar Connection Failed</h2>
+            <p>Failed to store Google Calendar tokens. Please try again later.</p>
             <script>
-              window.close();
-              window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: 'Failed to store tokens' }, '*');
+              if (window.opener) {
+                window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: 'Failed to store tokens' }, '*');
+                window.close();
+              }
             </script>
           </body>
         </html>
@@ -194,42 +252,90 @@ export async function GET(request: Request) {
     }
 
     // Clear the state cookie
-    cookieStore.delete("google_oauth_state");
+    try {
+      const cookieStore = await cookies();
+      cookieStore.set("google_oauth_state", "", {
+        expires: new Date(0),
+        path: "/",
+      });
+    } catch (error) {
+      // Ignore cookie errors, as they might occur in server components
+      console.warn("Failed to clear google_oauth_state cookie:", error);
+    }
 
-    // Return success page that closes itself
+    // Return success page that closes itself or redirects
     return new Response(
       `
       <html>
         <head>
           <title>Success</title>
+          <style>
+            body { 
+              font-family: system-ui;
+              padding: 2rem;
+              line-height: 1.5;
+              text-align: center;
+            }
+            .success { 
+              color: #059669;
+              margin-bottom: 1rem;
+            }
+            .spinner {
+              border: 3px solid #f3f3f3;
+              border-radius: 50%;
+              border-top: 3px solid #059669;
+              width: 24px;
+              height: 24px;
+              animation: spin 1s linear infinite;
+              margin: 1rem auto;
+            }
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          </style>
         </head>
         <body>
+          <h2 class="success">Google Calendar Connected Successfully!</h2>
+          <div class="spinner"></div>
+          <p>Redirecting back to your dashboard...</p>
           <script>
-            window.opener.postMessage({ type: 'GOOGLE_AUTH_SUCCESS' }, '*');
-            window.close();
+            if (window.opener) {
+              window.opener.postMessage({ type: 'GOOGLE_AUTH_SUCCESS' }, '*');
+              setTimeout(() => window.close(), 1500);
+            } else {
+              setTimeout(() => window.location.href = '/trainer/dashboard', 1500);
+            }
           </script>
         </body>
       </html>
       `,
       {
-        status: 200,
         headers: {
           "Content-Type": "text/html",
         },
       }
     );
   } catch (error) {
-    console.error("Error in Google callback:", error);
+    console.error("Google OAuth callback error:", error);
     return new Response(
       `
       <html>
         <head>
           <title>Error</title>
+          <style>
+            body { font-family: system-ui; padding: 2rem; line-height: 1.5; }
+            .error { color: #dc2626; }
+          </style>
         </head>
         <body>
+          <h2 class="error">Unexpected Error</h2>
+          <p>An unexpected error occurred while connecting your Google Calendar. Please try again later.</p>
           <script>
-            window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: 'Internal server error' }, '*');
-            window.close();
+            if (window.opener) {
+              window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: 'Unexpected error' }, '*');
+              window.close();
+            }
           </script>
         </body>
       </html>
@@ -243,4 +349,3 @@ export async function GET(request: Request) {
     );
   }
 }
- 
