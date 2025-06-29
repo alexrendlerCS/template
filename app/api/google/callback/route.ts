@@ -25,7 +25,7 @@ export async function GET(request: Request) {
             <script>
               if (window.opener) {
                 window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: '${error}' }, '*');
-                window.close();
+              window.close();
               }
             </script>
           </body>
@@ -57,7 +57,7 @@ export async function GET(request: Request) {
             <script>
               if (window.opener) {
                 window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: 'No code received' }, '*');
-                window.close();
+              window.close();
               }
             </script>
           </body>
@@ -93,7 +93,7 @@ export async function GET(request: Request) {
             <script>
               if (window.opener) {
                 window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: 'Invalid state' }, '*');
-                window.close();
+              window.close();
               }
             </script>
           </body>
@@ -140,7 +140,7 @@ export async function GET(request: Request) {
             <script>
               if (window.opener) {
                 window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: 'Failed to exchange code for tokens' }, '*');
-                window.close();
+              window.close();
               }
             </script>
           </body>
@@ -191,7 +191,7 @@ export async function GET(request: Request) {
             <script>
               if (window.opener) {
                 window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: 'Not authenticated' }, '*');
-                window.close();
+              window.close();
               }
             </script>
           </body>
@@ -206,20 +206,75 @@ export async function GET(request: Request) {
       );
     }
 
-    // Update user record with Google tokens
-    const { error: updateError } = await supabase
-      .from("users")
-      .update({
-        google_access_token: tokens.access_token,
-        google_refresh_token: tokens.refresh_token,
-        google_token_expiry: new Date(
-          Date.now() + tokens.expires_in * 1000
-        ).toISOString(),
-        google_account_connected: true,
-      })
-      .eq("id", user.id);
+    // Create a new Google Calendar
+    try {
+      const calendarResponse = await fetch(
+        "https://www.googleapis.com/calendar/v3/calendars",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${tokens.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            summary: "Training Sessions",
+            timeZone: "America/Los_Angeles",
+          }),
+        }
+      );
 
-    if (updateError) {
+      if (!calendarResponse.ok) {
+        throw new Error("Failed to create Google Calendar");
+      }
+
+      const calendar = await calendarResponse.json();
+
+      // Update user record with Google tokens and calendar ID
+      const { error: updateError } = await supabase
+        .from("users")
+        .update({
+          google_access_token: tokens.access_token,
+          google_refresh_token: tokens.refresh_token,
+          google_token_expiry: new Date(
+            Date.now() + tokens.expires_in * 1000
+          ).toISOString(),
+          google_account_connected: true,
+          google_calendar_id: calendar.id,
+        })
+        .eq("id", user.id);
+
+      if (updateError) {
+        return new Response(
+          `
+          <html>
+            <head>
+              <title>Error</title>
+              <style>
+                body { font-family: system-ui; padding: 2rem; line-height: 1.5; }
+                .error { color: #dc2626; }
+              </style>
+            </head>
+            <body>
+              <h2 class="error">Google Calendar Connection Failed</h2>
+              <p>Failed to store Google Calendar tokens. Please try again later.</p>
+              <script>
+                if (window.opener) {
+                  window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: 'Failed to store tokens' }, '*');
+                window.close();
+                }
+              </script>
+            </body>
+          </html>
+          `,
+          {
+            status: 500,
+            headers: {
+              "Content-Type": "text/html",
+            },
+          }
+        );
+      }
+    } catch (error) {
       return new Response(
         `
         <html>
@@ -232,11 +287,11 @@ export async function GET(request: Request) {
           </head>
           <body>
             <h2 class="error">Google Calendar Connection Failed</h2>
-            <p>Failed to store Google Calendar tokens. Please try again later.</p>
+            <p>Failed to create Google Calendar. Please try again later.</p>
             <script>
               if (window.opener) {
-                window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: 'Failed to store tokens' }, '*');
-                window.close();
+                window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: 'Failed to create calendar' }, '*');
+              window.close();
               }
             </script>
           </body>
@@ -296,7 +351,7 @@ export async function GET(request: Request) {
           </style>
         </head>
         <body>
-          <h2 class="success">Google Calendar Connected Successfully!</h2>
+          <h2 class="success">Google Calendar Connected fully!</h2>
           <div class="spinner"></div>
           <p>Redirecting back to your dashboard...</p>
           <script>
@@ -304,7 +359,18 @@ export async function GET(request: Request) {
               window.opener.postMessage({ type: 'GOOGLE_AUTH_SUCCESS' }, '*');
               setTimeout(() => window.close(), 1500);
             } else {
-              setTimeout(() => window.location.href = '/trainer/dashboard', 1500);
+              const role = "${user.user_metadata?.role || "client"}";
+              const redirectUrl = role === "trainer"
+                ? "/trainer/dashboard"
+                : "/client/dashboard";
+
+              // Set the flag first, then redirect after a brief delay
+              localStorage.setItem("google_calendar_connected", "true");
+              
+              // Use a shorter delay for the redirect to ensure smooth UX
+              setTimeout(() => {
+                window.location.href = redirectUrl;
+              }, 100);
             }
           </script>
         </body>
@@ -334,7 +400,7 @@ export async function GET(request: Request) {
           <script>
             if (window.opener) {
               window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: 'Unexpected error' }, '*');
-              window.close();
+            window.close();
             }
           </script>
         </body>

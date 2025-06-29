@@ -29,24 +29,6 @@ export default function GoogleCalendarPopup({
   const [calendarName, setCalendarName] = useState<string>("");
   const { toast } = useToast();
 
-  // Check if we're in the middle of an OAuth flow
-  useEffect(() => {
-    const checkOAuthStatus = () => {
-      const urlParams = new URLSearchParams(window.location.search);
-      const oauthState = urlParams.get("state");
-      const oauthCode = urlParams.get("code");
-
-      // If we have state and code params, we're in a redirect
-      if (oauthState && oauthCode) {
-        setIsConnecting(true);
-      }
-    };
-
-    if (open) {
-      checkOAuthStatus();
-    }
-  }, [open]);
-
   // Handle messages from the popup window
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
@@ -124,10 +106,7 @@ export default function GoogleCalendarPopup({
       const pollTimer = setInterval(() => {
         if (popup?.closed) {
           clearInterval(pollTimer);
-          // Only reset connecting state if we haven't received a success message
-          if (!showSuccess) {
-            setIsConnecting(false);
-          }
+          setIsConnecting(false);
         }
       }, 500);
     } catch (error) {
@@ -144,15 +123,7 @@ export default function GoogleCalendarPopup({
 
   return (
     <>
-      <Dialog
-        open={open}
-        onOpenChange={(newOpen) => {
-          // Only allow closing if not in connecting state
-          if (!isConnecting || !newOpen) {
-            onOpenChange(newOpen);
-          }
-        }}
-      >
+      <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
