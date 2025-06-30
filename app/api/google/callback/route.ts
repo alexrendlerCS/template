@@ -246,9 +246,9 @@ export async function GET(request: Request) {
       if (updateError) {
         return new Response(
           `
-          <html>
-            <head>
-              <title>Error</title>
+        <html>
+          <head>
+            <title>Error</title>
               <style>
                 body { font-family: system-ui; padding: 2rem; line-height: 1.5; }
                 .error { color: #dc2626; }
@@ -356,7 +356,7 @@ export async function GET(request: Request) {
           <p>Redirecting back to your dashboard...</p>
           <script>
             if (window.opener) {
-              window.opener.postMessage({ type: 'GOOGLE_AUTH_SUCCESS' }, '*');
+            window.opener.postMessage({ type: 'GOOGLE_AUTH_SUCCESS' }, '*');
               setTimeout(() => window.close(), 1500);
             } else {
               const role = "${user.user_metadata?.role || "client"}";

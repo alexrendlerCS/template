@@ -2,12 +2,11 @@ import Link from "next/link";
 import { Calendar, Users2, CreditCard, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Footer } from "@/components/ui/footer";
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white to-gray-50 flex flex-col">
-      <main className="container mx-auto px-4 py-16 flex flex-col items-center text-center flex-grow">
+    <div className="min-h-screen bg-gradient-to-b from-white to-gray-50">
+      <main className="container mx-auto px-4 py-16 flex flex-col items-center text-center">
         {/* Hero Section */}
         <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-gray-900 mb-4">
           Fitness Trainer Scheduler
@@ -69,7 +68,6 @@ export default function HomePage() {
           </Card>
         </div>
       </main>
-      <Footer />
     </div>
   );
 }
