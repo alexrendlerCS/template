@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { TrainerSidebar } from "@/components/trainer-sidebar";
 import {
@@ -29,12 +29,8 @@ import GoogleCalendarPopup from "@/components/GoogleCalendarPopup";
 import GoogleCalendarSuccessDialog from "@/components/GoogleCalendarSuccessDialog";
 import { createClient } from "@/lib/supabaseClient";
 
-export default function TrainerSettings() {
-  const [notifications, setNotifications] = useState({
-    email: true,
-    sms: false,
-    push: true,
-  });
+// Separate the Google Calendar section into its own client component
+function GoogleCalendarSection() {
   const [showGooglePopup, setShowGooglePopup] = useState(false);
   const [showGoogleSuccess, setShowGoogleSuccess] = useState(false);
   const [isGoogleConnected, setIsGoogleConnected] = useState(false);
@@ -63,6 +59,81 @@ export default function TrainerSettings() {
     setIsGoogleConnected(true);
     setShowGoogleSuccess(true);
   }, []);
+
+  return (
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Calendar className="h-5 w-5 text-red-600" />
+            <span>Calendar Integration</span>
+          </CardTitle>
+          <CardDescription>
+            Sync with your calendar for seamless scheduling
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="flex items-center justify-between p-4 border rounded-lg">
+            <div className="flex items-center space-x-3">
+              <div className="bg-blue-600 p-2 rounded">
+                <Calendar className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <p className="font-medium">Google Calendar</p>
+                <p className="text-sm text-gray-500">
+                  Sync your availability and bookings
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              {isGoogleConnected ? (
+                <Badge
+                  variant="outline"
+                  className="text-green-600 border-green-600"
+                >
+                  Connected
+                </Badge>
+              ) : (
+                <>
+                  <Badge
+                    variant="outline"
+                    className="text-orange-600 border-orange-600"
+                  >
+                    Not Connected
+                  </Badge>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowGooglePopup(true)}
+                  >
+                    Connect
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <GoogleCalendarPopup
+        open={showGooglePopup}
+        onOpenChange={setShowGooglePopup}
+        onSuccess={handleGoogleSuccess}
+      />
+      <GoogleCalendarSuccessDialog
+        open={showGoogleSuccess}
+        onOpenChange={setShowGoogleSuccess}
+        calendarName="Training Sessions"
+      />
+    </>
+  );
+}
+
+export default function TrainerSettings() {
+  const [notifications, setNotifications] = useState({
+    email: true,
+    sms: false,
+    push: true,
+  });
 
   return (
     <SidebarProvider>
@@ -226,81 +297,9 @@ export default function TrainerSettings() {
               </Card>
 
               {/* Calendar Integration */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <Calendar className="h-5 w-5 text-red-600" />
-                    <span>Calendar Integration</span>
-                  </CardTitle>
-                  <CardDescription>
-                    Sync with your calendar for seamless scheduling
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div className="bg-blue-600 p-2 rounded">
-                        <Calendar className="h-5 w-5 text-white" />
-                      </div>
-                      <div>
-                        <p className="font-medium">Google Calendar</p>
-                        <p className="text-sm text-gray-500">
-                          Sync your availability and bookings
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      {isGoogleConnected ? (
-                        <Badge
-                          variant="outline"
-                          className="text-green-600 border-green-600"
-                        >
-                          Connected
-                        </Badge>
-                      ) : (
-                        <>
-                          <Badge
-                            variant="outline"
-                            className="text-orange-600 border-orange-600"
-                          >
-                            Not Connected
-                          </Badge>
-                          <Button
-                            variant="outline"
-                            onClick={() => setShowGooglePopup(true)}
-                          >
-                            Connect
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Label htmlFor="auto-block">
-                          Auto-block booked sessions
-                        </Label>
-                        <p className="text-sm text-gray-500">
-                          Automatically block time slots when sessions are
-                          booked
-                        </p>
-                      </div>
-                      <Switch id="auto-block" />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Label htmlFor="buffer-time">Add buffer time</Label>
-                        <p className="text-sm text-gray-500">
-                          Add 15 minutes before and after each session
-                        </p>
-                      </div>
-                      <Switch id="buffer-time" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              <Suspense fallback={<div>Loading calendar settings...</div>}>
+                <GoogleCalendarSection />
+              </Suspense>
 
               {/* Notifications */}
               <Card>
@@ -424,18 +423,6 @@ export default function TrainerSettings() {
                 </Button>
               </div>
             </div>
-
-            {/* Google Calendar Popups */}
-            <GoogleCalendarPopup
-              open={showGooglePopup}
-              onOpenChange={setShowGooglePopup}
-              onSuccess={handleGoogleSuccess}
-            />
-            <GoogleCalendarSuccessDialog
-              open={showGoogleSuccess}
-              onOpenChange={setShowGoogleSuccess}
-              calendarName="Training Sessions"
-            />
           </main>
         </div>
       </div>
