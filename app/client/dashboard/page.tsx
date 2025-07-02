@@ -147,6 +147,23 @@ interface PackageTypeCount {
   total: number;
 }
 
+// Add this helper function at the top with other helper functions
+const calculateExpirationDate = (purchaseDate: string) => {
+  const purchase = new Date(purchaseDate);
+  const nextMonth = new Date(
+    purchase.getFullYear(),
+    purchase.getMonth() + 1,
+    4
+  ); // 4th of next month
+  return nextMonth;
+};
+
+const getDaysUntilExpiration = (expirationDate: Date) => {
+  const now = new Date();
+  const diffTime = expirationDate.getTime() - now.getTime();
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+};
+
 // Create a new component for URL parameter handling
 function URLParamHandler({
   onSuccess,
@@ -186,6 +203,58 @@ function URLParamHandler({
   return null;
 }
 
+// Add this component after the interfaces and before the main component
+function GoogleCalendarSection({
+  isConnected,
+  onConnect,
+}: {
+  isConnected: boolean;
+  onConnect: () => void;
+}) {
+  if (isConnected) return null;
+
+  return (
+    <Card className="mt-6">
+      <CardHeader>
+        <CardTitle className="flex items-center space-x-2">
+          <Calendar className="h-5 w-5 text-red-600" />
+          <span>Connect Google Calendar</span>
+        </CardTitle>
+        <CardDescription>
+          Sync your training sessions with Google Calendar
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+          <div className="flex-shrink-0">
+            <Image
+              src="/placeholder-logo.svg"
+              alt="Google Calendar"
+              width={48}
+              height={48}
+              className="rounded"
+            />
+          </div>
+          <div className="flex-grow">
+            <h4 className="font-medium mb-1">Never Miss a Session</h4>
+            <p className="text-sm text-gray-600">
+              Connect your Google Calendar to automatically sync your training
+              sessions and receive reminders
+            </p>
+          </div>
+        </div>
+        <Button
+          onClick={onConnect}
+          className="w-full bg-red-600 hover:bg-red-700 text-white"
+        >
+          <Calendar className="h-4 w-4 mr-2" />
+          Connect Google Calendar
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function ClientDashboard() {
   const [showCalendarPopup, setShowCalendarPopup] = useState(false);
   const [showContractModal, setShowContractModal] = useState(false);
@@ -203,6 +272,8 @@ export default function ClientDashboard() {
   const [sessionsByType, setSessionsByType] = useState<PackageTypeCount[]>([]);
   const [totalSessionsRemaining, setTotalSessionsRemaining] = useState(0);
   const [totalSessionsUsed, setTotalSessionsUsed] = useState(0);
+  const [earliestExpirationDate, setEarliestExpirationDate] =
+    useState<Date | null>(null);
   const supabase = createClient();
   const router = useRouter();
 
@@ -416,6 +487,7 @@ export default function ClientDashboard() {
     };
   }, [showCalendarPopup]);
 
+  // Update fetchPackageInfo to calculate expiration
   useEffect(() => {
     const fetchPackageInfo = async () => {
       try {
@@ -456,6 +528,7 @@ export default function ClientDashboard() {
 
         let totalUsed = 0;
         let totalRemaining = 0;
+        let earliestExpiration: Date | null = null;
 
         if (packages && packages.length > 0) {
           packages.forEach((pkg) => {
@@ -463,6 +536,13 @@ export default function ClientDashboard() {
             if (packageTypes[type]) {
               const remaining =
                 (pkg.sessions_included || 0) - (pkg.sessions_used || 0);
+              if (remaining > 0) {
+                // Only consider expiration for packages with remaining sessions
+                const expiration = calculateExpirationDate(pkg.purchase_date);
+                if (!earliestExpiration || expiration < earliestExpiration) {
+                  earliestExpiration = expiration;
+                }
+              }
               packageTypes[type].remaining += remaining;
               packageTypes[type].total += pkg.sessions_included || 0;
               totalUsed += pkg.sessions_used || 0;
@@ -474,6 +554,7 @@ export default function ClientDashboard() {
         setSessionsByType(Object.values(packageTypes));
         setTotalSessionsRemaining(totalRemaining);
         setTotalSessionsUsed(totalUsed);
+        setEarliestExpirationDate(earliestExpiration);
       } catch (error) {
         console.error("Error fetching package info:", error);
       }
@@ -527,6 +608,119 @@ export default function ClientDashboard() {
     .map((n) => n[0])
     .join("")
     .toUpperCase();
+
+  const handleConnectCalendar = () => {
+    setShowCalendarPopup(true);
+  };
+
+  const renderModals = () => {
+    return (
+      <>
+        <GoogleCalendarPopup
+          open={showCalendarPopup}
+          onOpenChange={setShowCalendarPopup}
+        />
+
+        <GoogleCalendarSuccessDialog
+          open={showSuccessDialog}
+          onOpenChange={setShowSuccessDialog}
+          calendarName={calendarName}
+        />
+
+        <ContractFlowModal
+          open={showContractModal}
+          onOpenChange={(open) => {
+            setShowContractModal(open);
+            // Only redirect to login if the contract wasn't accepted
+            if (!open && !userStatus.contractAccepted) {
+              router.push("/login");
+            }
+          }}
+          onComplete={async () => {
+            setUserStatus((prev) => ({ ...prev, contractAccepted: true }));
+            setShowContractModal(false);
+            if (!userStatus.googleConnected) {
+              setShowCalendarPopup(true);
+            }
+          }}
+        />
+      </>
+    );
+  };
+
+  // Update the payment reminder section in the return statement
+  const renderPaymentReminder = () => {
+    if (!earliestExpirationDate || totalSessionsRemaining === 0) return null;
+
+    const daysUntilExpiration = getDaysUntilExpiration(earliestExpirationDate);
+    if (daysUntilExpiration <= 0) return null;
+
+    const urgency =
+      daysUntilExpiration <= 7
+        ? "red"
+        : daysUntilExpiration <= 14
+          ? "orange"
+          : "yellow";
+    const colorClasses = {
+      red: {
+        border: "border-red-200",
+        bg: "bg-red-50",
+        text: "text-red-800",
+        description: "text-red-700",
+        button: "bg-red-600 hover:bg-red-700",
+        icon: "text-red-600",
+      },
+      orange: {
+        border: "border-orange-200",
+        bg: "bg-orange-50",
+        text: "text-orange-800",
+        description: "text-orange-700",
+        button: "bg-orange-600 hover:bg-orange-700",
+        icon: "text-orange-600",
+      },
+      yellow: {
+        border: "border-yellow-200",
+        bg: "bg-yellow-50",
+        text: "text-yellow-800",
+        description: "text-yellow-700",
+        button: "bg-yellow-600 hover:bg-yellow-700",
+        icon: "text-yellow-600",
+      },
+    };
+
+    const colors = colorClasses[urgency];
+
+    return (
+      <Card className={`${colors.border} ${colors.bg}`}>
+        <CardContent className="p-4">
+          <div className="flex items-start space-x-3">
+            <AlertCircle className={`h-5 w-5 ${colors.icon} mt-0.5`} />
+            <div>
+              <p className={`font-medium ${colors.text}`}>
+                Package Expiration Reminder
+              </p>
+              <p className={`text-sm ${colors.description} mt-1`}>
+                {daysUntilExpiration === 1
+                  ? "Your package expires tomorrow"
+                  : `Your package expires in ${daysUntilExpiration} days`}
+                {totalSessionsRemaining > 0 &&
+                  ` with ${totalSessionsRemaining} sessions remaining`}
+                .
+                {daysUntilExpiration <= 7
+                  ? " Renew now to avoid interruption."
+                  : " Consider renewing soon."}
+              </p>
+              <Link href="/client/packages">
+                <Button size="sm" className={`mt-3 ${colors.button}`}>
+                  Renew Now
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
 
   if (loading) {
     return (
@@ -804,66 +998,17 @@ export default function ClientDashboard() {
                 </CardContent>
               </Card>
 
-              {/* Upcoming Payment Alert */}
-              <Card className="border-orange-200 bg-orange-50">
-                <CardContent className="p-4">
-                  <div className="flex items-start space-x-3">
-                    <AlertCircle className="h-5 w-5 text-orange-600 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-orange-800">
-                        Payment Reminder
-                      </p>
-                      <p className="text-sm text-orange-700 mt-1">
-                        Your current package expires in 45 days. Consider
-                        renewing to avoid interruption.
-                      </p>
-                      <Button
-                        size="sm"
-                        className="mt-3 bg-orange-600 hover:bg-orange-700"
-                      >
-                        Renew Now
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              {renderPaymentReminder()}
+
+              <GoogleCalendarSection
+                isConnected={userStatus.googleConnected}
+                onConnect={handleConnectCalendar}
+              />
             </div>
           </div>
         </main>
-
-        {/* Move ContractFlowModal outside of layout containers */}
-        <ContractFlowModal
-          open={showContractModal}
-          onOpenChange={(open) => {
-            setShowContractModal(open);
-            // Only redirect to login if the contract wasn't accepted
-            if (!open && !userStatus.contractAccepted) {
-              router.push("/login");
-            }
-          }}
-          onComplete={async () => {
-            setUserStatus((prev) => ({ ...prev, contractAccepted: true }));
-            setShowContractModal(false);
-            if (!userStatus.googleConnected) {
-              setShowCalendarPopup(true);
-            }
-          }}
-        />
-
-        {/* Keep GoogleCalendarPopup */}
-        <GoogleCalendarPopup
-          open={showCalendarPopup}
-          onOpenChange={setShowCalendarPopup}
-        />
-
-        <GoogleCalendarSuccessDialog
-          open={showSuccessDialog}
-          onOpenChange={setShowSuccessDialog}
-          calendarName={calendarName}
-        />
-
-        <GoogleCalendarBanner />
       </div>
+      {renderModals()}
     </DashboardWrapper>
   );
 }
