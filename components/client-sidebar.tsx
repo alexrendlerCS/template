@@ -105,8 +105,11 @@ export function ClientSidebar() {
 
   const handleSignOut = async () => {
     try {
-      await supabase.auth.signOut();
-      router.push("/login");
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+
+      // Force a hard refresh to clear all client state
+      window.location.href = "/login";
     } catch (error) {
       console.error("Error signing out:", error);
     }
