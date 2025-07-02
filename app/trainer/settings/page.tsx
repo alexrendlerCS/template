@@ -37,23 +37,44 @@ function GoogleCalendarSection() {
   const supabase = createClient();
 
   useEffect(() => {
+    let mounted = true;
+
     const checkGoogleStatus = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
+      try {
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+        if (userError || !user) {
+          console.error("Failed to get user:", userError);
+          return;
+        }
 
-      const { data: userData } = await supabase
-        .from("users")
-        .select("google_account_connected")
-        .eq("id", user.id)
-        .single();
+        const { data: userData, error: dbError } = await supabase
+          .from("users")
+          .select("google_account_connected")
+          .eq("id", user.id)
+          .single();
 
-      setIsGoogleConnected(!!userData?.google_account_connected);
+        if (dbError) {
+          console.error("Failed to fetch user data:", dbError);
+          return;
+        }
+
+        if (mounted) {
+          setIsGoogleConnected(!!userData?.google_account_connected);
+        }
+      } catch (error) {
+        console.error("Error checking Google status:", error);
+      }
     };
 
     checkGoogleStatus();
-  }, []);
+
+    return () => {
+      mounted = false;
+    };
+  }, [supabase]);
 
   const handleGoogleSuccess = useCallback(() => {
     setIsGoogleConnected(true);
@@ -61,70 +82,68 @@ function GoogleCalendarSection() {
   }, []);
 
   return (
-    <>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Calendar className="h-5 w-5 text-red-600" />
-            <span>Calendar Integration</span>
-          </CardTitle>
-          <CardDescription>
-            Sync with your calendar for seamless scheduling
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="flex items-center justify-between p-4 border rounded-lg">
-            <div className="flex items-center space-x-3">
-              <div className="bg-blue-600 p-2 rounded">
-                <Calendar className="h-5 w-5 text-white" />
-              </div>
-              <div>
-                <p className="font-medium">Google Calendar</p>
-                <p className="text-sm text-gray-500">
-                  Sync your availability and bookings
-                </p>
-              </div>
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center space-x-2">
+          <Calendar className="h-5 w-5 text-red-600" />
+          <span>Calendar Integration</span>
+        </CardTitle>
+        <CardDescription>
+          Sync with your calendar for seamless scheduling
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="flex items-center justify-between p-4 border rounded-lg">
+          <div className="flex items-center space-x-3">
+            <div className="bg-blue-600 p-2 rounded">
+              <Calendar className="h-5 w-5 text-white" />
             </div>
-            <div className="flex items-center space-x-2">
-              {isGoogleConnected ? (
-                <Badge
-                  variant="outline"
-                  className="text-green-600 border-green-600"
-                >
-                  Connected
-                </Badge>
-              ) : (
-                <>
-                  <Badge
-                    variant="outline"
-                    className="text-orange-600 border-orange-600"
-                  >
-                    Not Connected
-                  </Badge>
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowGooglePopup(true)}
-                  >
-                    Connect
-                  </Button>
-                </>
-              )}
+            <div>
+              <p className="font-medium">Google Calendar</p>
+              <p className="text-sm text-gray-500">
+                Sync your availability and bookings
+              </p>
             </div>
           </div>
-        </CardContent>
-      </Card>
+          <div className="flex items-center space-x-2">
+            {isGoogleConnected ? (
+              <Badge
+                variant="outline"
+                className="text-green-600 border-green-600"
+              >
+                Connected
+              </Badge>
+            ) : (
+              <>
+                <Badge
+                  variant="outline"
+                  className="text-orange-600 border-orange-600"
+                >
+                  Not Connected
+                </Badge>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowGooglePopup(true)}
+                >
+                  Connect
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
 
-      <GoogleCalendarPopup
-        open={showGooglePopup}
-        onOpenChange={setShowGooglePopup}
-        onSuccess={handleGoogleSuccess}
-      />
-      <GoogleCalendarSuccessDialog
-        open={showGoogleSuccess}
-        onOpenChange={setShowGoogleSuccess}
-        calendarName="Training Sessions"
-      />
-    </>
+        <GoogleCalendarPopup
+          open={showGooglePopup}
+          onOpenChange={setShowGooglePopup}
+          onSuccess={handleGoogleSuccess}
+        />
+        <GoogleCalendarSuccessDialog
+          open={showGoogleSuccess}
+          onOpenChange={setShowGoogleSuccess}
+          calendarName="Training Sessions"
+        />
+      </CardContent>
+    </Card>
   );
 }
 

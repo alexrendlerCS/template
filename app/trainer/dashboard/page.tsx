@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { TrainerSidebar } from "@/components/trainer-sidebar";
 import {
@@ -121,27 +121,24 @@ function URLParamHandler({
   onError: (error: string) => void;
 }) {
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   useEffect(() => {
+    // Only run once on mount
     const success = searchParams.get("success");
     const error = searchParams.get("error");
     const calendarNameParam = searchParams.get("calendarName");
 
-    if (success === "true") {
-      if (calendarNameParam) {
-        onSuccess(decodeURIComponent(calendarNameParam));
-      }
-      setTimeout(() => {
-        const newUrl = window.location.pathname;
-        window.history.replaceState({}, "", newUrl);
-      }, 100);
+    if (success === "true" && calendarNameParam) {
+      onSuccess(decodeURIComponent(calendarNameParam));
+      // Use router.replace instead of window.history for better Next.js integration
+      router.replace(window.location.pathname);
     } else if (error) {
       console.error("OAuth error:", error);
       onError(decodeURIComponent(error));
-      const newUrl = window.location.pathname;
-      window.history.replaceState({}, "", newUrl);
+      router.replace(window.location.pathname);
     }
-  }, [searchParams, onSuccess, onError]);
+  }, []); // Empty dependency array since we only want this to run once on mount
 
   return null;
 }
@@ -195,111 +192,124 @@ export default function TrainerDashboard() {
   const router = useRouter();
 
   // Add OAuth success and error handlers
-  const handleOAuthSuccess = (calendarName: string) => {
+  const handleOAuthSuccess = useCallback((calendarName: string) => {
     setShowGoogleSuccess(true);
     setUserStatus((prev) => ({ ...prev, googleConnected: true }));
-  };
+  }, []);
 
-  const handleOAuthError = (error: string) => {
+  const handleOAuthError = useCallback((error: string) => {
     toast({
       title: "Error",
       description: error,
       variant: "destructive",
     });
-  };
-
-  useEffect(() => {
-    const checkUserStatus = async () => {
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
-        if (!session?.user) {
-          console.log("No session found, redirecting to login");
-          router.push("/login");
-          return;
-        }
-
-        console.log("Checking trainer status for user:", session.user.id);
-
-        // First verify this is actually a trainer
-        const { data: userData, error: userError } = await supabase
-          .from("users")
-          .select(
-            "contract_accepted, google_account_connected, full_name, avatar_url, role"
-          )
-          .eq("id", session.user.id)
-          .single();
-
-        if (userError) {
-          console.error("Error fetching trainer data:", userError);
-          return;
-        }
-
-        console.log("Full trainer data:", userData);
-
-        // Verify this is a trainer
-        if (userData.role !== "trainer") {
-          console.log("Non-trainer accessing trainer dashboard, redirecting");
-          router.push("/client/dashboard");
-          return;
-        }
-
-        if (userData) {
-          const contractAccepted = userData.contract_accepted || false;
-          const googleConnected = userData.google_account_connected || false;
-
-          console.log("Setting trainer status:", {
-            contractAccepted,
-            googleConnected,
-            userName: userData.full_name || "",
-            avatarUrl: userData.avatar_url,
-          });
-
-          setUserStatus({
-            contractAccepted,
-            googleConnected,
-            userName: userData.full_name || "",
-            avatarUrl: userData.avatar_url,
-          });
-
-          // Show contract modal immediately if contract not accepted
-          if (!contractAccepted) {
-            console.log("Showing contract modal - contract not accepted");
-            setShowContractModal(true);
-          }
-          // Show calendar popup if contract accepted but Google not connected
-          else if (!googleConnected) {
-            console.log("Showing Google popup - Google not connected");
-            setShowGooglePopup(true);
-          } else {
-            console.log("Both contract accepted and Google connected");
-          }
-        }
-      } catch (error) {
-        console.error("Error checking trainer status:", error);
-      }
-    };
-
-    checkUserStatus();
   }, []);
 
-  // Add debug logging for render
-  console.log("Rendering trainer dashboard:", {
-    showContractModal,
-    showGooglePopup,
-    userStatus,
-  });
+  const checkUserStatus = useCallback(async () => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.user) {
+        console.log("No session found, redirecting to login");
+        router.push("/login");
+        return;
+      }
+
+      console.log("Checking trainer status for user:", session.user.id);
+
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .select(
+          "contract_accepted, google_account_connected, full_name, avatar_url, role"
+        )
+        .eq("id", session.user.id)
+        .single();
+
+      if (userError) {
+        console.error("Error fetching trainer data:", userError);
+        return;
+      }
+
+      console.log("Full trainer data:", userData);
+
+      if (userData.role !== "trainer") {
+        console.log("Non-trainer accessing trainer dashboard, redirecting");
+        router.push("/client/dashboard");
+        return;
+      }
+
+      if (userData) {
+        const contractAccepted = userData.contract_accepted || false;
+        const googleConnected = userData.google_account_connected || false;
+
+        console.log("Setting trainer status:", {
+          contractAccepted,
+          googleConnected,
+          userName: userData.full_name || "",
+          avatarUrl: userData.avatar_url,
+        });
+
+        setUserStatus({
+          contractAccepted,
+          googleConnected,
+          userName: userData.full_name || "",
+          avatarUrl: userData.avatar_url,
+        });
+
+        if (!contractAccepted) {
+          console.log("Showing contract modal - contract not accepted");
+          setShowContractModal(true);
+        } else if (!googleConnected) {
+          console.log("Showing Google popup - Google not connected");
+          setShowGooglePopup(true);
+        } else {
+          console.log("Both contract accepted and Google connected");
+        }
+      }
+    } catch (error) {
+      console.error("Error checking trainer status:", error);
+    }
+  }, [router, supabase]);
+
+  useEffect(() => {
+    checkUserStatus();
+  }, [checkUserStatus]);
+
+  const handleContractComplete = useCallback(async () => {
+    setUserStatus((prev) => ({ ...prev, contractAccepted: true }));
+    setShowContractModal(false);
+    await router.refresh();
+    // Use the callback form to ensure we have the latest state
+    setShowGooglePopup(true);
+  }, [router]);
+
+  const handleGoogleSuccess = useCallback(() => {
+    setUserStatus((prev) => ({ ...prev, googleConnected: true }));
+    setShowGooglePopup(false);
+    setShowGoogleSuccess(true);
+  }, []);
 
   // Add function to handle calendar connection
-  const handleConnectCalendar = () => {
+  const handleConnectCalendar = useCallback(() => {
     setShowGooglePopup(true);
-  };
+  }, []);
 
-  // Add function to render modals
-  const renderModals = () => {
-    return (
+  // Memoize the filtered clients to prevent unnecessary recalculations
+  const filteredClients = useMemo(
+    () =>
+      mockClients.filter(
+        (client) =>
+          client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          client.email.toLowerCase().includes(searchTerm.toLowerCase())
+      ),
+    [searchTerm]
+  );
+
+  // Memoize the modals to prevent unnecessary re-renders
+  const modals = useMemo(
+    () => (
       <>
         <ContractFlowModal
           open={showContractModal}
@@ -309,23 +319,13 @@ export default function TrainerDashboard() {
               router.push("/login");
             }
           }}
-          onComplete={async () => {
-            setUserStatus((prev) => ({ ...prev, contractAccepted: true }));
-            await router.refresh();
-            setShowContractModal(false);
-            if (!userStatus.googleConnected) {
-              setShowGooglePopup(true);
-            }
-          }}
+          onComplete={handleContractComplete}
         />
 
         <GoogleCalendarPopup
           open={showGooglePopup}
           onOpenChange={setShowGooglePopup}
-          onSuccess={() => {
-            setUserStatus((prev) => ({ ...prev, googleConnected: true }));
-            setShowGoogleSuccess(true);
-          }}
+          onSuccess={handleGoogleSuccess}
         />
 
         <GoogleCalendarSuccessDialog
@@ -334,29 +334,35 @@ export default function TrainerDashboard() {
           calendarName="Training Sessions"
         />
 
-        <URLParamHandler
-          onSuccess={handleOAuthSuccess}
-          onError={handleOAuthError}
-        />
+        {(showGooglePopup || showGoogleSuccess) && (
+          <URLParamHandler
+            onSuccess={handleOAuthSuccess}
+            onError={handleOAuthError}
+          />
+        )}
       </>
-    );
-  };
-
-  // Prevent rendering dashboard content until contract is accepted
-  if (!userStatus.contractAccepted && showContractModal) {
-    return renderModals();
-  }
-
-  const filteredClients = mockClients.filter(
-    (client) =>
-      client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.email.toLowerCase().includes(searchTerm.toLowerCase())
+    ),
+    [
+      showContractModal,
+      showGooglePopup,
+      showGoogleSuccess,
+      handleContractComplete,
+      handleGoogleSuccess,
+      handleOAuthSuccess,
+      handleOAuthError,
+      router,
+    ]
   );
+
+  // If contract not accepted, only show the contract modal
+  if (!userStatus.contractAccepted) {
+    return modals;
+  }
 
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full">
-        {renderModals()}
+        {modals}
         <TrainerSidebar />
         <div className="flex-1">
           <header className="border-b">

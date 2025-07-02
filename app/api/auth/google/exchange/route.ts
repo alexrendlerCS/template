@@ -30,21 +30,21 @@ export async function GET(request: Request) {
     // Create Supabase client
     const supabase = createClient();
 
-    // Get user session
+    // Get authenticated user
     const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
-    if (sessionError) {
-      console.error("❌ Session error:", sessionError);
+    if (userError) {
+      console.error("❌ User error:", userError);
       return NextResponse.redirect(
-        `${origin}/login?error=${encodeURIComponent(sessionError.message)}`
+        `${origin}/login?error=${encodeURIComponent(userError.message)}`
       );
     }
 
-    if (!session?.user) {
-      console.error("❌ No session found");
+    if (!user) {
+      console.error("❌ No user found");
       return NextResponse.redirect(
         `${origin}/login?error=${encodeURIComponent("Please log in to continue")}`
       );
@@ -53,8 +53,8 @@ export async function GET(request: Request) {
     // Get user role for redirects
     const { data: userData, error: userRoleError } = await supabase
       .from("users")
-      .select("role")
-      .eq("id", session.user.id)
+      .select("role, full_name")
+      .eq("id", user.id)
       .single();
 
     if (userRoleError) {
@@ -108,23 +108,11 @@ export async function GET(request: Request) {
             Date.now() + tokenData.expires_in * 1000
           ).toISOString(),
         })
-        .eq("id", session.user.id);
+        .eq("id", user.id);
 
       if (updateError) {
         console.error("❌ Failed to update user:", updateError);
         throw new Error("Failed to store tokens");
-      }
-
-      // Get user's role and name for calendar creation
-      const { data: userData, error: userError } = await supabase
-        .from("users")
-        .select("role, full_name")
-        .eq("id", session.user.id)
-        .single();
-
-      if (userError) {
-        console.error("❌ Failed to fetch user data:", userError);
-        throw new Error("Failed to fetch user data");
       }
 
       // Create a dedicated calendar for training sessions
@@ -167,17 +155,6 @@ export async function GET(request: Request) {
       return response;
     } catch (error) {
       console.error("❌ Error during OAuth flow:", error);
-      // Get user role for error redirect
-      const { data: userData } = await supabase
-        .from("users")
-        .select("role")
-        .eq("id", session.user.id)
-        .single();
-
-      const redirectPath =
-        userData?.role === "trainer"
-          ? "/trainer/dashboard"
-          : "/client/dashboard";
       return NextResponse.redirect(
         `${origin}${redirectPath}?error=${encodeURIComponent(error instanceof Error ? error.message : "Unexpected error occurred")}`
       );
