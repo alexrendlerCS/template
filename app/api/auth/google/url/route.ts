@@ -23,8 +23,11 @@ export async function GET(request: Request) {
 
   const redirectUri = process.env.GOOGLE_REDIRECT_URI;
   const clientId = process.env.GOOGLE_CLIENT_ID;
-  const scope =
-    "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events";
+  const scope = [
+    "https://www.googleapis.com/auth/calendar",
+    "https://www.googleapis.com/auth/calendar.events",
+    "https://www.googleapis.com/auth/calendar.calendars",
+  ].join(" ");
 
   console.log("🔍 OAuth URL Generation:", {
     redirectUri,
