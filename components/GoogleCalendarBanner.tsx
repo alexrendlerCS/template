@@ -45,17 +45,54 @@ export function GoogleCalendarBanner({ onDismiss }: GoogleCalendarBannerProps) {
   // Handle messages from the popup window
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
-      if (event.data.type === "GOOGLE_AUTH_SUCCESS") {
-        setIsConnecting(false);
-        setShowSuccessDialog(true);
-        router.refresh();
-      } else if (event.data.type === "GOOGLE_AUTH_ERROR") {
+      if (event.data.type === "GOOGLE_AUTH_CODE") {
+        const { code, state } = event.data;
+        const storedState = localStorage.getItem("oauth_state");
+
+        // Validate state before proceeding
+        if (state !== storedState) {
+          toast({
+            title: "Authentication Error",
+            description: "Invalid state parameter. Please try again.",
+            variant: "destructive",
+          });
+          setIsConnecting(false);
+          return;
+        }
+
+        try {
+          const res = await fetch("/api/auth/google/exchange", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code, state }),
+          });
+
+          if (!res.ok) {
+            const error = await res.text();
+            throw new Error(error || "Failed to exchange code");
+          }
+
+          localStorage.removeItem("oauth_state");
+          setIsConnecting(false);
+          setShowSuccessDialog(true);
+          router.refresh();
+        } catch (err) {
+          console.error("Failed to exchange code:", err);
+          setIsConnecting(false);
+          toast({
+            title: "OAuth Error",
+            description: err instanceof Error ? err.message : "Unknown error",
+            variant: "destructive",
+          });
+        }
+      }
+
+      if (event.data.type === "GOOGLE_AUTH_ERROR") {
         setIsConnecting(false);
         toast({
-          title: "Error",
-          description: event.data.error || "Failed to connect Google Calendar",
+          title: "OAuth Error",
+          description: event.data.error || "Unknown error during Google auth",
           variant: "destructive",
-          duration: 5000,
         });
       }
     };
@@ -67,13 +104,16 @@ export function GoogleCalendarBanner({ onDismiss }: GoogleCalendarBannerProps) {
   const handleConnect = async () => {
     try {
       setIsConnecting(true);
-      // Get the OAuth URL from our backend
+      // Get the OAuth URL and state from our backend
       const response = await fetch("/api/auth/google/url");
-      const { url } = await response.json();
+      const { url, state } = await response.json();
 
-      if (!url) {
-        throw new Error("Failed to get OAuth URL");
+      if (!url || !state) {
+        throw new Error("Failed to get OAuth URL or state");
       }
+
+      // Store state in localStorage for validation in callback
+      localStorage.setItem("oauth_state", state);
 
       // Open the OAuth flow in a centered popup window
       const width = 500;
@@ -91,13 +131,14 @@ export function GoogleCalendarBanner({ onDismiss }: GoogleCalendarBannerProps) {
       const pollTimer = setInterval(() => {
         if (popup?.closed) {
           clearInterval(pollTimer);
-          // Only reset connecting state if we haven't received a success message
           setIsConnecting(false);
+          localStorage.removeItem("oauth_state"); // Clean up state if popup was closed
         }
       }, 500);
     } catch (error) {
       console.error("Error starting Google Calendar connection:", error);
       setIsConnecting(false);
+      localStorage.removeItem("oauth_state"); // Clean up state on error
       toast({
         title: "Error",
         description: "Failed to start Google Calendar connection",

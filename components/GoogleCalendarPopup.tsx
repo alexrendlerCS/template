@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useCallback, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useToast } from "@/components/ui/use-toast";
 import {
   Dialog,
@@ -11,161 +11,120 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { CalendarIcon, Loader2 } from "lucide-react";
-import GoogleCalendarSuccessDialog from "./GoogleCalendarSuccessDialog";
+import { Loader2 } from "lucide-react";
+
+// Generate a random string for OAuth state
+function generateRandomString(length: number = 32): string {
+  const charset =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+  let result = "";
+  const randomValues = new Uint8Array(length);
+  crypto.getRandomValues(randomValues);
+  for (let i = 0; i < length; i++) {
+    result += charset[randomValues[i] % charset.length];
+  }
+  return result;
+}
 
 interface GoogleCalendarPopupProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSuccess?: () => void;
 }
 
 export default function GoogleCalendarPopup({
   open,
   onOpenChange,
+  onSuccess,
 }: GoogleCalendarPopupProps) {
   const router = useRouter();
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [calendarName, setCalendarName] = useState<string>("");
   const { toast } = useToast();
+  const searchParams = useSearchParams();
+  const [isConnecting, setIsConnecting] = useState(false);
 
-  // Handle messages from the popup window
+  // Handle URL parameters in effect
   useEffect(() => {
-    const handleMessage = async (event: MessageEvent) => {
-      if (event.data.type === "GOOGLE_AUTH_SUCCESS") {
-        try {
-          // Verify calendar connection
-          const response = await fetch("/api/google/calendar/verify", {
-            method: "POST",
-          });
+    if (!searchParams) return;
 
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(
-              errorText || "Failed to verify calendar connection"
-            );
-          }
+    const success = searchParams.get("success");
+    const error = searchParams.get("error");
 
-          const data = await response.json();
-          setIsConnecting(false);
-          onOpenChange(false);
-          setShowSuccess(true);
-          setCalendarName(data.calendarName);
-          router.refresh();
-        } catch (error) {
-          console.error("Error verifying calendar:", error);
-          toast({
-            title: "Warning",
-            description:
-              "Connected to Google Calendar but failed to verify connection. Please try reconnecting.",
-            variant: "destructive",
-            duration: 5000,
-          });
-          setIsConnecting(false);
-        }
-      } else if (event.data.type === "GOOGLE_AUTH_ERROR") {
-        setIsConnecting(false);
-        toast({
-          title: "Error",
-          description: event.data.error || "Failed to connect Google Calendar",
-          variant: "destructive",
-          duration: 5000,
-        });
-      }
-    };
+    if (success === "true") {
+      // Close the dialog
+      onOpenChange(false);
+      // Notify parent of success
+      onSuccess?.();
+      // Show success toast
+      toast({
+        title: "Success",
+        description: "Successfully connected to Google Calendar!",
+      });
 
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
-  }, [router, toast, onOpenChange]);
+      // Clean up URL params
+      const url = new URL(window.location.href);
+      url.searchParams.delete("success");
+      router.replace(url.pathname);
+    } else if (error) {
+      toast({
+        title: "Error",
+        description: decodeURIComponent(error),
+        variant: "destructive",
+      });
+      setIsConnecting(false);
+      // Clean up URL params
+      const url = new URL(window.location.href);
+      url.searchParams.delete("error");
+      router.replace(url.pathname);
+    }
+  }, [searchParams, router, onOpenChange, onSuccess, toast]);
 
-  const handleConnectCalendar = async () => {
+  const handleAuthClick = useCallback(async () => {
     try {
       setIsConnecting(true);
+      const state = generateRandomString();
+      localStorage.setItem("oauth_state", state);
 
-      // Get the OAuth URL from our backend
-      const response = await fetch("/api/auth/google/url");
-      const data = await response.json();
-
-      if (!data.url) {
-        throw new Error("Failed to get OAuth URL");
+      const response = await fetch(`/api/auth/google/url?state=${state}`);
+      if (!response.ok) {
+        throw new Error("Failed to get auth URL");
       }
 
-      // Open the OAuth flow in a popup window
-      const width = 600;
-      const height = 700;
-      const left = window.screenX + (window.outerWidth - width) / 2;
-      const top = window.screenY + (window.outerHeight - height) / 2;
-
-      const popup = window.open(
-        data.url,
-        "Connect Google Calendar",
-        `width=${width},height=${height},left=${left},top=${top}`
-      );
-
-      // Poll for popup closure without success message
-      const pollTimer = setInterval(() => {
-        if (popup?.closed) {
-          clearInterval(pollTimer);
-          setIsConnecting(false);
-        }
-      }, 500);
+      const { url } = await response.json();
+      window.location.href = url;
     } catch (error) {
-      console.error("Error connecting to Google Calendar:", error);
+      console.error("Failed to start auth:", error);
       setIsConnecting(false);
       toast({
         title: "Error",
-        description: "Failed to start Google Calendar connection",
+        description: "Failed to start authentication. Please try again.",
         variant: "destructive",
-        duration: 5000,
       });
     }
-  };
+  }, [toast]);
 
   return (
-    <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CalendarIcon className="h-5 w-5" />
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Connect Google Calendar</DialogTitle>
+          <DialogDescription>
+            Connect your Google Calendar to automatically sync your training
+            sessions.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          {isConnecting ? (
+            <div className="flex items-center justify-center">
+              <Loader2 className="h-6 w-6 animate-spin" />
+              <span className="ml-2">Connecting to Google...</span>
+            </div>
+          ) : (
+            <Button onClick={handleAuthClick} className="w-full max-w-sm">
               Connect Google Calendar
-            </DialogTitle>
-            <DialogDescription>
-              Connect your Google Calendar to automatically sync your training
-              sessions and receive reminders.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col items-center justify-center">
-            {isConnecting ? (
-              <div className="flex flex-col items-center gap-4 py-4">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="text-sm text-muted-foreground text-center">
-                  Connecting to Google Calendar...
-                  <br />
-                  Please complete the authentication in the popup window.
-                </p>
-              </div>
-            ) : (
-              <Button
-                onClick={handleConnectCalendar}
-                className="w-full max-w-sm"
-              >
-                Connect Calendar
-              </Button>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-      <GoogleCalendarSuccessDialog
-        open={showSuccess}
-        onOpenChange={(open) => {
-          setShowSuccess(open);
-          if (!open) {
-            router.refresh();
-          }
-        }}
-        calendarName={calendarName}
-      />
-    </>
+            </Button>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

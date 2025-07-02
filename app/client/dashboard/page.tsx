@@ -26,8 +26,11 @@ import { DashboardWrapper } from "./DashboardWrapper";
 import { useEffect, useState } from "react";
 import { ContractFlowModal } from "@/components/ContractFlowModal";
 import { createClient } from "@/lib/supabaseClient";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import GoogleCalendarPopup from "@/components/GoogleCalendarPopup";
+import GoogleCalendarSuccessDialog from "@/components/GoogleCalendarSuccessDialog";
+import { GoogleCalendarBanner } from "@/components/GoogleCalendarBanner";
+import { toast } from "@/components/ui/use-toast";
 
 // Interface for the final processed session
 interface Session {
@@ -43,7 +46,7 @@ interface Session {
 
 // Interface for the raw Supabase response
 interface RawSupabaseSession {
-  id: string; // Updated to string since Supabase IDs are UUIDs
+  id: string;
   date: string;
   start_time: string;
   type: string;
@@ -51,6 +54,17 @@ interface RawSupabaseSession {
   users: {
     full_name: string;
   };
+}
+
+interface SupabaseResponse {
+  id: string;
+  date: string;
+  start_time: string;
+  type: string;
+  trainer_id: string;
+  users: Array<{
+    full_name: string;
+  }>;
 }
 
 // Add payment history interface
@@ -134,159 +148,295 @@ interface PackageTypeCount {
 }
 
 export default function ClientDashboard() {
-  const [loading, setLoading] = useState(true);
-  const [showContractModal, setShowContractModal] = useState(false);
   const [showCalendarPopup, setShowCalendarPopup] = useState(false);
-  const [upcomingSessions, setUpcomingSessions] = useState<Session[]>([]);
-  const [paymentHistory, setPaymentHistory] = useState<Payment[]>([]);
+  const [showContractModal, setShowContractModal] = useState(false);
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [calendarName, setCalendarName] = useState("");
+  const [loading, setLoading] = useState(true);
   const [userStatus, setUserStatus] = useState<UserStatus>({
     contractAccepted: false,
     googleConnected: false,
-    userName: "Client",
+    userName: "",
     avatarUrl: null,
   });
+  const [upcomingSessions, setUpcomingSessions] = useState<Session[]>([]);
+  const [paymentHistory, setPaymentHistory] = useState<Payment[]>([]);
   const [sessionsByType, setSessionsByType] = useState<PackageTypeCount[]>([]);
   const [totalSessionsRemaining, setTotalSessionsRemaining] = useState(0);
   const [totalSessionsUsed, setTotalSessionsUsed] = useState(0);
   const supabase = createClient();
   const router = useRouter();
 
-  useEffect(() => {
-    const fetchUpcomingSessions = async (userId: string) => {
-      try {
-        console.log("Fetching upcoming sessions for user:", userId);
-
-        const { data: sessions, error } = await supabase
-          .from("sessions")
-          .select(
-            "id, date, start_time, type, trainer_id, users!sessions_trainer_id_fkey(full_name)"
+  // Move fetchUpcomingSessions to component scope
+  const fetchUpcomingSessions = async (userId: string) => {
+    try {
+      console.log("Fetching upcoming sessions for user:", userId);
+      const { data: rawSessions, error } = await supabase
+        .from("sessions")
+        .select(
+          `
+          id,
+          date,
+          start_time,
+          type,
+          trainer_id,
+          users!sessions_trainer_id_fkey (
+            full_name
           )
-          .eq("client_id", userId)
-          .gte("date", new Date().toISOString().split("T")[0])
-          .order("date", { ascending: true })
-          .order("start_time", { ascending: true })
-          .limit(3);
+        `
+        )
+        .eq("client_id", userId)
+        .gte("date", new Date().toISOString().split("T")[0])
+        .order("date", { ascending: true })
+        .order("start_time", { ascending: true });
 
-        if (error) {
-          console.error("Error fetching sessions:", error);
-          return;
-        }
+      if (error) {
+        console.error("Error fetching sessions:", error);
+        return;
+      }
 
-        console.log("Raw sessions data:", sessions);
+      console.log("Raw sessions data:", rawSessions);
 
-        // Transform the raw response to match our Session interface
-        const typedSessions =
-          sessions?.map((session) => {
-            // First cast to unknown, then to our expected type
-            const rawSession = session as unknown as RawSupabaseSession;
+      const typedSessions =
+        (rawSessions as any[])?.map((rawSession) => {
+          // Get trainer name from the users array
+          const users = Array.isArray(rawSession.users)
+            ? rawSession.users
+            : [rawSession.users];
+          const trainerName = users[0]?.full_name || "Unknown Trainer";
 
-            console.log("Processing session:", {
-              sessionId: rawSession.id,
-              trainerId: rawSession.trainer_id,
-              usersData: rawSession.users,
-            });
+          const session: Session = {
+            id: rawSession.id,
+            date: rawSession.date,
+            start_time: rawSession.start_time,
+            type: rawSession.type,
+            trainer_id: rawSession.trainer_id,
+            users: {
+              full_name: trainerName,
+            },
+          };
 
-            // The users data is already in the correct format
-            const trainerName =
-              rawSession.users?.full_name || "Unknown Trainer";
-            if (trainerName === "Unknown Trainer") {
-              console.warn("Trainer name not found for session:", {
-                sessionId: rawSession.id,
-                trainerId: rawSession.trainer_id,
-                usersData: rawSession.users,
-              });
-            }
-
+          if (rawSession.type === "Partner Training") {
             return {
-              ...rawSession,
-              users: {
+              ...session,
+              trainerId: rawSession.trainer_id,
+              usersData: {
                 full_name: trainerName,
               },
             };
-          }) || [];
-
-        console.log("Processed sessions:", typedSessions);
-        setUpcomingSessions(typedSessions);
-      } catch (error) {
-        console.error("Error in fetchUpcomingSessions:", error);
-      }
-    };
-
-    const checkUserStatus = async () => {
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
-        if (!session?.user) {
-          console.log("No session found, redirecting to login");
-          router.push("/login");
-          return;
-        }
-
-        console.log("Fetching user data for auth ID:", session.user.id);
-
-        const { data: userData, error } = await supabase
-          .from("users")
-          .select(
-            "contract_accepted, google_account_connected, full_name, avatar_url"
-          )
-          .eq("id", session.user.id)
-          .single();
-
-        if (error) {
-          console.error("Error fetching user data:", error);
-          return;
-        }
-
-        console.log("User data from Supabase:", userData);
-
-        if (userData) {
-          const contractAccepted =
-            userData.contract_accepted === null
-              ? false
-              : userData.contract_accepted;
-          const googleConnected =
-            userData.google_account_connected === null
-              ? false
-              : userData.google_account_connected;
-
-          setUserStatus({
-            contractAccepted,
-            googleConnected,
-            userName: userData.full_name || "Client",
-            avatarUrl: userData.avatar_url,
-          });
-
-          if (
-            userData.contract_accepted === false ||
-            userData.contract_accepted === null
-          ) {
-            console.log("Contract not accepted, showing modal");
-            setShowContractModal(true);
-          } else if (!googleConnected) {
-            console.log(
-              "Contract accepted but Google not connected, showing calendar popup"
-            );
-            setShowCalendarPopup(true);
           }
 
-          // Fetch upcoming sessions after user data is confirmed
-          await fetchUpcomingSessions(session.user.id);
-        } else {
-          console.log("No user data found for auth ID:", session.user.id);
-        }
-      } catch (error) {
-        console.error("Error checking user status:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+          return session;
+        }) || [];
 
+      console.log("Processed sessions:", typedSessions);
+      setUpcomingSessions(typedSessions);
+    } catch (error) {
+      console.error("Error in fetchUpcomingSessions:", error);
+    }
+  };
+
+  // Add revalidation trigger for URL parameters
+  const searchParams = useSearchParams();
+  const success = searchParams?.get("success");
+  const error = searchParams?.get("error");
+  const timestamp = searchParams?.get("t");
+
+  useEffect(() => {
+    if (success === "true") {
+      // Show success toast
+      toast({
+        title: "Success",
+        description: "Successfully connected to Google Calendar!",
+      });
+
+      // Force refresh user status
+      checkUserStatus();
+
+      // Clean up URL params
+      const url = new URL(window.location.href);
+      url.searchParams.delete("success");
+      url.searchParams.delete("t");
+      router.replace(url.pathname);
+    } else if (error) {
+      toast({
+        title: "Error",
+        description: decodeURIComponent(error),
+        variant: "destructive",
+      });
+
+      // Clean up URL params
+      const url = new URL(window.location.href);
+      url.searchParams.delete("error");
+      router.replace(url.pathname);
+    }
+  }, [success, error, timestamp]);
+
+  // Move checkUserStatus to component scope
+  const checkUserStatus = async () => {
+    setLoading(true);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.user) {
+        console.log("No session found, redirecting to login");
+        router.push("/login");
+        return;
+      }
+
+      console.log("Fetching user data for auth ID:", session.user.id);
+
+      // Force cache revalidation by adding nocache parameter
+      const { data: userData, error } = await supabase
+        .from("users")
+        .select(
+          "contract_accepted, google_account_connected, full_name, avatar_url"
+        )
+        .eq("id", session.user.id)
+        .single();
+
+      if (error) {
+        console.error("Error fetching user data:", error);
+        return;
+      }
+
+      console.log("User data from Supabase:", userData);
+
+      if (userData) {
+        const contractAccepted =
+          userData.contract_accepted === null
+            ? false
+            : userData.contract_accepted;
+        const googleConnected =
+          userData.google_account_connected === null
+            ? false
+            : userData.google_account_connected;
+
+        console.log("Setting user status with:", {
+          contractAccepted,
+          googleConnected,
+          userName: userData.full_name || "Client",
+          avatarUrl: userData.avatar_url,
+        });
+
+        setUserStatus({
+          contractAccepted,
+          googleConnected,
+          userName: userData.full_name || "Client",
+          avatarUrl: userData.avatar_url,
+        });
+
+        if (
+          userData.contract_accepted === false ||
+          userData.contract_accepted === null
+        ) {
+          console.log("Contract not accepted, showing modal");
+          setShowContractModal(true);
+          setShowCalendarPopup(false);
+          setShowSuccessDialog(false);
+        } else if (!googleConnected) {
+          console.log(
+            "Contract accepted but Google not connected, showing calendar popup"
+          );
+          setShowContractModal(false);
+          setShowCalendarPopup(true);
+          setShowSuccessDialog(false);
+        } else {
+          console.log("Both contract accepted and Google connected");
+          setShowContractModal(false);
+          setShowCalendarPopup(false);
+        }
+
+        // Fetch upcoming sessions after user data is confirmed
+        await fetchUpcomingSessions(session.user.id);
+      } else {
+        console.log("No user data found for auth ID:", session.user.id);
+      }
+    } catch (error) {
+      console.error("Error checking user status:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initial load
+  useEffect(() => {
     checkUserStatus();
   }, []);
 
-  // Add this effect to fetch package information
+  // Add effect to handle URL parameters and recheck status
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const success = params.get("success");
+    const error = params.get("error");
+    const calendarNameParam = params.get("calendarName");
+
+    if (success === "true") {
+      // Show success dialog with calendar name
+      if (calendarNameParam) {
+        setCalendarName(decodeURIComponent(calendarNameParam));
+      }
+      setShowSuccessDialog(true);
+
+      // Recheck user status to reflect Google connection
+      checkUserStatus();
+
+      // Clear URL parameters but keep the history
+      setTimeout(() => {
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, "", newUrl);
+      }, 100);
+    } else if (error) {
+      console.error("OAuth error:", error);
+      toast({
+        title: "Error",
+        description: decodeURIComponent(error),
+        variant: "destructive",
+      });
+
+      // Clear URL parameters
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, "", newUrl);
+
+      // Recheck user status
+      checkUserStatus();
+    }
+  }, []);
+
+  // Add effect to handle cookie-based state updates
+  useEffect(() => {
+    const checkGoogleConnected = async () => {
+      try {
+        const response = await fetch("/api/auth/google/status");
+        const data = await response.json();
+
+        if (data.connected) {
+          // Update local state
+          setUserStatus((prev) => ({
+            ...prev,
+            googleConnected: true,
+          }));
+        }
+      } catch (error) {
+        console.error("Failed to check Google connection status:", error);
+      }
+    };
+
+    // Check status every 5 seconds while calendar popup is shown
+    let interval: NodeJS.Timeout;
+    if (showCalendarPopup) {
+      interval = setInterval(checkGoogleConnected, 5000);
+    }
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [showCalendarPopup]);
+
   useEffect(() => {
     const fetchPackageInfo = async () => {
       try {
@@ -720,6 +870,14 @@ export default function ClientDashboard() {
           open={showCalendarPopup}
           onOpenChange={setShowCalendarPopup}
         />
+
+        <GoogleCalendarSuccessDialog
+          open={showSuccessDialog}
+          onOpenChange={setShowSuccessDialog}
+          calendarName={calendarName}
+        />
+
+        <GoogleCalendarBanner />
       </div>
     </DashboardWrapper>
   );

@@ -1,57 +1,39 @@
-import { createClient } from "@/lib/supabase-server";
-import { cookies } from "next/headers";
+/**
+ * Google OAuth URL Generator
+ *
+ * We use localStorage for state management instead of server sessions or cookies because:
+ * 1. OAuth popups/new tabs don't reliably share cookie state with the opener
+ * 2. This allows for a more robust cross-window state validation
+ * 3. Prevents "Invalid State" errors when users open auth in new tabs/popups
+ */
 
-export async function GET() {
-  try {
-    const supabase = createClient();
+import { NextResponse } from "next/server";
 
-    // Get the current user
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Not authenticated" }), {
-        status: 401,
-      });
-    }
+export async function GET(request: Request) {
+  // Get state from query params
+  const url = new URL(request.url);
+  const state = url.searchParams.get("state");
 
-    // Generate state parameter to prevent CSRF
-    const state = Math.random().toString(36).substring(7);
-
-    // Store state in cookie for verification in callback
-    const cookieStore = await cookies();
-    cookieStore.set("google_oauth_state", state, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 5, // 5 minutes
-    });
-
-    // Construct OAuth URL
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    const redirectUri = process.env.GOOGLE_REDIRECT_URI;
-    const scope = encodeURIComponent(
-      "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.calendars"
-    );
-
-    const url =
-      `https://accounts.google.com/o/oauth2/v2/auth?` +
-      `client_id=${clientId}` +
-      `&redirect_uri=${encodeURIComponent(redirectUri!)}` +
-      `&response_type=code` +
-      `&scope=${scope}` +
-      `&access_type=offline` +
-      `&state=${state}` +
-      `&prompt=consent`;
-
-    return new Response(JSON.stringify({ url }), { status: 200 });
-  } catch (error) {
-    console.error("Error generating Google OAuth URL:", error);
-    return new Response(
-      JSON.stringify({ error: "Failed to generate OAuth URL" }),
-      { status: 500 }
+  if (!state) {
+    return NextResponse.json(
+      { error: "Missing state parameter" },
+      { status: 400 }
     );
   }
+
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI;
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const scope =
+    "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events";
+
+  const googleUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  googleUrl.searchParams.set("client_id", clientId!);
+  googleUrl.searchParams.set("redirect_uri", redirectUri!);
+  googleUrl.searchParams.set("response_type", "code");
+  googleUrl.searchParams.set("scope", scope);
+  googleUrl.searchParams.set("state", state);
+  googleUrl.searchParams.set("access_type", "offline");
+  googleUrl.searchParams.set("prompt", "consent");
+
+  return NextResponse.json({ url: googleUrl.toString() });
 }
