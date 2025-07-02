@@ -27,8 +27,11 @@ import {
 } from "lucide-react";
 import { ContractFlowModal } from "@/components/ContractFlowModal";
 import GoogleCalendarPopup from "@/components/GoogleCalendarPopup";
+import GoogleCalendarSuccessDialog from "@/components/GoogleCalendarSuccessDialog";
+import { GoogleCalendarBanner } from "@/components/GoogleCalendarBanner";
 import { createClient } from "@/lib/supabaseClient";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "@/components/ui/use-toast";
 
 const mockClients = [
   {
@@ -109,16 +112,101 @@ interface ModalProps {
   open?: boolean;
 }
 
+// Add URL parameter handler component
+function URLParamHandler({
+  onSuccess,
+  onError,
+}: {
+  onSuccess: (calendarName: string) => void;
+  onError: (error: string) => void;
+}) {
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const success = searchParams.get("success");
+    const error = searchParams.get("error");
+    const calendarNameParam = searchParams.get("calendarName");
+
+    if (success === "true") {
+      if (calendarNameParam) {
+        onSuccess(decodeURIComponent(calendarNameParam));
+      }
+      setTimeout(() => {
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, "", newUrl);
+      }, 100);
+    } else if (error) {
+      console.error("OAuth error:", error);
+      onError(decodeURIComponent(error));
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, "", newUrl);
+    }
+  }, [searchParams, onSuccess, onError]);
+
+  return null;
+}
+
+// Add Google Calendar section component
+function GoogleCalendarSection({
+  isConnected,
+  onConnect,
+}: {
+  isConnected: boolean;
+  onConnect: () => void;
+}) {
+  if (isConnected) {
+    return (
+      <div className="flex items-center space-x-2">
+        <CheckCircle className="h-5 w-5 text-green-500" />
+        <span className="text-sm text-muted-foreground">
+          Google Calendar connected
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="flex items-center space-x-2"
+      onClick={onConnect}
+    >
+      <Calendar className="h-4 w-4" />
+      <span>Connect Google Calendar</span>
+    </Button>
+  );
+}
+
 export default function TrainerDashboard() {
+  console.log("Trainer Dashboard - Component Mounted");
+
   const [searchTerm, setSearchTerm] = useState("");
   const [showContractModal, setShowContractModal] = useState(false);
-  const [showCalendarPopup, setShowCalendarPopup] = useState(false);
+  const [showGooglePopup, setShowGooglePopup] = useState(false);
+  const [showGoogleSuccess, setShowGoogleSuccess] = useState(false);
   const [userStatus, setUserStatus] = useState({
     contractAccepted: false,
     googleConnected: false,
+    userName: "",
+    avatarUrl: null as string | null,
   });
   const supabase = createClient();
   const router = useRouter();
+
+  // Add OAuth success and error handlers
+  const handleOAuthSuccess = (calendarName: string) => {
+    setShowGoogleSuccess(true);
+    setUserStatus((prev) => ({ ...prev, googleConnected: true }));
+  };
+
+  const handleOAuthError = (error: string) => {
+    toast({
+      title: "Error",
+      description: error,
+      variant: "destructive",
+    });
+  };
 
   useEffect(() => {
     const checkUserStatus = async () => {
@@ -128,65 +216,135 @@ export default function TrainerDashboard() {
         } = await supabase.auth.getSession();
 
         if (!session?.user) {
+          console.log("No session found, redirecting to login");
           router.push("/login");
           return;
         }
 
-        const { data: userData } = await supabase
+        console.log("Checking trainer status for user:", session.user.id);
+
+        // First verify this is actually a trainer
+        const { data: userData, error: userError } = await supabase
           .from("users")
-          .select("contract_accepted, google_calendar_connected")
+          .select(
+            "contract_accepted, google_account_connected, full_name, avatar_url, role"
+          )
           .eq("id", session.user.id)
           .single();
 
+        if (userError) {
+          console.error("Error fetching trainer data:", userError);
+          return;
+        }
+
+        console.log("Full trainer data:", userData);
+
+        // Verify this is a trainer
+        if (userData.role !== "trainer") {
+          console.log("Non-trainer accessing trainer dashboard, redirecting");
+          router.push("/client/dashboard");
+          return;
+        }
+
         if (userData) {
           const contractAccepted = userData.contract_accepted || false;
-          const googleConnected = userData.google_calendar_connected || false;
+          const googleConnected = userData.google_account_connected || false;
+
+          console.log("Setting trainer status:", {
+            contractAccepted,
+            googleConnected,
+            userName: userData.full_name || "",
+            avatarUrl: userData.avatar_url,
+          });
 
           setUserStatus({
             contractAccepted,
             googleConnected,
+            userName: userData.full_name || "",
+            avatarUrl: userData.avatar_url,
           });
 
           // Show contract modal immediately if contract not accepted
           if (!contractAccepted) {
+            console.log("Showing contract modal - contract not accepted");
             setShowContractModal(true);
           }
           // Show calendar popup if contract accepted but Google not connected
           else if (!googleConnected) {
-            setShowCalendarPopup(true);
+            console.log("Showing Google popup - Google not connected");
+            setShowGooglePopup(true);
+          } else {
+            console.log("Both contract accepted and Google connected");
           }
         }
       } catch (error) {
-        console.error("Error checking user status:", error);
+        console.error("Error checking trainer status:", error);
       }
     };
 
     checkUserStatus();
   }, []);
 
+  // Add debug logging for render
+  console.log("Rendering trainer dashboard:", {
+    showContractModal,
+    showGooglePopup,
+    userStatus,
+  });
+
+  // Add function to handle calendar connection
+  const handleConnectCalendar = () => {
+    setShowGooglePopup(true);
+  };
+
+  // Add function to render modals
+  const renderModals = () => {
+    return (
+      <>
+        <ContractFlowModal
+          open={showContractModal}
+          onOpenChange={(open) => {
+            setShowContractModal(open);
+            if (!open) {
+              router.push("/login");
+            }
+          }}
+          onComplete={async () => {
+            setUserStatus((prev) => ({ ...prev, contractAccepted: true }));
+            await router.refresh();
+            setShowContractModal(false);
+            if (!userStatus.googleConnected) {
+              setShowGooglePopup(true);
+            }
+          }}
+        />
+
+        <GoogleCalendarPopup
+          open={showGooglePopup}
+          onOpenChange={setShowGooglePopup}
+          onSuccess={() => {
+            setUserStatus((prev) => ({ ...prev, googleConnected: true }));
+            setShowGoogleSuccess(true);
+          }}
+        />
+
+        <GoogleCalendarSuccessDialog
+          open={showGoogleSuccess}
+          onOpenChange={setShowGoogleSuccess}
+          calendarName="Training Sessions"
+        />
+
+        <URLParamHandler
+          onSuccess={handleOAuthSuccess}
+          onError={handleOAuthError}
+        />
+      </>
+    );
+  };
+
   // Prevent rendering dashboard content until contract is accepted
   if (!userStatus.contractAccepted && showContractModal) {
-    return (
-      <ContractFlowModal
-        open={showContractModal}
-        onOpenChange={(open) => {
-          setShowContractModal(open);
-          if (!open) {
-            // If they try to close without accepting, redirect to login
-            router.push("/login");
-          }
-        }}
-        onComplete={async () => {
-          setUserStatus((prev) => ({ ...prev, contractAccepted: true }));
-          await router.refresh();
-          setShowContractModal(false);
-          // Show calendar popup after contract is accepted
-          if (!userStatus.googleConnected) {
-            setShowCalendarPopup(true);
-          }
-        }}
-      />
-    );
+    return renderModals();
   }
 
   const filteredClients = mockClients.filter(
@@ -198,28 +356,27 @@ export default function TrainerDashboard() {
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full">
+        {renderModals()}
         <TrainerSidebar />
         <div className="flex-1">
-          <header className="border-b bg-white px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <SidebarTrigger />
-                <h1 className="text-2xl font-bold text-gray-900">
-                  Trainer Dashboard
-                </h1>
-              </div>
-              <div className="flex items-center space-x-4">
-                <Avatar>
-                  <AvatarImage src="/placeholder.svg?height=40&width=40" />
-                  <AvatarFallback className="bg-red-600 text-white">
-                    JD
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-medium text-gray-900">John Doe</p>
-                  <p className="text-sm text-gray-500">Certified Trainer</p>
+          <header className="border-b">
+            <div className="flex h-16 items-center px-4 gap-4">
+              <SidebarTrigger />
+              <div className="flex-1">
+                <div className="relative">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search clients..."
+                    className="pl-8"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
                 </div>
               </div>
+              <GoogleCalendarSection
+                isConnected={userStatus.googleConnected}
+                onConnect={handleConnectCalendar}
+              />
             </div>
           </header>
 
@@ -469,34 +626,6 @@ export default function TrainerDashboard() {
             </div>
           </main>
         </div>
-
-        {/* Modals */}
-        <ContractFlowModal
-          open={showContractModal}
-          onOpenChange={(open) => {
-            setShowContractModal(open);
-            if (!open && !userStatus.contractAccepted) {
-              router.push("/login");
-            }
-          }}
-          onComplete={async () => {
-            setUserStatus((prev) => ({ ...prev, contractAccepted: true }));
-            setShowContractModal(false);
-            if (!userStatus.googleConnected) {
-              setShowCalendarPopup(true);
-            }
-          }}
-        />
-
-        <GoogleCalendarPopup
-          open={showCalendarPopup}
-          onOpenChange={(open) => {
-            setShowCalendarPopup(open);
-            if (!open) {
-              setUserStatus((prev) => ({ ...prev, googleConnected: true }));
-            }
-          }}
-        />
       </div>
     </SidebarProvider>
   );
