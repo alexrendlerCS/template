@@ -1,23 +1,68 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
-import { TrainerSidebar } from "@/components/trainer-sidebar"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Switch } from "@/components/ui/switch"
-import { Badge } from "@/components/ui/badge"
-import { Upload, Palette, CreditCard, Calendar, Bell, Shield, Save } from "lucide-react"
+import { useState, useEffect, useCallback } from "react";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { TrainerSidebar } from "@/components/trainer-sidebar";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import {
+  Upload,
+  Palette,
+  CreditCard,
+  Calendar,
+  Bell,
+  Shield,
+  Save,
+} from "lucide-react";
+import GoogleCalendarPopup from "@/components/GoogleCalendarPopup";
+import GoogleCalendarSuccessDialog from "@/components/GoogleCalendarSuccessDialog";
+import { createClient } from "@/lib/supabaseClient";
 
 export default function TrainerSettings() {
   const [notifications, setNotifications] = useState({
     email: true,
     sms: false,
     push: true,
-  })
+  });
+  const [showGooglePopup, setShowGooglePopup] = useState(false);
+  const [showGoogleSuccess, setShowGoogleSuccess] = useState(false);
+  const [isGoogleConnected, setIsGoogleConnected] = useState(false);
+  const supabase = createClient();
+
+  useEffect(() => {
+    const checkGoogleStatus = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: userData } = await supabase
+        .from("users")
+        .select("google_account_connected")
+        .eq("id", user.id)
+        .single();
+
+      setIsGoogleConnected(!!userData?.google_account_connected);
+    };
+
+    checkGoogleStatus();
+  }, []);
+
+  const handleGoogleSuccess = useCallback(() => {
+    setIsGoogleConnected(true);
+    setShowGoogleSuccess(true);
+  }, []);
 
   return (
     <SidebarProvider>
@@ -40,7 +85,9 @@ export default function TrainerSettings() {
                     <Upload className="h-5 w-5 text-red-600" />
                     <span>Business Profile</span>
                   </CardTitle>
-                  <CardDescription>Customize your business information and branding</CardDescription>
+                  <CardDescription>
+                    Customize your business information and branding
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -67,7 +114,9 @@ export default function TrainerSettings() {
                     <Label>Logo Upload</Label>
                     <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
                       <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <p className="text-gray-600 mb-2">Upload your business logo</p>
+                      <p className="text-gray-600 mb-2">
+                        Upload your business logo
+                      </p>
                       <Button variant="outline">Choose File</Button>
                     </div>
                   </div>
@@ -81,7 +130,9 @@ export default function TrainerSettings() {
                     <Palette className="h-5 w-5 text-red-600" />
                     <span>Branding & Colors</span>
                   </CardTitle>
-                  <CardDescription>Customize the appearance of your client portal</CardDescription>
+                  <CardDescription>
+                    Customize the appearance of your client portal
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -132,7 +183,9 @@ export default function TrainerSettings() {
                     <CreditCard className="h-5 w-5 text-red-600" />
                     <span>Payment Integration</span>
                   </CardTitle>
-                  <CardDescription>Connect your payment processor to accept payments</CardDescription>
+                  <CardDescription>
+                    Connect your payment processor to accept payments
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="flex items-center justify-between p-4 border rounded-lg">
@@ -142,11 +195,16 @@ export default function TrainerSettings() {
                       </div>
                       <div>
                         <p className="font-medium">Stripe</p>
-                        <p className="text-sm text-gray-500">Accept credit cards and online payments</p>
+                        <p className="text-sm text-gray-500">
+                          Accept credit cards and online payments
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <Badge variant="outline" className="text-orange-600 border-orange-600">
+                      <Badge
+                        variant="outline"
+                        className="text-orange-600 border-orange-600"
+                      >
                         Not Connected
                       </Badge>
                       <Button variant="outline">Connect</Button>
@@ -154,7 +212,9 @@ export default function TrainerSettings() {
                   </div>
 
                   <div className="bg-blue-50 p-4 rounded-lg">
-                    <h4 className="font-medium text-blue-900 mb-2">Payment Features (Coming Soon)</h4>
+                    <h4 className="font-medium text-blue-900 mb-2">
+                      Payment Features (Coming Soon)
+                    </h4>
                     <ul className="text-sm text-blue-800 space-y-1">
                       <li>• Automated payment links and QR codes</li>
                       <li>• Session package pricing</li>
@@ -172,7 +232,9 @@ export default function TrainerSettings() {
                     <Calendar className="h-5 w-5 text-red-600" />
                     <span>Calendar Integration</span>
                   </CardTitle>
-                  <CardDescription>Sync with your calendar for seamless scheduling</CardDescription>
+                  <CardDescription>
+                    Sync with your calendar for seamless scheduling
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="flex items-center justify-between p-4 border rounded-lg">
@@ -182,29 +244,57 @@ export default function TrainerSettings() {
                       </div>
                       <div>
                         <p className="font-medium">Google Calendar</p>
-                        <p className="text-sm text-gray-500">Sync your availability and bookings</p>
+                        <p className="text-sm text-gray-500">
+                          Sync your availability and bookings
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <Badge variant="outline" className="text-orange-600 border-orange-600">
-                        Not Connected
-                      </Badge>
-                      <Button variant="outline">Connect</Button>
+                      {isGoogleConnected ? (
+                        <Badge
+                          variant="outline"
+                          className="text-green-600 border-green-600"
+                        >
+                          Connected
+                        </Badge>
+                      ) : (
+                        <>
+                          <Badge
+                            variant="outline"
+                            className="text-orange-600 border-orange-600"
+                          >
+                            Not Connected
+                          </Badge>
+                          <Button
+                            variant="outline"
+                            onClick={() => setShowGooglePopup(true)}
+                          >
+                            Connect
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
 
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <Label htmlFor="auto-block">Auto-block booked sessions</Label>
-                        <p className="text-sm text-gray-500">Automatically block time slots when sessions are booked</p>
+                        <Label htmlFor="auto-block">
+                          Auto-block booked sessions
+                        </Label>
+                        <p className="text-sm text-gray-500">
+                          Automatically block time slots when sessions are
+                          booked
+                        </p>
                       </div>
                       <Switch id="auto-block" />
                     </div>
                     <div className="flex items-center justify-between">
                       <div>
                         <Label htmlFor="buffer-time">Add buffer time</Label>
-                        <p className="text-sm text-gray-500">Add 15 minutes before and after each session</p>
+                        <p className="text-sm text-gray-500">
+                          Add 15 minutes before and after each session
+                        </p>
                       </div>
                       <Switch id="buffer-time" />
                     </div>
@@ -219,41 +309,70 @@ export default function TrainerSettings() {
                     <Bell className="h-5 w-5 text-red-600" />
                     <span>Notifications</span>
                   </CardTitle>
-                  <CardDescription>Manage how you receive notifications</CardDescription>
+                  <CardDescription>
+                    Manage how you receive notifications
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <Label htmlFor="email-notifications">Email Notifications</Label>
-                        <p className="text-sm text-gray-500">Receive booking confirmations and updates via email</p>
+                        <Label htmlFor="email-notifications">
+                          Email Notifications
+                        </Label>
+                        <p className="text-sm text-gray-500">
+                          Receive booking confirmations and updates via email
+                        </p>
                       </div>
                       <Switch
                         id="email-notifications"
                         checked={notifications.email}
-                        onCheckedChange={(checked) => setNotifications((prev) => ({ ...prev, email: checked }))}
+                        onCheckedChange={(checked) =>
+                          setNotifications((prev) => ({
+                            ...prev,
+                            email: checked,
+                          }))
+                        }
                       />
                     </div>
                     <div className="flex items-center justify-between">
                       <div>
-                        <Label htmlFor="sms-notifications">SMS Notifications</Label>
-                        <p className="text-sm text-gray-500">Get text messages for urgent updates</p>
+                        <Label htmlFor="sms-notifications">
+                          SMS Notifications
+                        </Label>
+                        <p className="text-sm text-gray-500">
+                          Get text messages for urgent updates
+                        </p>
                       </div>
                       <Switch
                         id="sms-notifications"
                         checked={notifications.sms}
-                        onCheckedChange={(checked) => setNotifications((prev) => ({ ...prev, sms: checked }))}
+                        onCheckedChange={(checked) =>
+                          setNotifications((prev) => ({
+                            ...prev,
+                            sms: checked,
+                          }))
+                        }
                       />
                     </div>
                     <div className="flex items-center justify-between">
                       <div>
-                        <Label htmlFor="push-notifications">Push Notifications</Label>
-                        <p className="text-sm text-gray-500">Browser notifications for real-time updates</p>
+                        <Label htmlFor="push-notifications">
+                          Push Notifications
+                        </Label>
+                        <p className="text-sm text-gray-500">
+                          Browser notifications for real-time updates
+                        </p>
                       </div>
                       <Switch
                         id="push-notifications"
                         checked={notifications.push}
-                        onCheckedChange={(checked) => setNotifications((prev) => ({ ...prev, push: checked }))}
+                        onCheckedChange={(checked) =>
+                          setNotifications((prev) => ({
+                            ...prev,
+                            push: checked,
+                          }))
+                        }
                       />
                     </div>
                   </div>
@@ -267,7 +386,9 @@ export default function TrainerSettings() {
                     <Shield className="h-5 w-5 text-red-600" />
                     <span>Security</span>
                   </CardTitle>
-                  <CardDescription>Manage your account security settings</CardDescription>
+                  <CardDescription>
+                    Manage your account security settings
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -283,8 +404,12 @@ export default function TrainerSettings() {
 
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label htmlFor="two-factor">Two-Factor Authentication</Label>
-                      <p className="text-sm text-gray-500">Add an extra layer of security to your account</p>
+                      <Label htmlFor="two-factor">
+                        Two-Factor Authentication
+                      </Label>
+                      <p className="text-sm text-gray-500">
+                        Add an extra layer of security to your account
+                      </p>
                     </div>
                     <Button variant="outline">Enable 2FA</Button>
                   </div>
@@ -299,9 +424,21 @@ export default function TrainerSettings() {
                 </Button>
               </div>
             </div>
+
+            {/* Google Calendar Popups */}
+            <GoogleCalendarPopup
+              open={showGooglePopup}
+              onOpenChange={setShowGooglePopup}
+              onSuccess={handleGoogleSuccess}
+            />
+            <GoogleCalendarSuccessDialog
+              open={showGoogleSuccess}
+              onOpenChange={setShowGoogleSuccess}
+              calendarName="Training Sessions"
+            />
           </main>
         </div>
       </div>
     </SidebarProvider>
-  )
+  );
 }

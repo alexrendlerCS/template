@@ -21,8 +21,9 @@ export async function GET(request: Request) {
 
     if (!code || !state) {
       console.error("❌ Missing code or state");
+      // Since we don't have a session yet, redirect to login
       return NextResponse.redirect(
-        `${origin}/client/dashboard?error=${encodeURIComponent("Missing OAuth parameters")}`
+        `${origin}/login?error=${encodeURIComponent("Missing OAuth parameters")}`
       );
     }
 
@@ -49,6 +50,23 @@ export async function GET(request: Request) {
       );
     }
 
+    // Get user role for redirects
+    const { data: userData, error: userRoleError } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", session.user.id)
+      .single();
+
+    if (userRoleError) {
+      console.error("❌ Failed to fetch user role:", userRoleError);
+      return NextResponse.redirect(
+        `${origin}/login?error=${encodeURIComponent("Failed to fetch user role")}`
+      );
+    }
+
+    const redirectPath =
+      userData.role === "trainer" ? "/trainer/dashboard" : "/client/dashboard";
+
     try {
       // Exchange code for tokens
       const tokenRequestBody = {
@@ -63,7 +81,7 @@ export async function GET(request: Request) {
         redirect_uri: process.env.GOOGLE_REDIRECT_URI,
         code_length: code.length,
         client_id: process.env.GOOGLE_CLIENT_ID ? "present" : "missing",
-        client_secret: process.env.GOOGLE_CLIENT_SECRET ? "present" : "missing"
+        client_secret: process.env.GOOGLE_CLIENT_SECRET ? "present" : "missing",
       });
 
       const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
@@ -134,7 +152,7 @@ export async function GET(request: Request) {
       // Force a cache revalidation by adding a timestamp to the success URL
       const timestamp = Date.now();
       const response = NextResponse.redirect(
-        `${origin}/client/dashboard?success=true&calendarName=${encodeURIComponent(calendarData.calendarName)}&t=${timestamp}`
+        `${origin}${redirectPath}?success=true&calendarName=${encodeURIComponent(calendarData.calendarName)}&t=${timestamp}`
       );
 
       // Set cookie to indicate successful connection
@@ -149,13 +167,25 @@ export async function GET(request: Request) {
       return response;
     } catch (error) {
       console.error("❌ Error during OAuth flow:", error);
+      // Get user role for error redirect
+      const { data: userData } = await supabase
+        .from("users")
+        .select("role")
+        .eq("id", session.user.id)
+        .single();
+
+      const redirectPath =
+        userData?.role === "trainer"
+          ? "/trainer/dashboard"
+          : "/client/dashboard";
       return NextResponse.redirect(
-        `${origin}/client/dashboard?error=${encodeURIComponent(error instanceof Error ? error.message : "Unexpected error occurred")}`
+        `${origin}${redirectPath}?error=${encodeURIComponent(error instanceof Error ? error.message : "Unexpected error occurred")}`
       );
     }
   } catch (error) {
     console.error("❌ Unexpected error:", error);
     const url = new URL(request.url);
+    // Default to client dashboard for unexpected errors since we can't determine role
     return NextResponse.redirect(
       `${url.origin}/client/dashboard?error=${encodeURIComponent("Unexpected error occurred")}`
     );
