@@ -23,7 +23,7 @@ import {
 import Link from "next/link";
 import Image from "next/image";
 import { DashboardWrapper } from "./DashboardWrapper";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { ContractFlowModal } from "@/components/ContractFlowModal";
 import { createClient } from "@/lib/supabaseClient";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -147,6 +147,45 @@ interface PackageTypeCount {
   total: number;
 }
 
+// Create a new component for URL parameter handling
+function URLParamHandler({
+  onSuccess,
+  onError,
+}: {
+  onSuccess: (calendarName: string) => void;
+  onError: (error: string) => void;
+}) {
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const success = searchParams.get("success");
+    const error = searchParams.get("error");
+    const calendarNameParam = searchParams.get("calendarName");
+
+    if (success === "true") {
+      // Show success dialog with calendar name
+      if (calendarNameParam) {
+        onSuccess(decodeURIComponent(calendarNameParam));
+      }
+
+      // Clear URL parameters but keep the history
+      setTimeout(() => {
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, "", newUrl);
+      }, 100);
+    } else if (error) {
+      console.error("OAuth error:", error);
+      onError(decodeURIComponent(error));
+
+      // Clear URL parameters
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, "", newUrl);
+    }
+  }, [searchParams, onSuccess, onError]);
+
+  return null;
+}
+
 export default function ClientDashboard() {
   const [showCalendarPopup, setShowCalendarPopup] = useState(false);
   const [showContractModal, setShowContractModal] = useState(false);
@@ -236,41 +275,20 @@ export default function ClientDashboard() {
     }
   };
 
-  // Add revalidation trigger for URL parameters
-  const searchParams = useSearchParams();
-  const success = searchParams?.get("success");
-  const error = searchParams?.get("error");
-  const timestamp = searchParams?.get("t");
+  const handleOAuthSuccess = (calendarName: string) => {
+    setCalendarName(calendarName);
+    setShowSuccessDialog(true);
+    checkUserStatus();
+  };
 
-  useEffect(() => {
-    if (success === "true") {
-      // Show success toast
-      toast({
-        title: "Success",
-        description: "Successfully connected to Google Calendar!",
-      });
-
-      // Force refresh user status
-      checkUserStatus();
-
-      // Clean up URL params
-      const url = new URL(window.location.href);
-      url.searchParams.delete("success");
-      url.searchParams.delete("t");
-      router.replace(url.pathname);
-    } else if (error) {
-      toast({
-        title: "Error",
-        description: decodeURIComponent(error),
-        variant: "destructive",
-      });
-
-      // Clean up URL params
-      const url = new URL(window.location.href);
-      url.searchParams.delete("error");
-      router.replace(url.pathname);
-    }
-  }, [success, error, timestamp]);
+  const handleOAuthError = (error: string) => {
+    toast({
+      title: "Error",
+      description: error,
+      variant: "destructive",
+    });
+    checkUserStatus();
+  };
 
   // Move checkUserStatus to component scope
   const checkUserStatus = async () => {
@@ -364,45 +382,6 @@ export default function ClientDashboard() {
   // Initial load
   useEffect(() => {
     checkUserStatus();
-  }, []);
-
-  // Add effect to handle URL parameters and recheck status
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const success = params.get("success");
-    const error = params.get("error");
-    const calendarNameParam = params.get("calendarName");
-
-    if (success === "true") {
-      // Show success dialog with calendar name
-      if (calendarNameParam) {
-        setCalendarName(decodeURIComponent(calendarNameParam));
-      }
-      setShowSuccessDialog(true);
-
-      // Recheck user status to reflect Google connection
-      checkUserStatus();
-
-      // Clear URL parameters but keep the history
-      setTimeout(() => {
-        const newUrl = window.location.pathname;
-        window.history.replaceState({}, "", newUrl);
-      }, 100);
-    } else if (error) {
-      console.error("OAuth error:", error);
-      toast({
-        title: "Error",
-        description: decodeURIComponent(error),
-        variant: "destructive",
-      });
-
-      // Clear URL parameters
-      const newUrl = window.location.pathname;
-      window.history.replaceState({}, "", newUrl);
-
-      // Recheck user status
-      checkUserStatus();
-    }
   }, []);
 
   // Add effect to handle cookie-based state updates
@@ -559,6 +538,12 @@ export default function ClientDashboard() {
 
   return (
     <DashboardWrapper>
+      <Suspense fallback={null}>
+        <URLParamHandler
+          onSuccess={handleOAuthSuccess}
+          onError={handleOAuthError}
+        />
+      </Suspense>
       <div className="min-h-screen bg-gray-50">
         <div className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
           <SidebarTrigger>
