@@ -51,16 +51,25 @@ export async function GET(request: Request) {
 
     try {
       // Exchange code for tokens
+      const tokenRequestBody = {
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET,
+        code,
+        grant_type: "authorization_code",
+        redirect_uri: process.env.GOOGLE_REDIRECT_URI,
+      };
+
+      console.log("🔄 Token Exchange Request:", {
+        redirect_uri: process.env.GOOGLE_REDIRECT_URI,
+        code_length: code.length,
+        client_id: process.env.GOOGLE_CLIENT_ID ? "present" : "missing",
+        client_secret: process.env.GOOGLE_CLIENT_SECRET ? "present" : "missing"
+      });
+
       const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          client_id: process.env.GOOGLE_CLIENT_ID,
-          client_secret: process.env.GOOGLE_CLIENT_SECRET,
-          code,
-          grant_type: "authorization_code",
-          redirect_uri: process.env.GOOGLE_REDIRECT_URI,
-        }),
+        body: JSON.stringify(tokenRequestBody),
       });
 
       if (!tokenResponse.ok) {

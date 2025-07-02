@@ -26,6 +26,13 @@ export async function GET(request: Request) {
   const scope =
     "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events";
 
+  console.log("🔍 OAuth URL Generation:", {
+    redirectUri,
+    clientId: clientId ? "present" : "missing",
+    origin: url.origin,
+    state,
+  });
+
   const googleUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   googleUrl.searchParams.set("client_id", clientId!);
   googleUrl.searchParams.set("redirect_uri", redirectUri!);
@@ -35,5 +42,8 @@ export async function GET(request: Request) {
   googleUrl.searchParams.set("access_type", "offline");
   googleUrl.searchParams.set("prompt", "consent");
 
-  return NextResponse.json({ url: googleUrl.toString() });
+  const finalUrl = googleUrl.toString();
+  console.log("📤 Generated OAuth URL:", finalUrl);
+
+  return NextResponse.json({ url: finalUrl });
 }
