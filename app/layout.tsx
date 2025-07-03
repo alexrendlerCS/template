@@ -10,6 +10,11 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata = {
   title: "Fitness Training Platform",
   description: "Book and manage your personal training sessions",
+  icons: {
+    icon: "/logo.jpg",
+    shortcut: "/logo.jpg",
+    apple: "/logo.jpg",
+  },
 };
 
 export default function RootLayout({

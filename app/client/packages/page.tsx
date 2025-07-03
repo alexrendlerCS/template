@@ -233,132 +233,73 @@ function PackagesContent() {
 
     setLoadingPackages(true);
     try {
-      console.log("🔍 Fetching most recent package...");
+      const sessionIdFromUrl = searchParams.get("session_id");
+
+      console.log("🔍 Fetching all payments...");
       const { data: payments, error: paymentError } = await supabase
         .from("payments")
         .select("*")
         .eq("client_id", user.id)
-        .order("id", { ascending: false }); // Order by ID to get the most recent payment
+        .order("paid_at", { ascending: false }); // ✅ CORRECT
 
       if (paymentError) {
-        console.error("❌ Error fetching latest payment:", paymentError);
+        console.error("❌ Error fetching payments:", paymentError);
         return false;
       }
 
-      console.log(
-        "💰 All payments:",
-        payments?.map((p) => ({
-          id: p.id,
-          amount: p.amount,
-          sessions: p.session_count,
-          type: p.package_type,
-          paid_at: p.paid_at,
-          transaction_id: p.transaction_id,
-          package_id: p.package_id,
-        }))
-      );
+      console.log("💰 All payments:", payments);
 
-      const latestPayment = payments?.[0];
+      let targetPayment = payments?.[0]; // fallback
+      if (sessionIdFromUrl) {
+        const match = payments?.find((p) => p.session_id === sessionIdFromUrl);
+        if (match) {
+          console.log("🎯 Matched payment using session_id:", sessionIdFromUrl);
+          targetPayment = match;
+        } else {
+          console.warn(
+            "⚠️ No matching payment for session_id:",
+            sessionIdFromUrl
+          );
+        }
+      }
 
-      if (!latestPayment) {
-        console.log("ℹ️ No payments found for user");
-        setLoadingPackages(false);
+      if (!targetPayment) {
+        console.log("ℹ️ No valid payment found");
         return false;
       }
 
-      console.log("💳 Raw payment data:", {
-        payment: latestPayment,
-        package_type: latestPayment?.package_type,
-        package_type_type: typeof latestPayment?.package_type,
-        has_package_type: "package_type" in (latestPayment || {}),
-        keys: latestPayment ? Object.keys(latestPayment) : [],
-      });
+      let packageType = targetPayment.package_type;
 
-      // If package_type is null, try to get it from the packages table
-      let packageType = latestPayment.package_type;
-      if (!packageType && latestPayment) {
-        console.log("🔍 Package type is null, looking up in packages table...");
+      if (!packageType) {
+        console.log("🔍 package_type missing, looking it up...");
+        const { data: packageFromTransaction } = await supabase
+          .from("packages")
+          .select("package_type")
+          .eq("transaction_id", targetPayment.transaction_id)
+          .single();
 
-        // First try to find by transaction_id (most reliable)
-        let relatedPackage = null;
-        if (latestPayment.transaction_id) {
-          const { data: packageByTransaction } = await supabase
-            .from("packages")
-            .select("package_type")
-            .eq("transaction_id", latestPayment.transaction_id)
-            .single();
-
-          if (packageByTransaction) {
-            console.log(
-              "✅ Found package type by transaction_id:",
-              packageByTransaction.package_type
-            );
-            relatedPackage = packageByTransaction;
-          }
-        }
-
-        // If not found by transaction_id, try by session count and date (fallback)
-        if (!relatedPackage) {
-          const { data: packageByCriteria } = await supabase
-            .from("packages")
-            .select("package_type")
-            .eq("client_id", user.id)
-            .eq("sessions_included", latestPayment.session_count)
-            .eq(
-              "purchase_date",
-              new Date(latestPayment.paid_at).toISOString().split("T")[0]
-            )
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .single();
-
-          if (packageByCriteria) {
-            console.log(
-              "✅ Found package type by session count and date:",
-              packageByCriteria.package_type
-            );
-            relatedPackage = packageByCriteria;
-          }
-        }
-
-        if (relatedPackage) {
-          packageType = relatedPackage.package_type;
+        if (packageFromTransaction) {
+          console.log(
+            "✅ Found package_type via transaction:",
+            packageFromTransaction.package_type
+          );
+          packageType = packageFromTransaction.package_type;
         }
       }
 
-      // Convert the payment data into a package format
-      const latestPaymentWithType = {
-        ...latestPayment,
-        package_type: packageType,
-        paidAtObj: new Date(latestPayment.paid_at).toISOString(),
-      };
-
-      console.log("✅ Latest payment found:", {
-        payment: latestPaymentWithType,
-        package_type: latestPaymentWithType.package_type,
-        has_package_type: "package_type" in latestPaymentWithType,
-        source:
-          packageType === latestPayment.package_type ? "payment" : "packages",
-      });
-
-      // Set the purchased package info for the success dialog
       if (packageType) {
-        const purchasedPackage = {
+        setPurchasedPackage({
           type: packageType,
-          sessions: latestPayment.session_count,
-        };
-
-        console.log("🎁 Setting purchased package:", {
-          package: purchasedPackage,
-          original_type: packageType,
-          payment_type: latestPayment.package_type,
-          found_in:
-            packageType === latestPayment.package_type ? "payment" : "packages",
+          sessions: targetPayment.session_count,
         });
-        setPurchasedPackage(purchasedPackage);
+
+        console.log("🎁 Set purchased package:", {
+          type: packageType,
+          sessions: targetPayment.session_count,
+        });
       }
 
-      // Get all packages and group by type
+      // Load all package sessions and calculate remaining
       const { data: packages, error: packagesError } = await supabase
         .from("packages")
         .select("*")
@@ -370,22 +311,6 @@ function PackagesContent() {
         return false;
       }
 
-      console.log(
-        "📦 All packages:",
-        packages?.map((p) => ({
-          id: p.id,
-          type: p.package_type,
-          sessions: {
-            included: p.sessions_included,
-            used: p.sessions_used,
-            remaining: p.sessions_included - p.sessions_used,
-          },
-          purchase_date: p.purchase_date,
-          transaction_id: p.transaction_id,
-        }))
-      );
-
-      // Group packages by type and calculate remaining sessions
       const packageTypes: Record<string, PackageTypeCount> = {
         "In-Person Training": {
           type: "In-Person Training",
@@ -404,30 +329,30 @@ function PackagesContent() {
         },
       };
 
-      if (packages) {
-        packages.forEach((pkg) => {
-          const type = pkg.package_type;
-          if (packageTypes[type]) {
-            const remaining =
-              (pkg.sessions_included || 0) - (pkg.sessions_used || 0);
-            packageTypes[type].remaining += remaining;
-            packageTypes[type].total += pkg.sessions_included || 0;
-          }
-        });
-      }
+      packages.forEach((pkg) => {
+        const type = pkg.package_type;
+        if (packageTypes[type]) {
+          const remaining =
+            (pkg.sessions_included || 0) - (pkg.sessions_used || 0);
+          packageTypes[type].remaining += remaining;
+          packageTypes[type].total += pkg.sessions_included || 0;
+        }
+      });
 
       const sessionTypesArray = Object.values(packageTypes);
-      console.log("Session types after processing:", sessionTypesArray);
       setSessionsByType(sessionTypesArray);
+      console.log("✅ Sessions by type:", sessionTypesArray);
+
       return true;
     } catch (error) {
-      console.error("Error in fetchPackageInformation:", error);
+      console.error("❌ Error in fetchPackageInformation:", error);
       return false;
     } finally {
       setLoadingPackages(false);
       setShouldFetchPackages(false);
     }
   };
+
 
   // Effect to handle initial mount and URL parameters
   useEffect(() => {

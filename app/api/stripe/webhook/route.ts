@@ -4,8 +4,17 @@ import Stripe from "stripe";
 import { createClient, supabaseAdmin } from "@/lib/supabase-server";
 import buffer from "@/lib/raw-body";
 
-// Use the webhook secret from environment variable
-const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+// 💡 RECOMMENDATION: Add a unique constraint to packages.transaction_id in Supabase
+// for additional safety against duplicate package creation:
+// ALTER TABLE packages ADD CONSTRAINT packages_transaction_id_unique UNIQUE (transaction_id);
+
+// Use the appropriate webhook secret based on environment
+// In development, use STRIPE_CLI_WEBHOOK_SECRET (from Stripe CLI)
+// In production, use STRIPE_WEBHOOK_SECRET (from Stripe Dashboard)
+const endpointSecret =
+  process.env.NODE_ENV === "production"
+    ? process.env.STRIPE_WEBHOOK_SECRET!
+    : process.env.STRIPE_CLI_WEBHOOK_SECRET!;
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -21,6 +30,11 @@ export const config = {
 export async function POST(req: Request) {
   try {
     console.log("🎣 Webhook received");
+    console.log("🔧 Environment:", process.env.NODE_ENV);
+    console.log(
+      "🔑 Using webhook secret:",
+      endpointSecret ? "✅ Secret configured" : "❌ No secret found"
+    );
 
     // Get the signature from the header
     const signature = req.headers.get("stripe-signature");
@@ -101,18 +115,31 @@ export async function POST(req: Request) {
         const isProrated = session.metadata.is_prorated === "true";
 
         try {
-          // Check if this transaction has already been processed
-          const { data: existingPackageByTransaction } = await supabaseAdmin
-            .from("packages")
+          // 🔒 EARLY DUPLICATE CHECK: Check if this transaction has already been processed
+          // by looking for an existing payment with the same transaction_id
+          const {
+            data: existingTransactionPayment,
+            error: transactionPaymentError,
+          } = await supabaseAdmin
+            .from("payments")
             .select("*")
             .eq("transaction_id", session.id)
             .single();
 
-          if (existingPackageByTransaction) {
+          if (
+            transactionPaymentError &&
+            transactionPaymentError.code !== "PGRST116"
+          ) {
+            console.log("🔍 Payment check error:", transactionPaymentError);
+          }
+
+          // If payment exists, transaction was already processed - exit early
+          if (existingTransactionPayment) {
             console.log("📦 Transaction already processed:", {
               transactionId: session.id,
-              packageId: existingPackageByTransaction.id,
-              sessions: existingPackageByTransaction.sessions_included,
+              paymentId: existingTransactionPayment.id,
+              packageId: existingTransactionPayment.package_id,
+              amount: existingTransactionPayment.amount,
             });
             return NextResponse.json({ status: "success" });
           }
@@ -319,8 +346,11 @@ export async function POST(req: Request) {
 
               console.log("🔢 Adding sessions to existing package:", {
                 currentSessions: existingPackage.sessions_included,
+                currentOriginalSessions: existingPackage.original_sessions,
                 addingSessions: parseInt(session.metadata.sessions_included),
                 newTotal: newSessionCount,
+                newOriginalSessions:
+                  existingPackage.original_sessions + sessionsIncluded,
                 operation: "add",
               });
 
@@ -329,6 +359,8 @@ export async function POST(req: Request) {
                   .from("packages")
                   .update({
                     sessions_included: newSessionCount,
+                    original_sessions:
+                      existingPackage.original_sessions + sessionsIncluded,
                     transaction_id: session.id,
                     purchase_date: currentDate,
                   })
@@ -455,19 +487,22 @@ export async function POST(req: Request) {
       case "payment_intent.succeeded": {
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
         console.log("💰 Payment intent succeeded:", paymentIntent.id);
-        break;
+        // 🔒 Only checkout.session.completed performs DB writes - exit early
+        return NextResponse.json({ status: "success" });
       }
 
       case "charge.succeeded": {
         const charge = event.data.object as Stripe.Charge;
         console.log("💳 Charge succeeded:", charge.id);
-        break;
+        // 🔒 Only checkout.session.completed performs DB writes - exit early
+        return NextResponse.json({ status: "success" });
       }
 
       case "charge.updated": {
         const charge = event.data.object as Stripe.Charge;
         console.log("📝 Charge updated:", charge.id);
-        break;
+        // 🔒 Only checkout.session.completed performs DB writes - exit early
+        return NextResponse.json({ status: "success" });
       }
 
       default:
