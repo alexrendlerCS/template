@@ -281,9 +281,7 @@ export default function TrainerClientsPage() {
   }
 
   const getStatusColor = (client: Client) => {
-    if (client.sessions_remaining === 0) {
-      return "bg-red-100 text-red-800";
-    } else if (client.google_account_connected) {
+    if (client.google_account_connected) {
       return "bg-green-100 text-green-800";
     } else {
       return "bg-gray-100 text-gray-800";
@@ -291,9 +289,7 @@ export default function TrainerClientsPage() {
   };
 
   const getStatusText = (client: Client) => {
-    if (client.sessions_remaining === 0) {
-      return "Payment Due";
-    } else if (client.google_account_connected) {
+    if (client.google_account_connected) {
       return "Active";
     } else {
       return "Inactive";
