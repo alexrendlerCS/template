@@ -231,6 +231,7 @@ export async function POST(req: Request) {
                 .from("packages")
                 .update({
                   sessions_included: newSessionCount,
+                  original_sessions: newSessionCount, // Update original_sessions to match new total
                   transaction_id: session.id,
                   purchase_date: currentDate,
                 })
