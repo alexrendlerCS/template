@@ -74,12 +74,12 @@ export async function POST(request: Request) {
 
       console.log("Creating event in trainer calendar");
       try {
-        const event = await calendar.events.insert({
-          calendarId: trainerData.google_calendar_id,
-          requestBody: eventDetails,
-        });
-        console.log("Trainer calendar event created:", event.data.id);
-        return NextResponse.json({ eventId: event.data.id });
+      const event = await calendar.events.insert({
+        calendarId: trainerData.google_calendar_id,
+        requestBody: eventDetails,
+      });
+      console.log("Trainer calendar event created:", event.data.id);
+      return NextResponse.json({ eventId: event.data.id });
       } catch (error: unknown) {
         console.error("Google Calendar API Error:", {
           error,
@@ -118,12 +118,12 @@ export async function POST(request: Request) {
 
     console.log("Creating event in client calendar");
     try {
-      const event = await calendar.events.insert({
-        calendarId: userData.google_calendar_id,
-        requestBody: eventDetails,
-      });
-      console.log("Client calendar event created:", event.data.id);
-      return NextResponse.json({ eventId: event.data.id });
+    const event = await calendar.events.insert({
+      calendarId: userData.google_calendar_id,
+      requestBody: eventDetails,
+    });
+    console.log("Client calendar event created:", event.data.id);
+    return NextResponse.json({ eventId: event.data.id });
     } catch (error: unknown) {
       console.error("Google Calendar API Error:", {
         error,

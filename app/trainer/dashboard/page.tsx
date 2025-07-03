@@ -24,6 +24,7 @@ import {
   QrCode,
   CreditCard,
   BarChart3,
+  Dumbbell,
 } from "lucide-react";
 import { ContractFlowModal } from "@/components/ContractFlowModal";
 import GoogleCalendarPopup from "@/components/GoogleCalendarPopup";
@@ -32,6 +33,19 @@ import { GoogleCalendarBanner } from "@/components/GoogleCalendarBanner";
 import { createClient } from "@/lib/supabaseClient";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "@/components/ui/use-toast";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { QRCodeCanvas } from "qrcode.react";
 
 const mockClients = [
   {
@@ -84,25 +98,6 @@ const mockSessions = [
     date: "2024-01-17",
     type: "Cardio Session",
     status: "pending_payment",
-  },
-];
-
-const mockPayments = [
-  {
-    id: 1,
-    client: "Sarah Johnson",
-    amount: 240,
-    date: "2024-01-10",
-    sessions: 4,
-    status: "completed",
-  },
-  {
-    id: 2,
-    client: "Mike Chen",
-    amount: 180,
-    date: "2024-01-12",
-    sessions: 3,
-    status: "completed",
   },
 ];
 
@@ -203,6 +198,10 @@ export default function TrainerDashboard() {
   const [revenueLastMonth, setRevenueLastMonth] = useState<number>(0);
   const [pendingPaymentsCount, setPendingPaymentsCount] = useState<number>(0);
   const [pendingPaymentsAmount, setPendingPaymentsAmount] = useState<number>(0);
+  const [clientsWithSessions, setClientsWithSessions] = useState<any[]>([]);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [qrClient, setQrClient] = useState<any>(null);
+  const [recentPayments, setRecentPayments] = useState<any[]>([]);
 
   // Add OAuth success and error handlers
   const handleOAuthSuccess = useCallback((calendarName: string) => {
@@ -381,25 +380,26 @@ export default function TrainerDashboard() {
         `[DEBUG] Fetching sessions for trainer_id: ${session.user.id} on date: ${todayStr}`
       );
 
-      // First, let's see ALL sessions for this trainer to understand the date format
-      const { data: allSessions, error: allSessionsError } = await supabase
-        .from("sessions")
-        .select("*")
-        .eq("trainer_id", session.user.id)
-        .order("date", { ascending: true });
-
-      if (allSessionsError) {
-        console.error("[DEBUG] Error fetching all sessions:", allSessionsError);
-      } else {
-        console.log(`[DEBUG] All sessions for trainer:`, allSessions);
-      }
-
-      // Fetch all sessions for today for this trainer
+      // Fetch all sessions for today for this trainer, joining users to get client name
       const { data: sessions, error } = await supabase
         .from("sessions")
-        .select("*")
+        .select(
+          `
+          id,
+          date,
+          start_time,
+          end_time,
+          duration_minutes,
+          type,
+          status,
+          client_id,
+          notes,
+          users:users!sessions_client_id_fkey (full_name, avatar_url, email)
+        `
+        )
         .eq("trainer_id", session.user.id)
-        .eq("date", todayStr);
+        .eq("date", todayStr)
+        .order("start_time", { ascending: true });
       if (error) {
         console.error("[DEBUG] Error fetching today's sessions:", error);
         setTodaysSessions([]);
@@ -407,24 +407,60 @@ export default function TrainerDashboard() {
         setUpcomingSessions(0);
         return;
       }
-      console.log(`[DEBUG] Raw sessions fetched:`, sessions);
-      setTodaysSessions(sessions ?? []);
+      // Process avatar URLs for each session
+      const processedSessions = await Promise.all(
+        (sessions ?? []).map(async (s) => {
+          let userObj: any = s.users;
+          if (Array.isArray(userObj)) {
+            userObj = userObj.length > 0 ? userObj[0] : {};
+          }
+          if (userObj && typeof userObj === "object" && userObj.avatar_url) {
+            const { data: publicUrl } = supabase.storage
+              .from("avatars")
+              .getPublicUrl(userObj.avatar_url);
+            return {
+              ...s,
+              users: {
+                ...userObj,
+                avatar_public_url: publicUrl?.publicUrl || null,
+              } as any,
+            };
+          }
+          return {
+            ...s,
+            users:
+              userObj && typeof userObj === "object" ? (userObj as any) : {},
+          };
+        })
+      );
+      console.log(`[DEBUG] Raw sessions fetched:`, processedSessions);
+      setTodaysSessions(processedSessions ?? []);
       // Calculate completed and upcoming
       const nowTime = now.getTime();
       let completed = 0;
       let upcoming = 0;
-      (sessions ?? []).forEach((s) => {
-        // Combine date and end_time to get session end datetime
-        const endDateTime = new Date(`${s.date}T${s.end_time}`);
-        console.log(
-          `[DEBUG] Session id: ${s.id}, date: ${s.date}, end_time: ${s.end_time}, endDateTime: ${endDateTime}, now: ${now}`
-        );
-        if (endDateTime.getTime() < nowTime) completed++;
+      (processedSessions ?? []).forEach((s) => {
+        let endDateTime;
+        if (s.end_time) {
+          endDateTime = new Date(`${s.date}T${s.end_time}`);
+        } else if (s.start_time && s.duration_minutes) {
+          const [hour, minute] = s.start_time.split(":").map(Number);
+          const start = new Date(`${s.date}T${s.start_time}`);
+          endDateTime = new Date(start.getTime() + s.duration_minutes * 60000);
+        } else if (s.start_time) {
+          const start = new Date(`${s.date}T${s.start_time}`);
+          endDateTime = new Date(start.getTime() + 60 * 60000);
+        } else {
+          endDateTime = new Date(`${s.date}`);
+        }
+        if (
+          endDateTime instanceof Date &&
+          !isNaN(endDateTime.getTime()) &&
+          endDateTime.getTime() < nowTime
+        )
+          completed++;
         else upcoming++;
       });
-      console.log(
-        `[DEBUG] Completed sessions: ${completed}, Upcoming sessions: ${upcoming}`
-      );
       setCompletedSessions(completed);
       setUpcomingSessions(upcoming);
     }
@@ -725,6 +761,101 @@ export default function TrainerDashboard() {
       }
     }
     fetchPendingPayments();
+
+    // Fetch clients with sessions
+    async function fetchClientsWithSessions() {
+      const { data: clients, error: clientsError } = await supabase
+        .from("users")
+        .select(
+          "id, full_name, email, avatar_url, contract_accepted, google_account_connected"
+        )
+        .eq("role", "client");
+      if (clientsError) {
+        console.error("[DEBUG] Error fetching clients:", clientsError);
+        setClientsWithSessions([]);
+        return;
+      }
+      // For each client, fetch their packages and compute sessions remaining
+      const processedClients = await Promise.all(
+        (clients ?? []).map(async (client: any) => {
+          let avatar_public_url = null;
+          if (client.avatar_url) {
+            const { data: publicUrl } = supabase.storage
+              .from("avatars")
+              .getPublicUrl(client.avatar_url);
+            avatar_public_url = publicUrl?.publicUrl || null;
+          }
+          // Fetch packages for this client
+          const { data: packages, error: packagesError } = await supabase
+            .from("packages")
+            .select("sessions_included, sessions_used")
+            .eq("client_id", client.id);
+          let total_included = 0;
+          let total_used = 0;
+          if (packages && Array.isArray(packages)) {
+            for (const pkg of packages) {
+              total_included += pkg.sessions_included || 0;
+              total_used += pkg.sessions_used || 0;
+            }
+          }
+          const sessions_remaining = total_included - total_used;
+          // Debug logs
+          console.log(`[DEBUG] Client: ${client.full_name} (${client.id})`);
+          console.log("[DEBUG] Packages:", packages);
+          console.log(
+            `[DEBUG] total_included: ${total_included}, total_used: ${total_used}, sessions_remaining: ${sessions_remaining}`
+          );
+          return {
+            ...client,
+            avatar_public_url,
+            sessions_remaining,
+          };
+        })
+      );
+      setClientsWithSessions(processedClients);
+    }
+
+    // Function to fetch recent payments
+    async function fetchRecentPayments() {
+      try {
+        console.log("🔍 Fetching recent payments...");
+
+        const { data: payments, error } = await supabase
+          .from("payments")
+          .select(
+            `
+            id,
+            amount,
+            session_count,
+            package_type,
+            method,
+            status,
+            transaction_id,
+            paid_at,
+            client_id,
+            users!payments_client_id_fkey (
+              full_name,
+              email
+            )
+          `
+          )
+          .order("paid_at", { ascending: false })
+          .limit(3);
+
+        if (error) {
+          console.error("❌ Error fetching recent payments:", error);
+          return;
+        }
+
+        console.log("✅ Recent payments fetched:", payments);
+        setRecentPayments(payments || []);
+      } catch (error) {
+        console.error("❌ Error in fetchRecentPayments:", error);
+      }
+    }
+
+    fetchClientsWithSessions();
+    fetchRecentPayments();
   }, [supabase]);
 
   const handleContractComplete = useCallback(async () => {
@@ -808,6 +939,38 @@ export default function TrainerDashboard() {
   if (!userStatus.contractAccepted) {
     return modals;
   }
+
+  const handleSendPayment = async (clientId: string) => {
+    try {
+      // For now, use 'In-Person Training' as the packageType and 1 session
+      const response = await fetch("/api/stripe/checkout-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: clientId,
+          packageType: "In-Person Training",
+          sessionsIncluded: 1,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error("Failed to create checkout session");
+      }
+      const { url } = await response.json();
+      if (url) {
+        window.open(url, "_blank");
+      } else {
+        throw new Error("No checkout URL received");
+      }
+    } catch (error) {
+      console.error("Send Payment error:", error);
+      alert("Failed to initiate payment. Please try again.");
+    }
+  };
+
+  const handleShowQr = (client: any) => {
+    setQrClient(client);
+    setQrModalOpen(true);
+  };
 
   return (
     <SidebarProvider>
@@ -959,39 +1122,145 @@ export default function TrainerDashboard() {
                       No sessions scheduled for today.
                     </div>
                   ) : (
-                    todaysSessions.map((session) => (
-                      <div
-                        key={session.id}
-                        className="flex items-center justify-between p-4 border rounded-lg"
-                      >
-                        <div className="flex items-center space-x-4">
-                          <div className="text-center">
-                            <p className="font-medium">{session.start_time}</p>
-                            <p className="text-sm text-gray-500">
-                              {session.date}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="font-medium">{session.type}</p>
-                            <p className="text-sm text-gray-500">
-                              {session.status}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Badge
-                            variant={
-                              session.status === "completed"
-                                ? "default"
-                                : "secondary"
-                            }
-                          >
-                            {session.status.charAt(0).toUpperCase() +
-                              session.status.slice(1)}
-                          </Badge>
-                        </div>
-                      </div>
-                    ))
+                    <div className="flex flex-col gap-4">
+                      <TooltipProvider>
+                        {todaysSessions.map((session) => {
+                          // Format start and end time as 10:00 AM - 11:00 AM
+                          const start = session.start_time
+                            ? new Date(`${session.date}T${session.start_time}`)
+                            : null;
+                          let end: Date | null = null;
+                          if (session.end_time) {
+                            end = new Date(
+                              `${session.date}T${session.end_time}`
+                            );
+                          } else if (
+                            session.start_time &&
+                            session.duration_minutes
+                          ) {
+                            const startDate = new Date(
+                              `${session.date}T${session.start_time}`
+                            );
+                            end = new Date(
+                              startDate.getTime() +
+                                session.duration_minutes * 60000
+                            );
+                          } else if (session.start_time) {
+                            const startDate = new Date(
+                              `${session.date}T${session.start_time}`
+                            );
+                            end = new Date(startDate.getTime() + 60 * 60000);
+                          }
+                          const formatTime = (date: Date | null) =>
+                            date
+                              ? date.toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  hour12: true,
+                                })
+                              : "";
+                          const formattedTime = `${formatTime(start)} - ${formatTime(end)}`;
+                          // Status badge color
+                          let badgeVariant:
+                            | "default"
+                            | "secondary"
+                            | "destructive" = "default";
+                          let badgeClass = "";
+                          if (session.status === "confirmed") {
+                            badgeVariant = "default";
+                            badgeClass = "bg-green-500 text-white";
+                          } else if (session.status === "completed") {
+                            badgeVariant = "secondary";
+                            badgeClass = "bg-gray-400 text-white";
+                          } else if (session.status === "canceled") {
+                            badgeVariant = "destructive";
+                            badgeClass = "bg-red-500 text-white";
+                          }
+                          // Client info
+                          const client = session.users || {};
+                          const clientName =
+                            client.full_name || "Unknown Client";
+                          const clientEmail = client.email || null;
+                          const clientAvatarUrl =
+                            client.avatar_public_url || "/placeholder-user.jpg";
+                          // Avatar fallback: initials
+                          const initials = clientName
+                            .split(" ")
+                            .map((n: string) => n[0])
+                            .join("")
+                            .toUpperCase();
+                          // Session notes (if available)
+                          const notes = session.notes || null;
+                          // Session detail link
+                          const sessionDetailUrl = `/trainer/schedule/session/${session.id}`;
+                          return (
+                            <Card
+                              key={session.id}
+                              className="flex flex-col sm:flex-row items-center justify-between p-4 gap-4 w-full shadow-md"
+                            >
+                              <div className="flex items-center gap-4 w-full">
+                                <span className="flex items-center text-base font-medium text-gray-700 min-w-[150px]">
+                                  <Clock className="h-4 w-4 mr-1 text-gray-500" />
+                                  {formattedTime}
+                                </span>
+                                <span className="flex items-center font-bold text-lg text-gray-900">
+                                  <Dumbbell className="h-4 w-4 mr-1 text-red-600" />
+                                  {session.type}
+                                </span>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="flex items-center gap-2 cursor-pointer">
+                                      <Avatar className="h-8 w-8">
+                                        <AvatarImage
+                                          src={clientAvatarUrl}
+                                          alt={clientName}
+                                          onError={(e) => {
+                                            e.currentTarget.style.display =
+                                              "none";
+                                          }}
+                                        />
+                                        <AvatarFallback className="bg-red-600 text-white text-sm">
+                                          {initials}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                      <span className="font-medium text-gray-800">
+                                        {clientName}
+                                      </span>
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <div className="flex flex-col">
+                                      {clientEmail && (
+                                        <span>{clientEmail}</span>
+                                      )}
+                                      {notes && (
+                                        <span className="text-xs text-gray-500 mt-1">
+                                          {notes}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </TooltipContent>
+                                </Tooltip>
+                                <Badge
+                                  variant={badgeVariant}
+                                  className={badgeClass + " ml-2"}
+                                >
+                                  {session.status.charAt(0).toUpperCase() +
+                                    session.status.slice(1)}
+                                </Badge>
+                              </div>
+                              <Button
+                                asChild
+                                variant="outline"
+                                className="ml-auto"
+                              >
+                                <a href={sessionDetailUrl}>View</a>
+                              </Button>
+                            </Card>
+                          );
+                        })}
+                      </TooltipProvider>
+                    </div>
                   )}
                 </div>
               </CardContent>
@@ -1021,41 +1290,95 @@ export default function TrainerDashboard() {
                       />
                     </div>
                     <div className="space-y-3">
-                      {filteredClients.map((client) => (
-                        <div
-                          key={client.id}
-                          className="flex items-center justify-between p-3 border rounded-lg"
-                        >
-                          <div>
-                            <p className="font-medium">{client.name}</p>
-                            <p className="text-sm text-gray-500">
-                              {client.email}
-                            </p>
-                            <p className="text-sm text-gray-500">
-                              {client.sessions} sessions remaining
-                            </p>
+                      {clientsWithSessions
+                        .filter(
+                          (client) =>
+                            client.full_name
+                              .toLowerCase()
+                              .includes(searchTerm.toLowerCase()) ||
+                            client.email
+                              .toLowerCase()
+                              .includes(searchTerm.toLowerCase())
+                        )
+                        .map((client) => (
+                          <div
+                            key={client.id}
+                            className="flex items-center justify-between p-3 border rounded-lg"
+                          >
+                            <div className="flex items-center gap-4">
+                              <Avatar className="h-10 w-10">
+                                <AvatarImage
+                                  src={
+                                    client.avatar_public_url ||
+                                    "/placeholder-user.jpg"
+                                  }
+                                  alt={client.full_name}
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = "none";
+                                  }}
+                                />
+                                <AvatarFallback className="bg-red-600 text-white text-sm">
+                                  {client.full_name
+                                    .split(" ")
+                                    .map((n: string) => n[0])
+                                    .join("")
+                                    .toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <p className="font-medium">
+                                  {client.full_name}
+                                </p>
+                                <p className="text-sm text-gray-500">
+                                  {client.email}
+                                </p>
+                                <p className="text-sm text-gray-500">
+                                  {client.sessions_remaining} sessions remaining
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge
+                                variant={
+                                  client.google_account_connected
+                                    ? "default"
+                                    : "secondary"
+                                }
+                                className={
+                                  client.google_account_connected
+                                    ? "bg-green-500 text-white"
+                                    : "bg-gray-400 text-white"
+                                }
+                              >
+                                Google Connected
+                              </Badge>
+                              <Badge
+                                variant={
+                                  client.contract_accepted
+                                    ? "default"
+                                    : "secondary"
+                                }
+                                className={
+                                  client.contract_accepted
+                                    ? "bg-green-500 text-white"
+                                    : "bg-gray-400 text-white"
+                                }
+                              >
+                                Contract Signed
+                              </Badge>
+                              {client.sessions_remaining === 0 && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleShowQr(client)}
+                                >
+                                  <QrCode className="h-4 w-4 mr-1" />
+                                  Send Payment
+                                </Button>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex items-center space-x-2">
-                            <Badge
-                              variant={
-                                client.status === "active"
-                                  ? "default"
-                                  : "destructive"
-                              }
-                            >
-                              {client.status === "active"
-                                ? "Active"
-                                : "Payment Due"}
-                            </Badge>
-                            {client.status === "payment_due" && (
-                              <Button size="sm" variant="outline">
-                                <QrCode className="h-4 w-4 mr-1" />
-                                Send Payment
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
+                        ))}
                     </div>
                   </div>
                 </CardContent>
@@ -1074,35 +1397,58 @@ export default function TrainerDashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {mockPayments.map((payment) => (
-                      <div
-                        key={payment.id}
-                        className="flex items-center justify-between p-3 border rounded-lg"
-                      >
-                        <div>
-                          <p className="font-medium">{payment.client}</p>
-                          <p className="text-sm text-gray-500">
-                            {payment.sessions} sessions
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {payment.date}
-                          </p>
+                    {recentPayments.length > 0 ? (
+                      recentPayments.map((payment) => (
+                        <div
+                          key={payment.id}
+                          className="flex items-center justify-between p-3 border rounded-lg"
+                        >
+                          <div>
+                            <p className="font-medium">
+                              {payment.users?.full_name || "Unknown Client"}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              {payment.session_count} sessions •{" "}
+                              {payment.package_type}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              {new Date(payment.paid_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-green-600">
+                              ${payment.amount}
+                            </p>
+                            <Badge
+                              variant="default"
+                              className={
+                                payment.status === "completed"
+                                  ? "bg-green-100 text-green-800"
+                                  : payment.status === "pending"
+                                    ? "bg-yellow-100 text-yellow-800"
+                                    : "bg-red-100 text-red-800"
+                              }
+                            >
+                              {payment.status === "completed"
+                                ? "Completed"
+                                : payment.status === "pending"
+                                  ? "Pending"
+                                  : "Failed"}
+                            </Badge>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <p className="font-bold text-green-600">
-                            ${payment.amount}
-                          </p>
-                          <Badge
-                            variant="default"
-                            className="bg-green-100 text-green-800"
-                          >
-                            Completed
-                          </Badge>
-                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-8 text-gray-500">
+                        <p>No recent payments found</p>
                       </div>
-                    ))}
+                    )}
                   </div>
-                  <Button variant="outline" className="w-full mt-4">
+                  <Button
+                    variant="outline"
+                    className="w-full mt-4"
+                    onClick={() => router.push("/trainer/payments")}
+                  >
                     View All Payments
                   </Button>
                 </CardContent>
@@ -1111,6 +1457,43 @@ export default function TrainerDashboard() {
           </main>
         </div>
       </div>
+      {/* QR Code Modal */}
+      <Dialog open={qrModalOpen} onOpenChange={setQrModalOpen}>
+        <DialogContent className="flex flex-col items-center">
+          <DialogHeader>
+            <DialogTitle>Scan to Pay for Sessions</DialogTitle>
+          </DialogHeader>
+          {qrClient && (
+            <>
+              <div className="mb-4">
+                <QRCodeCanvas
+                  value={`${window.location.origin}/client/checkout?clientId=${encodeURIComponent(qrClient.id)}&packageType=In-Person%20Training&sessionsIncluded=8`}
+                  size={200}
+                  level="H"
+                  includeMargin={true}
+                />
+              </div>
+              <div className="text-center">
+                <div className="font-medium mb-1">{qrClient.full_name}</div>
+                <div className="text-sm text-gray-500 mb-2">
+                  {qrClient.email}
+                </div>
+                <div className="text-xs text-gray-400 mb-2">
+                  Scan this QR code to purchase 8 In-Person Training sessions
+                </div>
+                <a
+                  href={`/client/checkout?clientId=${encodeURIComponent(qrClient.id)}&packageType=In-Person%20Training&sessionsIncluded=8`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 underline text-xs"
+                >
+                  Or click here if scanning doesn't work
+                </a>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </SidebarProvider>
   );
 }
