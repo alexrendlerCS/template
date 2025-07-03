@@ -80,10 +80,10 @@ export async function POST(request: Request) {
         });
         console.log("Trainer calendar event created:", event.data.id);
         return NextResponse.json({ eventId: event.data.id });
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Google Calendar API Error:", {
           error,
-          details: error.response?.data,
+          details: (error as any)?.response?.data,
           calendarId: trainerData.google_calendar_id,
           eventDetails,
         });
@@ -124,10 +124,10 @@ export async function POST(request: Request) {
       });
       console.log("Client calendar event created:", event.data.id);
       return NextResponse.json({ eventId: event.data.id });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Google Calendar API Error:", {
         error,
-        details: error.response?.data,
+        details: (error as any)?.response?.data,
         calendarId: userData.google_calendar_id,
         eventDetails,
       });
