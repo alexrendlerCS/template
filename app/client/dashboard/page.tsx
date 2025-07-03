@@ -403,18 +403,27 @@ export default function ClientDashboard() {
             ? false
             : userData.google_account_connected;
 
+        // Get the avatar URL directly from the storage bucket
+        let avatarUrl = userData.avatar_url;
+        if (avatarUrl) {
+          const { data: publicUrl } = supabase.storage
+            .from("avatars")
+            .getPublicUrl(avatarUrl);
+          avatarUrl = publicUrl.publicUrl;
+        }
+
         console.log("Setting user status with:", {
           contractAccepted,
           googleConnected,
           userName: userData.full_name || "Client",
-          avatarUrl: userData.avatar_url,
+          avatarUrl,
         });
 
         setUserStatus({
           contractAccepted,
           googleConnected,
           userName: userData.full_name || "Client",
-          avatarUrl: userData.avatar_url,
+          avatarUrl,
         });
 
         if (
@@ -756,6 +765,18 @@ export default function ClientDashboard() {
                   <AvatarImage
                     src={userStatus.avatarUrl || "/placeholder-user.jpg"}
                     alt={userStatus.userName}
+                    onError={(e) => {
+                      console.error(
+                        "Dashboard avatar image failed to load:",
+                        e
+                      );
+                      console.log(
+                        "Attempted avatar URL:",
+                        userStatus.avatarUrl
+                      );
+                      // Force fallback to initials
+                      e.currentTarget.style.display = "none";
+                    }}
                   />
                   <AvatarFallback className="bg-white text-red-600 text-xl font-bold">
                     {initials}

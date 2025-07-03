@@ -30,43 +30,65 @@ export async function POST(request: Request) {
 
     // If trainerId is provided, we're creating an event in the trainer's calendar
     if (trainerId) {
-      console.log("Fetching trainer data");
+      console.log("Fetching trainer data for ID:", trainerId);
       const { data: trainerData, error: trainerError } = await supabase
         .from("users")
-        .select("google_refresh_token, google_calendar_id")
+        .select("google_refresh_token, google_calendar_id, email")
         .eq("id", trainerId)
         .single();
 
       if (trainerError) {
-        console.error("Trainer data fetch error:", trainerError);
+        console.error("Trainer data fetch error:", {
+          error: trainerError,
+          trainerId,
+        });
         return new NextResponse("Failed to fetch trainer data", {
           status: 500,
         });
       }
 
+      console.log("Trainer data retrieved:", {
+        hasRefreshToken: !!trainerData?.google_refresh_token,
+        hasCalendarId: !!trainerData?.google_calendar_id,
+        trainerEmail: trainerData?.email,
+      });
+
       if (
         !trainerData?.google_refresh_token ||
         !trainerData?.google_calendar_id
       ) {
-        console.log("No trainer Google calendar found");
+        console.log("Missing trainer Google calendar data:", {
+          trainerId,
+          hasRefreshToken: !!trainerData?.google_refresh_token,
+          hasCalendarId: !!trainerData?.google_calendar_id,
+        });
         return new NextResponse("Trainer Google Calendar not connected", {
           status: 400,
         });
       }
 
-      console.log("Creating trainer calendar client");
+      console.log("Creating trainer calendar client with refresh token");
       const calendar = await getGoogleCalendarClient(
         trainerData.google_refresh_token
       );
 
       console.log("Creating event in trainer calendar");
-      const event = await calendar.events.insert({
-        calendarId: trainerData.google_calendar_id,
-        requestBody: eventDetails,
-      });
-
-      console.log("Trainer calendar event created:", event.data.id);
-      return NextResponse.json({ eventId: event.data.id });
+      try {
+        const event = await calendar.events.insert({
+          calendarId: trainerData.google_calendar_id,
+          requestBody: eventDetails,
+        });
+        console.log("Trainer calendar event created:", event.data.id);
+        return NextResponse.json({ eventId: event.data.id });
+      } catch (error) {
+        console.error("Google Calendar API Error:", {
+          error,
+          details: error.response?.data,
+          calendarId: trainerData.google_calendar_id,
+          eventDetails,
+        });
+        throw error;
+      }
     }
 
     // Otherwise, create event in client's calendar
@@ -95,13 +117,22 @@ export async function POST(request: Request) {
     );
 
     console.log("Creating event in client calendar");
-    const event = await calendar.events.insert({
-      calendarId: userData.google_calendar_id,
-      requestBody: eventDetails,
-    });
-
-    console.log("Client calendar event created:", event.data.id);
-    return NextResponse.json({ eventId: event.data.id });
+    try {
+      const event = await calendar.events.insert({
+        calendarId: userData.google_calendar_id,
+        requestBody: eventDetails,
+      });
+      console.log("Client calendar event created:", event.data.id);
+      return NextResponse.json({ eventId: event.data.id });
+    } catch (error) {
+      console.error("Google Calendar API Error:", {
+        error,
+        details: error.response?.data,
+        calendarId: userData.google_calendar_id,
+        eventDetails,
+      });
+      throw error;
+    }
   } catch (error) {
     console.error("Calendar event creation error:", error);
     return new NextResponse(

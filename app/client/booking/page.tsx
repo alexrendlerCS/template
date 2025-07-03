@@ -460,7 +460,8 @@ export default function BookingPage() {
         // Then fetch trainers
         const { data: trainersData, error: trainersError } = await supabase
           .from("users")
-          .select("id, full_name, email, avatar_url");
+          .select("id, full_name, email, avatar_url")
+          .eq("role", "trainer");
 
         if (trainersError) {
           console.error("Trainers fetch error details:", {
@@ -829,6 +830,18 @@ export default function BookingPage() {
 
       console.log("Finding package for session type:", sessionTypeName);
 
+      // Debug: Check all active packages first
+      const { data: allPackages, error: allPackagesError } = await supabase
+        .from("packages")
+        .select("*")
+        .eq("client_id", session.user.id)
+        .eq("status", "active");
+
+      console.log("All active packages:", {
+        count: allPackages?.length || 0,
+        packages: allPackages,
+      });
+
       // Get the user's packages
       const { data: userPackages, error: packagesError } = await supabase
         .from("packages")
@@ -839,10 +852,16 @@ export default function BookingPage() {
         .order("purchase_date", { ascending: false });
 
       if (packagesError) {
+        console.error("Package lookup error:", packagesError);
         throw packagesError;
       }
 
-      console.log("Available packages:", userPackages);
+      console.log("Package lookup results:", {
+        sessionType: selectedType,
+        sessionTypeName,
+        foundPackages: userPackages?.length || 0,
+        packages: userPackages,
+      });
 
       // Find the first package with remaining sessions
       const packageToUpdate = userPackages?.find(
@@ -942,6 +961,104 @@ export default function BookingPage() {
         throw new Error(
           "Failed to verify package update - session has been rolled back"
         );
+      }
+
+      // Create calendar events for both trainer and client
+      console.log("Creating calendar events...");
+
+      const baseEventDetails = {
+        description: `${sessionTypeName} training session`,
+        start: {
+          dateTime: `${selectedDate}T${selectedTimeSlot.startTime}`,
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        },
+        end: {
+          dateTime: `${selectedDate}T${selectedTimeSlot.endTime}`,
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        },
+        attendees: [
+          { email: currentProfile.email },
+          { email: selectedTrainer.email },
+        ],
+        reminders: {
+          useDefault: true,
+        },
+      };
+
+      // Create event in trainer's calendar with client's name
+      try {
+        console.log("Creating trainer calendar event for trainer:", {
+          trainerId: selectedTrainer.id,
+          trainerEmail: selectedTrainer.email,
+        });
+
+        const trainerEventDetails = {
+          ...baseEventDetails,
+          summary: `${sessionTypeName} with ${currentProfile.full_name}`,
+        };
+
+        const trainerEventResponse = await fetch(
+          `/api/google/calendar/event?trainerId=${selectedTrainer.id}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(trainerEventDetails),
+          }
+        );
+
+        const trainerEventResult = await trainerEventResponse.text();
+        if (!trainerEventResponse.ok) {
+          console.warn("Failed to create trainer calendar event:", {
+            status: trainerEventResponse.status,
+            statusText: trainerEventResponse.statusText,
+            result: trainerEventResult,
+          });
+        } else {
+          console.log(
+            "Trainer calendar event created successfully:",
+            trainerEventResult
+          );
+        }
+      } catch (error) {
+        console.warn("Error creating trainer calendar event:", {
+          error,
+          trainerId: selectedTrainer.id,
+          trainerEmail: selectedTrainer.email,
+        });
+      }
+
+      // Create event in client's calendar with trainer's name
+      try {
+        const clientEventDetails = {
+          ...baseEventDetails,
+          summary: `${sessionTypeName} with ${selectedTrainer.full_name}`,
+        };
+
+        const clientEventResponse = await fetch("/api/google/calendar/event", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(clientEventDetails),
+        });
+
+        const clientEventResult = await clientEventResponse.text();
+        if (!clientEventResponse.ok) {
+          console.warn("Failed to create client calendar event:", {
+            status: clientEventResponse.status,
+            statusText: clientEventResponse.statusText,
+            result: clientEventResult,
+          });
+        } else {
+          console.log(
+            "Client calendar event created successfully:",
+            clientEventResult
+          );
+        }
+      } catch (error) {
+        console.warn("Error creating client calendar event:", error);
       }
 
       // Send email notification with type-safe values
@@ -1064,7 +1181,7 @@ export default function BookingPage() {
                     <Avatar className="h-12 w-12">
                       {trainer.avatar_url ? (
                         <AvatarImage
-                          src={trainer.avatar_url}
+                          src={`https://gpbarexscmauxziijhxe.supabase.co/storage/v1/object/public/avatars/${trainer.avatar_url}`}
                           alt={trainer.full_name}
                         />
                       ) : (
@@ -1125,8 +1242,8 @@ export default function BookingPage() {
                         isDisabled
                           ? "opacity-50 cursor-not-allowed border-gray-200"
                           : selectedType === type.id
-                          ? "border-red-600 bg-red-50 cursor-pointer"
-                          : "border-gray-200 hover:border-gray-300 cursor-pointer"
+                            ? "border-red-600 bg-red-50 cursor-pointer"
+                            : "border-gray-200 hover:border-gray-300 cursor-pointer"
                       }`}
                       onClick={() => {
                         if (!isDisabled) {
@@ -1144,10 +1261,10 @@ export default function BookingPage() {
                               isDisabled
                                 ? "bg-gray-100"
                                 : sessionsRemaining === 1
-                                ? "bg-red-100 text-red-700"
-                                : sessionsRemaining <= 3
-                                ? "bg-yellow-100 text-yellow-700"
-                                : "bg-green-100 text-green-700"
+                                  ? "bg-red-100 text-red-700"
+                                  : sessionsRemaining <= 3
+                                    ? "bg-yellow-100 text-yellow-700"
+                                    : "bg-green-100 text-green-700"
                             }
                           >
                             {sessionsRemaining} remaining
@@ -1520,8 +1637,8 @@ export default function BookingPage() {
                     packageType.remaining >= 4
                       ? "bg-green-50"
                       : packageType.remaining >= 2
-                      ? "bg-yellow-50"
-                      : "bg-red-50"
+                        ? "bg-yellow-50"
+                        : "bg-red-50"
                   } p-4 rounded-lg`}
                 >
                   <h3
@@ -1529,8 +1646,8 @@ export default function BookingPage() {
                       packageType.remaining >= 4
                         ? "text-green-700"
                         : packageType.remaining >= 2
-                        ? "text-yellow-700"
-                        : "text-red-700"
+                          ? "text-yellow-700"
+                          : "text-red-700"
                     }`}
                   >
                     {packageType.type}
@@ -1541,8 +1658,8 @@ export default function BookingPage() {
                         packageType.remaining >= 4
                           ? "text-green-600"
                           : packageType.remaining >= 2
-                          ? "text-yellow-600"
-                          : "text-red-600"
+                            ? "text-yellow-600"
+                            : "text-red-600"
                       }`}
                     >
                       {packageType.remaining} remaining
@@ -1553,8 +1670,8 @@ export default function BookingPage() {
                         packageType.remaining >= 4
                           ? "bg-green-100"
                           : packageType.remaining >= 2
-                          ? "bg-yellow-100"
-                          : "bg-red-100"
+                            ? "bg-yellow-100"
+                            : "bg-red-100"
                       }`}
                     >
                       {packageType.remaining}/{packageType.total} sessions

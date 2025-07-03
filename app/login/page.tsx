@@ -14,7 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dumbbell, Mail, Lock, User } from "lucide-react";
+import { Dumbbell, Mail, Lock, User, CheckCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -33,6 +33,7 @@ import { Footer } from "@/components/ui/footer";
 interface FormData {
   email: string;
   password: string;
+  confirmPassword: string;
   full_name: string;
 }
 
@@ -44,6 +45,7 @@ export default function LoginPage() {
   const [formData, setFormData] = useState<FormData>({
     email: "",
     password: "",
+    confirmPassword: "",
     full_name: "",
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -57,6 +59,29 @@ export default function LoginPage() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+
+    // Clear error message when user starts typing
+    if (statusMessage.type === "error") {
+      setStatusMessage({ type: null, message: "" });
+    }
+  };
+
+  const validateSignupForm = () => {
+    if (formData.password !== formData.confirmPassword) {
+      setStatusMessage({
+        type: "error",
+        message: "Passwords do not match",
+      });
+      return false;
+    }
+    if (formData.password.length < 6) {
+      setStatusMessage({
+        type: "error",
+        message: "Password must be at least 6 characters long",
+      });
+      return false;
+    }
+    return true;
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -102,6 +127,12 @@ export default function LoginPage() {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validate form before submission
+    if (!validateSignupForm()) {
+      return;
+    }
+
     setIsLoading(true);
     setStatusMessage({ type: null, message: "" });
 
@@ -110,7 +141,9 @@ export default function LoginPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...formData,
+          email: formData.email,
+          password: formData.password,
+          full_name: formData.full_name,
           role: userType,
         }),
       });
@@ -121,18 +154,28 @@ export default function LoginPage() {
         throw new Error(data.error || "Failed to create account");
       }
 
-      setStatusMessage({
-        type: "success",
-        message:
-          "Account created successfully! Please check your email to confirm.",
-      });
-
       // Clear form
       setFormData({
         email: "",
         password: "",
+        confirmPassword: "",
         full_name: "",
       });
+
+      // Switch to login tab
+      setIsLogin(true);
+
+      // Show success message
+      setStatusMessage({
+        type: "success",
+        message: `Please sign in as ${userType === "trainer" ? "Trainer" : "Client"} to continue.`,
+      });
+
+      // Pre-fill the login email
+      setLoginData((prev) => ({
+        ...prev,
+        email: formData.email,
+      }));
     } catch (error: any) {
       let friendlyMessage = error.message;
 
@@ -180,7 +223,11 @@ export default function LoginPage() {
         <CardContent>
           <Tabs
             value={isLogin ? "login" : "signup"}
-            onValueChange={(value) => setIsLogin(value === "login")}
+            onValueChange={(value) => {
+              setIsLogin(value === "login");
+              // Clear messages when switching tabs
+              setStatusMessage({ type: null, message: "" });
+            }}
           >
             <TabsList className="grid w-full grid-cols-2 mb-6">
               <TabsTrigger value="login">Login</TabsTrigger>
@@ -225,6 +272,12 @@ export default function LoginPage() {
               <form onSubmit={handleLogin} className="space-y-4">
                 {statusMessage.type === "error" && (
                   <Alert variant="destructive">
+                    <AlertDescription>{statusMessage.message}</AlertDescription>
+                  </Alert>
+                )}
+                {statusMessage.type === "success" && (
+                  <Alert>
+                    <CheckCircle className="h-4 w-4" />
                     <AlertDescription>{statusMessage.message}</AlertDescription>
                   </Alert>
                 )}
@@ -298,6 +351,13 @@ export default function LoginPage() {
                 <CardContent>
                   <form onSubmit={handleSignup}>
                     <div className="grid w-full items-center gap-4">
+                      {statusMessage.type === "error" && (
+                        <Alert variant="destructive">
+                          <AlertDescription>
+                            {statusMessage.message}
+                          </AlertDescription>
+                        </Alert>
+                      )}
                       <div className="flex flex-col space-y-1.5">
                         <Label htmlFor="full_name">Full Name</Label>
                         <Input
@@ -336,11 +396,29 @@ export default function LoginPage() {
                           Password must be at least 6 characters long.
                         </p>
                       </div>
-                      <Button type="submit" disabled={isLoading}>
+                      <div className="flex flex-col space-y-1.5">
+                        <Label htmlFor="confirmPassword">
+                          Confirm Password
+                        </Label>
+                        <Input
+                          id="confirmPassword"
+                          name="confirmPassword"
+                          type="password"
+                          value={formData.confirmPassword}
+                          onChange={handleInputChange}
+                          placeholder="Confirm your password"
+                          required
+                        />
+                      </div>
+                      <Button
+                        type="submit"
+                        className="w-full bg-red-600 hover:bg-red-700"
+                        disabled={isLoading}
+                      >
                         {isLoading ? (
                           <>
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Creating account...
+                            Creating Account...
                           </>
                         ) : (
                           "Create Account"
@@ -378,8 +456,8 @@ export default function LoginPage() {
               {statusMessage.type === "success" && isLogin
                 ? "Welcome Back!"
                 : statusMessage.type === "success"
-                ? "Account Created!"
-                : "Error"}
+                  ? "Account Created!"
+                  : "Error"}
             </DialogTitle>
             <DialogDescription>{statusMessage.message}</DialogDescription>
           </DialogHeader>

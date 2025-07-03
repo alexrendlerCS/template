@@ -5,7 +5,13 @@ import { createClient, supabaseAdmin } from "@/lib/supabase-server";
 import buffer from "@/lib/raw-body";
 
 // Use the webhook secret from environment variable
-const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+// For local development with Stripe CLI, use the CLI's webhook secret
+// For production, use the environment variable
+const endpointSecret =
+  process.env.NODE_ENV === "development"
+    ? process.env.STRIPE_CLI_WEBHOOK_SECRET ||
+      process.env.STRIPE_WEBHOOK_SECRET!
+    : process.env.STRIPE_WEBHOOK_SECRET!;
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -19,9 +25,13 @@ export const config = {
 };
 
 export async function POST(req: Request) {
-  try {
-    console.log("🎣 Webhook received");
+  console.log("🎣 Webhook endpoint hit", {
+    method: req.method,
+    url: req.url,
+    headers: Object.fromEntries(req.headers.entries()),
+  });
 
+  try {
     // Get the signature from the header
     const signature = req.headers.get("stripe-signature");
     console.log("📝 Webhook signature:", signature);
@@ -37,6 +47,14 @@ export async function POST(req: Request) {
     // Get the raw body
     const rawBody = await buffer(req.body!);
     console.log("📦 Raw body length:", rawBody.length, "bytes");
+    console.log(
+      "📦 Raw body preview:",
+      rawBody.toString().substring(0, 200) + "..."
+    );
+    console.log(
+      "🔑 Using webhook secret:",
+      endpointSecret.substring(0, 10) + "..."
+    );
 
     let event;
     try {
@@ -47,10 +65,18 @@ export async function POST(req: Request) {
       );
       console.log(
         "✅ Successfully verified webhook signature, event type:",
-        event.type
+        event.type,
+        "Event ID:",
+        event.id
       );
     } catch (err) {
       console.error("❌ Webhook signature verification failed:", err);
+      console.error("🔍 Debug info:", {
+        signatureHeader: signature,
+        secretUsed: endpointSecret.substring(0, 10) + "...",
+        bodyLength: rawBody.length,
+        error: err instanceof Error ? err.message : "Unknown error",
+      });
       return NextResponse.json(
         { error: "Webhook signature verification failed" },
         { status: 400 }
@@ -65,6 +91,9 @@ export async function POST(req: Request) {
           sessionId: session.id,
           metadata: session.metadata,
           amount: session.amount_total,
+          userId: session.metadata?.user_id,
+          packageType: session.metadata?.package_type,
+          sessionsIncluded: session.metadata?.sessions_included,
         });
 
         // Check if we have the required metadata
@@ -100,13 +129,38 @@ export async function POST(req: Request) {
           : sessionsIncluded;
         const isProrated = session.metadata.is_prorated === "true";
 
+        console.log("📊 Parsed metadata values:", {
+          sessionsIncluded,
+          originalSessions,
+          isProrated,
+          userId: session.metadata.user_id,
+          packageType: session.metadata.package_type,
+        });
+
         try {
+          // Get the current date in YYYY-MM-DD format for the purchase date
+          const currentDate = new Date().toISOString().split("T")[0];
+          let packageId: string | undefined;
+
           // Check if this transaction has already been processed
-          const { data: existingPackageByTransaction } = await supabaseAdmin
+          const {
+            data: existingPackageByTransaction,
+            error: transactionError,
+          } = await supabaseAdmin
             .from("packages")
             .select("*")
             .eq("transaction_id", session.id)
             .single();
+
+          if (transactionError) {
+            console.log("🔍 Transaction check error:", transactionError);
+          }
+
+          console.log("🔍 Transaction check result:", {
+            exists: !!existingPackageByTransaction,
+            transactionId: session.id,
+            packageId: existingPackageByTransaction?.id,
+          });
 
           if (existingPackageByTransaction) {
             console.log("📦 Transaction already processed:", {
@@ -117,251 +171,104 @@ export async function POST(req: Request) {
             return NextResponse.json({ status: "success" });
           }
 
-          // Validate package type first
-          const validPackageTypes = [
-            "In-Person Training",
-            "Virtual Training",
-            "Partner Training",
-          ];
-          const packageType = session.metadata.package_type;
-
-          console.log("🔍 Validating package type:", {
-            receivedType: packageType,
-            validTypes: validPackageTypes,
-            isValid: validPackageTypes.includes(packageType),
-            metadata: session.metadata,
-          });
-
-          if (!validPackageTypes.includes(packageType)) {
-            console.error("❌ Invalid package type:", {
-              received: packageType,
-              valid: validPackageTypes,
-            });
-            return NextResponse.json(
-              { error: "Invalid package type" },
-              { status: 400 }
-            );
-          }
-
-          // Check for existing payment first
-          const { data: existingPayment, error: paymentError } =
-            await supabaseAdmin
-              .from("payments")
-              .select("*")
-              .eq("transaction_id", session.id)
-              .single();
-
-          console.log("🔍 Checking for existing payment:", {
-            exists: !!existingPayment,
-            payment: existingPayment,
-            transactionId: session.id,
-          });
-
-          if (paymentError && paymentError.code !== "PGRST116") {
-            console.error(
-              "❌ Error checking for existing payment:",
-              paymentError
-            );
-            throw new Error(
-              `Failed to check for existing payment: ${paymentError.message}`
-            );
-          }
-
-          // First, create or update the payment record with package_type
-          if (existingPayment) {
-            console.log("⚠️ Updating existing payment with package type:", {
-              paymentId: existingPayment.id,
-              packageType,
-            });
-
-            const { error: updatePaymentError } = await supabaseAdmin
-              .from("payments")
-              .update({
-                package_type: packageType,
-              })
-              .eq("id", existingPayment.id);
-
-            if (updatePaymentError) {
-              console.error("❌ Failed to update payment:", updatePaymentError);
-              console.warn("⚠️ Payment update failed but continuing...");
-            }
-          } else {
-            console.log("💳 Creating new payment with package type:", {
-              client_id: session.metadata.user_id,
-              amount: session.amount_total ? session.amount_total / 100 : 0,
-              session_count: parseInt(session.metadata.sessions_included),
-              package_type: packageType,
-            });
-
-            const { error: createPaymentError } = await supabaseAdmin
-              .from("payments")
-              .insert({
-                client_id: session.metadata.user_id,
-                trainer_id: null,
-                amount: session.amount_total ? session.amount_total / 100 : 0,
-                session_count: sessionsIncluded,
-                package_type: packageType,
-                method: "stripe",
-                status: "completed",
-                transaction_id: session.id,
-                paid_at: new Date().toISOString(),
-              });
-
-            if (createPaymentError) {
-              console.error("❌ Failed to create payment:", createPaymentError);
-              console.warn("⚠️ Payment creation failed but continuing...");
-            }
-          }
-
-          // Get the current date in YYYY-MM-DD format for the purchase date
-          const currentDate = new Date().toISOString().split("T")[0];
-
-          // Now handle the package
-          let packageId;
-
-          // Check for existing active package
-          const { data: existingPackage, error: existingPackageError } =
+          // Check for existing active packages
+          const { data: existingPackages, error: existingPackageError } =
             await supabaseAdmin
               .from("packages")
               .select("*")
               .eq("client_id", session.metadata.user_id)
-              .eq("package_type", packageType)
+              .eq("package_type", session.metadata.package_type)
               .eq("status", "active")
-              .single();
+              .order("purchase_date", { ascending: false });
 
-          console.log("🔄 Starting package processing", {
-            sessionCount: session.metadata.sessions_included,
-            packageType: session.metadata.package_type,
-            transactionId: session.id,
+          if (existingPackageError) {
+            console.error(
+              "❌ Error fetching existing packages:",
+              existingPackageError
+            );
+          }
+
+          console.log("📦 Existing packages query result:", {
+            count: existingPackages?.length || 0,
+            packages: existingPackages?.map((pkg) => ({
+              id: pkg.id,
+              sessions: pkg.sessions_included,
+              used: pkg.sessions_used,
+              purchaseDate: pkg.purchase_date,
+              transactionId: pkg.transaction_id,
+            })),
           });
 
-          console.log("📊 Package calculation details", {
-            initialSessionCount: Number(session.metadata.sessions_included),
-            parsedSessionCount: parseInt(session.metadata.sessions_included),
-            sessionCountType: typeof session.metadata.sessions_included,
-          });
-
-          console.log("📦 Creating package with:", {
-            sessions_included: sessionsIncluded,
-            original_sessions: originalSessions,
-            is_prorated: isProrated,
-            price: session.amount_total ? session.amount_total / 100 : 0,
-            expiry_date: session.metadata.expiry_date,
-          });
-
-          console.log("📦 Existing package state", {
-            exists: existingPackage !== null,
-            package: existingPackage,
-            intendedSessions: Number(session.metadata.sessions_included),
-          });
+          // Get the most recent package if any exist
+          const existingPackage = existingPackages?.[0];
 
           if (existingPackage) {
-            console.log("📦 Checking existing package:", {
+            console.log("🔄 Found existing package to update:", {
               id: existingPackage.id,
-              type: packageType,
               currentSessions: existingPackage.sessions_included,
-              hasTransactionId: !!existingPackage.transaction_id,
-              currentTransactionId: existingPackage.transaction_id,
-              newTransactionId: session.id,
+              usedSessions: existingPackage.sessions_used,
+              purchaseDate: existingPackage.purchase_date,
+              addingSessions: sessionsIncluded,
             });
 
-            // If the package has no transaction_id, treat it as a new package
-            if (!existingPackage.transaction_id) {
-              console.log(
-                "🆕 Existing package has no transaction_id, treating as new package"
-              );
+            // Always add sessions to the most recent package
+            const newSessionCount =
+              existingPackage.sessions_included + sessionsIncluded;
+            const newOriginalSessions =
+              existingPackage.original_sessions + sessionsIncluded;
 
-              const { data: updatedPackage, error: updateError } =
-                await supabaseAdmin
-                  .from("packages")
-                  .update({
-                    sessions_included: parseInt(
-                      session.metadata.sessions_included
-                    ),
-                    transaction_id: session.id,
-                    purchase_date: currentDate,
-                  })
-                  .eq("id", existingPackage.id)
-                  .select()
-                  .single();
+            console.log("📝 Attempting package update:", {
+              packageId: existingPackage.id,
+              currentSessions: existingPackage.sessions_included,
+              addingSessions: sessionsIncluded,
+              newTotal: newSessionCount,
+              currentOriginal: existingPackage.original_sessions,
+              newOriginal: newOriginalSessions,
+              transactionId: session.id,
+            });
 
-              if (updateError) {
-                console.error("❌ Failed to update package:", {
-                  error: updateError,
-                  packageId: existingPackage.id,
-                  attemptedSessions: parseInt(
-                    session.metadata.sessions_included
-                  ),
-                });
-                console.warn(
-                  "⚠️ Package update failed but payment was recorded"
-                );
-              } else {
-                console.log("✅ Successfully updated package:", {
-                  id: existingPackage.id,
-                  oldSessions: existingPackage.sessions_included,
-                  newSessions: updatedPackage.sessions_included,
-                  operation: "set",
-                });
-              }
-              packageId = existingPackage.id;
-            }
-            // If it's the same transaction, skip update
-            else if (existingPackage.transaction_id === session.id) {
-              console.log("⚠️ Transaction already processed, skipping update");
-              packageId = existingPackage.id;
-            }
-            // If it has a different transaction_id, add sessions
-            else {
-              const newSessionCount =
-                existingPackage.sessions_included +
-                parseInt(session.metadata.sessions_included);
+            const { data: updatedPackage, error: updateError } =
+              await supabaseAdmin
+                .from("packages")
+                .update({
+                  sessions_included: newSessionCount,
+                  original_sessions: newOriginalSessions,
+                  transaction_id: session.id,
+                  purchase_date: currentDate,
+                })
+                .eq("id", existingPackage.id)
+                .select()
+                .single();
 
-              console.log("🔢 Adding sessions to existing package:", {
-                currentSessions: existingPackage.sessions_included,
-                addingSessions: parseInt(session.metadata.sessions_included),
-                newTotal: newSessionCount,
-                operation: "add",
+            if (updateError) {
+              console.error("❌ Package update failed:", {
+                error: updateError,
+                packageId: existingPackage.id,
+                attempted: {
+                  sessions: newSessionCount,
+                  transactionId: session.id,
+                },
               });
-
-              const { data: updatedPackage, error: updateError } =
-                await supabaseAdmin
-                  .from("packages")
-                  .update({
-                    sessions_included: newSessionCount,
-                    transaction_id: session.id,
-                    purchase_date: currentDate,
-                  })
-                  .eq("id", existingPackage.id)
-                  .select()
-                  .single();
-
-              if (updateError) {
-                console.error("❌ Failed to update package:", {
-                  error: updateError,
-                  packageId: existingPackage.id,
-                  currentSessions: existingPackage.sessions_included,
-                  attemptedAdd: parseInt(session.metadata.sessions_included),
-                });
-                console.warn(
-                  "⚠️ Package update failed but payment was recorded"
-                );
-              } else {
-                console.log("✅ Successfully updated package:", {
-                  id: existingPackage.id,
-                  oldSessions: existingPackage.sessions_included,
-                  addedSessions: parseInt(session.metadata.sessions_included),
-                  newTotal: updatedPackage.sessions_included,
-                  operation: "add",
-                });
-              }
-              packageId = existingPackage.id;
+            } else {
+              console.log("✅ Package successfully updated:", {
+                id: updatedPackage.id,
+                oldSessions: existingPackage.sessions_included,
+                newSessions: updatedPackage.sessions_included,
+                transactionId: updatedPackage.transaction_id,
+              });
             }
+            packageId = existingPackage.id;
           } else {
+            console.log("🆕 No existing package found, creating new one:", {
+              userId: session.metadata.user_id,
+              packageType: session.metadata.package_type,
+              sessions: sessionsIncluded,
+            });
+
             // Create new package
             console.log("🆕 Creating new package:", {
-              type: packageType,
-              sessions: parseInt(session.metadata.sessions_included),
+              type: session.metadata.package_type,
+              sessions: sessionsIncluded,
               operation: "create",
             });
 
@@ -369,7 +276,7 @@ export async function POST(req: Request) {
               .from("packages")
               .insert({
                 client_id: session.metadata.user_id,
-                package_type: packageType,
+                package_type: session.metadata.package_type,
                 sessions_included: sessionsIncluded,
                 original_sessions: originalSessions,
                 is_prorated: isProrated,
@@ -386,7 +293,7 @@ export async function POST(req: Request) {
             if (createError) {
               console.error("❌ Failed to create package:", {
                 error: createError,
-                attemptedSessions: parseInt(session.metadata.sessions_included),
+                attemptedSessions: sessionsIncluded,
               });
               console.warn(
                 "⚠️ Package creation failed but payment was recorded"
@@ -404,10 +311,10 @@ export async function POST(req: Request) {
 
           console.log("✅ Final package state", {
             result: packageId,
-            expectedSessions: Number(session.metadata.sessions_included),
+            expectedSessions: sessionsIncluded,
             actualSessions: existingPackage
               ? existingPackage.sessions_included
-              : Number(session.metadata.sessions_included),
+              : sessionsIncluded,
           });
 
           // After package creation/update, update the payment record
@@ -415,14 +322,14 @@ export async function POST(req: Request) {
             console.log("💳 Updating payment record with package ID:", {
               packageId,
               transactionId: session.id,
-              packageType,
+              packageType: session.metadata.package_type,
             });
 
             const { error: paymentUpdateError } = await supabaseAdmin
               .from("payments")
               .update({
                 package_id: packageId,
-                package_type: packageType, // Ensure package_type is set during update
+                package_type: session.metadata.package_type, // Ensure package_type is set during update
               })
               .eq("transaction_id", session.id);
 
@@ -431,7 +338,7 @@ export async function POST(req: Request) {
                 error: paymentUpdateError,
                 transactionId: session.id,
                 packageId,
-                packageType,
+                packageType: session.metadata.package_type,
               });
             }
           }

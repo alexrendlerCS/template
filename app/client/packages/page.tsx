@@ -210,6 +210,9 @@ function PackagesContent() {
   const [shouldFetchPackages, setShouldFetchPackages] = useState(false);
   const { user, setUser } = useUser();
   const supabase = createClient();
+  const [retryCount, setRetryCount] = useState(0);
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 2000; // 2 seconds
 
   // Function to fetch user's package information
   const fetchPackageInformation = async () => {
@@ -225,7 +228,7 @@ function PackagesContent() {
         "❌ No user ID found for fetching packages - will retry when user is available"
       );
       setShouldFetchPackages(true);
-      return;
+      return false;
     }
 
     setLoadingPackages(true);
@@ -235,20 +238,32 @@ function PackagesContent() {
         .from("payments")
         .select("*")
         .eq("client_id", user.id)
-        .order("paid_at", { ascending: false })
-        .limit(1);
+        .order("paid_at", { ascending: false });
 
       if (paymentError) {
         console.error("❌ Error fetching latest payment:", paymentError);
-        return;
+        return false;
       }
+
+      console.log(
+        "💰 All payments:",
+        payments?.map((p) => ({
+          id: p.id,
+          amount: p.amount,
+          sessions: p.session_count,
+          type: p.package_type,
+          paid_at: p.paid_at,
+          transaction_id: p.transaction_id,
+          package_id: p.package_id,
+        }))
+      );
 
       const latestPayment = payments?.[0];
 
       if (!latestPayment) {
         console.log("ℹ️ No payments found for user");
         setLoadingPackages(false);
-        return;
+        return false;
       }
 
       console.log("💳 Raw payment data:", {
@@ -324,10 +339,23 @@ function PackagesContent() {
 
       if (packagesError) {
         console.error("❌ Failed to fetch all packages:", packagesError);
-        return;
+        return false;
       }
 
-      console.log("✅ All packages fetched:", packages);
+      console.log(
+        "📦 All packages:",
+        packages?.map((p) => ({
+          id: p.id,
+          type: p.package_type,
+          sessions: {
+            included: p.sessions_included,
+            used: p.sessions_used,
+            remaining: p.sessions_included - p.sessions_used,
+          },
+          purchase_date: p.purchase_date,
+          transaction_id: p.transaction_id,
+        }))
+      );
 
       // Group packages by type and calculate remaining sessions
       const packageTypes: Record<string, PackageTypeCount> = {
@@ -363,8 +391,10 @@ function PackagesContent() {
       const sessionTypesArray = Object.values(packageTypes);
       console.log("Session types after processing:", sessionTypesArray);
       setSessionsByType(sessionTypesArray);
+      return true;
     } catch (error) {
       console.error("Error in fetchPackageInformation:", error);
+      return false;
     } finally {
       setLoadingPackages(false);
       setShouldFetchPackages(false);
@@ -407,13 +437,29 @@ function PackagesContent() {
       hasUser: !!user,
       userId: user?.id,
       shouldFetch: shouldFetchPackages,
+      retryCount,
     });
 
     if (user?.id && shouldFetchPackages) {
       console.log("✅ User data available, fetching packages...");
-      fetchPackageInformation();
+      fetchPackageInformation().then((foundPackages) => {
+        // If no packages found and we haven't exceeded retries, try again
+        if (
+          !foundPackages &&
+          retryCount < MAX_RETRIES &&
+          searchParams.get("success") === "true"
+        ) {
+          console.log(
+            `🔄 No packages found, scheduling retry ${retryCount + 1} of ${MAX_RETRIES}...`
+          );
+          setTimeout(() => {
+            setRetryCount((prev) => prev + 1);
+            setShouldFetchPackages(true);
+          }, RETRY_DELAY);
+        }
+      });
     }
-  }, [user, shouldFetchPackages]);
+  }, [user, shouldFetchPackages, retryCount]);
 
   // Effect to handle URL parameter changes
   useEffect(() => {
@@ -618,8 +664,8 @@ function PackagesContent() {
                           isNewlyPurchased
                             ? "bg-green-50 border-2 border-green-200"
                             : packageType.remaining > 0
-                            ? "bg-gray-50 border border-gray-200"
-                            : "bg-gray-50 border border-gray-100"
+                              ? "bg-gray-50 border border-gray-200"
+                              : "bg-gray-50 border border-gray-100"
                         }`}
                       >
                         <div className="flex justify-between items-center">
@@ -632,8 +678,8 @@ function PackagesContent() {
                                 isNewlyPurchased
                                   ? "text-green-600"
                                   : packageType.remaining > 0
-                                  ? "text-gray-700"
-                                  : "text-gray-500"
+                                    ? "text-gray-700"
+                                    : "text-gray-500"
                               }`}
                             >
                               {isNewlyPurchased ? (
