@@ -190,6 +190,19 @@ export default function TrainerDashboard() {
   });
   const supabase = createClient();
   const router = useRouter();
+  const [totalClients, setTotalClients] = useState<number | null>(null);
+  const [clientsThisMonth, setClientsThisMonth] = useState<number>(0);
+  const [clientsLastMonth, setClientsLastMonth] = useState<number>(0);
+  const [todaysSessions, setTodaysSessions] = useState<any[]>([]);
+  const [completedSessions, setCompletedSessions] = useState<number>(0);
+  const [upcomingSessions, setUpcomingSessions] = useState<number>(0);
+  const [trainerId, setTrainerId] = useState<string | null>(null);
+  const [sessionsThisMonth, setSessionsThisMonth] = useState<number>(0);
+  const [sessionsLastMonth, setSessionsLastMonth] = useState<number>(0);
+  const [revenueThisMonth, setRevenueThisMonth] = useState<number>(0);
+  const [revenueLastMonth, setRevenueLastMonth] = useState<number>(0);
+  const [pendingPaymentsCount, setPendingPaymentsCount] = useState<number>(0);
+  const [pendingPaymentsAmount, setPendingPaymentsAmount] = useState<number>(0);
 
   // Add OAuth success and error handlers
   const handleOAuthSuccess = useCallback((calendarName: string) => {
@@ -276,6 +289,443 @@ export default function TrainerDashboard() {
   useEffect(() => {
     checkUserStatus();
   }, [checkUserStatus]);
+
+  useEffect(() => {
+    // Fetch total clients from users table
+    async function fetchTotalClients() {
+      console.log("[DEBUG] Fetching total clients from users table...");
+      const { data, error, count } = await supabase
+        .from("users")
+        .select("*", { count: "exact" })
+        .eq("role", "client");
+      console.log("[DEBUG] Supabase response:", { data, error, count });
+      if (error) {
+        console.error("[DEBUG] Error fetching total clients:", error);
+        setTotalClients(null);
+      } else {
+        setTotalClients(count ?? (data ? data.length : 0));
+        console.log(
+          "[DEBUG] Set totalClients to:",
+          count ?? (data ? data.length : 0)
+        );
+      }
+    }
+    fetchTotalClients();
+
+    // Fetch client growth for this and last month
+    async function fetchClientGrowth() {
+      const now = new Date();
+      const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const startOfLastMonth = new Date(
+        now.getFullYear(),
+        now.getMonth() - 1,
+        1
+      );
+      const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+
+      // This month
+      const { count: thisMonthCount, error: thisMonthError } = await supabase
+        .from("users")
+        .select("*", { count: "exact" })
+        .eq("role", "client")
+        .gte("created_at", startOfThisMonth.toISOString());
+      if (thisMonthError) {
+        console.error(
+          "[DEBUG] Error fetching this month clients:",
+          thisMonthError
+        );
+        setClientsThisMonth(0);
+      } else {
+        setClientsThisMonth(thisMonthCount ?? 0);
+      }
+
+      // Last month
+      const { count: lastMonthCount, error: lastMonthError } = await supabase
+        .from("users")
+        .select("*", { count: "exact" })
+        .eq("role", "client")
+        .gte("created_at", startOfLastMonth.toISOString())
+        .lte("created_at", endOfLastMonth.toISOString());
+      if (lastMonthError) {
+        console.error(
+          "[DEBUG] Error fetching last month clients:",
+          lastMonthError
+        );
+        setClientsLastMonth(0);
+      } else {
+        setClientsLastMonth(lastMonthCount ?? 0);
+      }
+    }
+    fetchClientGrowth();
+
+    // Fetch today's sessions for this trainer
+    async function fetchTodaysSessions() {
+      // Get trainer id from session
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.user) {
+        console.log("[DEBUG] No session user found in fetchTodaysSessions");
+        return;
+      }
+      setTrainerId(session.user.id);
+      const now = new Date();
+      // Use local date instead of UTC to avoid timezone issues
+      const todayStr = now.toLocaleDateString("en-CA"); // Returns YYYY-MM-DD format
+      console.log(`[DEBUG] Current date/time: ${now}`);
+      console.log(
+        `[DEBUG] Current timezone offset: ${now.getTimezoneOffset()} minutes`
+      );
+      console.log(`[DEBUG] Today string: ${todayStr}`);
+      console.log(
+        `[DEBUG] Fetching sessions for trainer_id: ${session.user.id} on date: ${todayStr}`
+      );
+
+      // First, let's see ALL sessions for this trainer to understand the date format
+      const { data: allSessions, error: allSessionsError } = await supabase
+        .from("sessions")
+        .select("*")
+        .eq("trainer_id", session.user.id)
+        .order("date", { ascending: true });
+
+      if (allSessionsError) {
+        console.error("[DEBUG] Error fetching all sessions:", allSessionsError);
+      } else {
+        console.log(`[DEBUG] All sessions for trainer:`, allSessions);
+      }
+
+      // Fetch all sessions for today for this trainer
+      const { data: sessions, error } = await supabase
+        .from("sessions")
+        .select("*")
+        .eq("trainer_id", session.user.id)
+        .eq("date", todayStr);
+      if (error) {
+        console.error("[DEBUG] Error fetching today's sessions:", error);
+        setTodaysSessions([]);
+        setCompletedSessions(0);
+        setUpcomingSessions(0);
+        return;
+      }
+      console.log(`[DEBUG] Raw sessions fetched:`, sessions);
+      setTodaysSessions(sessions ?? []);
+      // Calculate completed and upcoming
+      const nowTime = now.getTime();
+      let completed = 0;
+      let upcoming = 0;
+      (sessions ?? []).forEach((s) => {
+        // Combine date and end_time to get session end datetime
+        const endDateTime = new Date(`${s.date}T${s.end_time}`);
+        console.log(
+          `[DEBUG] Session id: ${s.id}, date: ${s.date}, end_time: ${s.end_time}, endDateTime: ${endDateTime}, now: ${now}`
+        );
+        if (endDateTime.getTime() < nowTime) completed++;
+        else upcoming++;
+      });
+      console.log(
+        `[DEBUG] Completed sessions: ${completed}, Upcoming sessions: ${upcoming}`
+      );
+      setCompletedSessions(completed);
+      setUpcomingSessions(upcoming);
+    }
+    fetchTodaysSessions();
+
+    // Fetch monthly sessions for this trainer
+    async function fetchMonthlySessions() {
+      // Get trainer id from session
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.user) {
+        console.log("[DEBUG] No session user found in fetchMonthlySessions");
+        return;
+      }
+
+      const now = new Date();
+      const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const startOfLastMonth = new Date(
+        now.getFullYear(),
+        now.getMonth() - 1,
+        1
+      );
+      const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+      const endOfThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+      console.log(
+        `[DEBUG] Fetching monthly sessions for trainer_id: ${session.user.id}`
+      );
+      console.log(
+        `[DEBUG] This month range: ${startOfThisMonth.toLocaleDateString("en-CA")} to ${endOfThisMonth.toLocaleDateString("en-CA")}`
+      );
+      console.log(
+        `[DEBUG] Last month range: ${startOfLastMonth.toLocaleDateString("en-CA")} to ${endOfLastMonth.toLocaleDateString("en-CA")}`
+      );
+      console.log(`[DEBUG] Current date: ${now.toLocaleDateString("en-CA")}`);
+      console.log(
+        `[DEBUG] Start of this month: ${startOfThisMonth.toLocaleDateString("en-CA")}`
+      );
+      console.log(
+        `[DEBUG] End of this month: ${endOfThisMonth.toLocaleDateString("en-CA")}`
+      );
+      console.log(
+        `[DEBUG] End of last month: ${endOfLastMonth.toLocaleDateString("en-CA")}`
+      );
+
+      // This month sessions
+      const { data: thisMonthSessions, error: thisMonthError } = await supabase
+        .from("sessions")
+        .select("*")
+        .eq("trainer_id", session.user.id)
+        .gte("date", startOfThisMonth.toLocaleDateString("en-CA"))
+        .lte("date", endOfThisMonth.toLocaleDateString("en-CA"));
+
+      if (thisMonthError) {
+        console.error(
+          "[DEBUG] Error fetching this month sessions:",
+          thisMonthError
+        );
+        setSessionsThisMonth(0);
+      } else {
+        console.log(`[DEBUG] This month sessions:`, thisMonthSessions);
+        console.log(
+          `[DEBUG] This month sessions count:`,
+          thisMonthSessions?.length ?? 0
+        );
+        setSessionsThisMonth(thisMonthSessions?.length ?? 0);
+      }
+
+      // Last month sessions
+      const { data: lastMonthSessions, error: lastMonthError } = await supabase
+        .from("sessions")
+        .select("*")
+        .eq("trainer_id", session.user.id)
+        .gte("date", startOfLastMonth.toLocaleDateString("en-CA"))
+        .lte("date", endOfLastMonth.toLocaleDateString("en-CA"));
+
+      if (lastMonthError) {
+        console.error(
+          "[DEBUG] Error fetching last month sessions:",
+          lastMonthError
+        );
+        setSessionsLastMonth(0);
+      } else {
+        console.log(`[DEBUG] Last month sessions:`, lastMonthSessions);
+        setSessionsLastMonth(lastMonthSessions?.length ?? 0);
+      }
+    }
+    fetchMonthlySessions();
+
+    // Fetch monthly revenue for this trainer
+    async function fetchMonthlyRevenue() {
+      // Get trainer id from session
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.user) {
+        console.log("[DEBUG] No session user found in fetchMonthlyRevenue");
+        return;
+      }
+
+      const now = new Date();
+      const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const startOfLastMonth = new Date(
+        now.getFullYear(),
+        now.getMonth() - 1,
+        1
+      );
+      const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+      const endOfThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+      console.log(
+        `[DEBUG] Fetching monthly revenue for trainer_id: ${session.user.id}`
+      );
+      console.log(
+        `[DEBUG] Revenue this month range: ${startOfThisMonth.toLocaleDateString("en-CA")} to ${endOfThisMonth.toLocaleDateString("en-CA")}`
+      );
+      console.log(
+        `[DEBUG] Revenue last month range: ${startOfLastMonth.toLocaleDateString("en-CA")} to ${endOfLastMonth.toLocaleDateString("en-CA")}`
+      );
+
+      // Debug: First, let's see ALL payments to verify we can access the table
+      const { data: allPayments, error: allPaymentsError } = await supabase
+        .from("payments")
+        .select("*");
+
+      if (allPaymentsError) {
+        console.error("[DEBUG] Error fetching all payments:", allPaymentsError);
+      } else {
+        console.log(`[DEBUG] All payments in table:`, allPayments);
+        console.log(`[DEBUG] Total payments count:`, allPayments?.length || 0);
+        if (allPayments && allPayments.length > 0) {
+          console.log(
+            `[DEBUG] Sample payment paid_at:`,
+            allPayments[0].paid_at
+          );
+          console.log(`[DEBUG] Sample payment status:`, allPayments[0].status);
+        }
+      }
+
+      // Helper to format date as YYYY-MM-DD HH:mm:ss
+      function formatDateWithTime(date: Date, isEndOfDay = false) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+
+        if (isEndOfDay) {
+          return `${year}-${month}-${day} 23:59:59`;
+        } else {
+          return `${year}-${month}-${day} 00:00:00`;
+        }
+      }
+
+      // This month revenue
+      const thisMonthStart = formatDateWithTime(startOfThisMonth);
+      const thisMonthEnd = formatDateWithTime(endOfThisMonth, true);
+      console.log(
+        `[DEBUG] Querying payments with: .gte("paid_at", "${thisMonthStart}") .lte("paid_at", "${thisMonthEnd}") .eq("status", "completed")`
+      );
+
+      const { data: thisMonthPayments, error: thisMonthError } = await supabase
+        .from("payments")
+        .select("amount")
+        .gte("paid_at", thisMonthStart)
+        .lte("paid_at", thisMonthEnd)
+        .eq("status", "completed");
+
+      if (thisMonthError) {
+        console.error(
+          "[DEBUG] Error fetching this month payments:",
+          thisMonthError
+        );
+        setRevenueThisMonth(0);
+      } else {
+        console.log(
+          `[DEBUG] This month payments raw response:`,
+          thisMonthPayments
+        );
+        console.log(
+          `[DEBUG] This month payments count:`,
+          thisMonthPayments?.length || 0
+        );
+
+        if (thisMonthPayments && thisMonthPayments.length > 0) {
+          console.log(
+            `[DEBUG] Individual payment amounts:`,
+            thisMonthPayments.map((p) => ({
+              amount: p.amount,
+              parsed: parseFloat(p.amount || 0),
+            }))
+          );
+        }
+
+        const totalThisMonth = (thisMonthPayments || []).reduce(
+          (sum, payment) => {
+            const parsedAmount = parseFloat(payment.amount || 0);
+            console.log(
+              `[DEBUG] Adding payment amount: ${payment.amount} -> parsed: ${parsedAmount}, running sum: ${sum + parsedAmount}`
+            );
+            return sum + parsedAmount;
+          },
+          0
+        );
+        console.log(`[DEBUG] This month revenue total: $${totalThisMonth}`);
+        setRevenueThisMonth(totalThisMonth);
+      }
+
+      // Last month revenue
+      const lastMonthStart = formatDateWithTime(startOfLastMonth);
+      const lastMonthEnd = formatDateWithTime(endOfLastMonth, true);
+      console.log(
+        `[DEBUG] Querying last month payments with: .gte("paid_at", "${lastMonthStart}") .lte("paid_at", "${lastMonthEnd}") .eq("status", "completed")`
+      );
+
+      const { data: lastMonthPayments, error: lastMonthError } = await supabase
+        .from("payments")
+        .select("amount")
+        .gte("paid_at", lastMonthStart)
+        .lte("paid_at", lastMonthEnd)
+        .eq("status", "completed");
+
+      if (lastMonthError) {
+        console.error(
+          "[DEBUG] Error fetching last month payments:",
+          lastMonthError
+        );
+        setRevenueLastMonth(0);
+      } else {
+        console.log(
+          `[DEBUG] Last month payments raw response:`,
+          lastMonthPayments
+        );
+        console.log(
+          `[DEBUG] Last month payments count:`,
+          lastMonthPayments?.length || 0
+        );
+
+        if (lastMonthPayments && lastMonthPayments.length > 0) {
+          console.log(
+            `[DEBUG] Individual last month payment amounts:`,
+            lastMonthPayments.map((p) => ({
+              amount: p.amount,
+              parsed: parseFloat(p.amount || 0),
+            }))
+          );
+        }
+
+        const totalLastMonth = (lastMonthPayments || []).reduce(
+          (sum, payment) => {
+            const parsedAmount = parseFloat(payment.amount || 0);
+            console.log(
+              `[DEBUG] Adding last month payment amount: ${payment.amount} -> parsed: ${parsedAmount}, running sum: ${sum + parsedAmount}`
+            );
+            return sum + parsedAmount;
+          },
+          0
+        );
+        console.log(`[DEBUG] Last month revenue total: $${totalLastMonth}`);
+        setRevenueLastMonth(totalLastMonth);
+      }
+    }
+    fetchMonthlyRevenue();
+
+    // Fetch pending payments
+    async function fetchPendingPayments() {
+      console.log(`[DEBUG] Fetching pending payments...`);
+
+      const { data: pendingPayments, error: pendingError } = await supabase
+        .from("payments")
+        .select("amount")
+        .eq("status", "pending");
+
+      if (pendingError) {
+        console.error("[DEBUG] Error fetching pending payments:", pendingError);
+        setPendingPaymentsCount(0);
+        setPendingPaymentsAmount(0);
+      } else {
+        console.log(`[DEBUG] Pending payments:`, pendingPayments);
+        console.log(
+          `[DEBUG] Pending payments count:`,
+          pendingPayments?.length || 0
+        );
+
+        const totalPendingAmount = (pendingPayments || []).reduce(
+          (sum, payment) => {
+            const parsedAmount = parseFloat(payment.amount || 0);
+            console.log(
+              `[DEBUG] Adding pending payment amount: ${payment.amount} -> parsed: ${parsedAmount}, running sum: ${sum + parsedAmount}`
+            );
+            return sum + parsedAmount;
+          },
+          0
+        );
+
+        console.log(`[DEBUG] Total pending amount: $${totalPendingAmount}`);
+        setPendingPaymentsCount(pendingPayments?.length || 0);
+        setPendingPaymentsAmount(totalPendingAmount);
+      }
+    }
+    fetchPendingPayments();
+  }, [supabase]);
 
   const handleContractComplete = useCallback(async () => {
     setUserStatus((prev) => ({ ...prev, contractAccepted: true }));
@@ -397,9 +847,16 @@ export default function TrainerDashboard() {
                   <Users className="h-4 w-4 text-red-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">12</div>
+                  <div className="text-2xl font-bold">
+                    {totalClients !== null ? (
+                      totalClients
+                    ) : (
+                      <span className="text-gray-400">--</span>
+                    )}
+                  </div>
                   <p className="text-xs text-muted-foreground">
-                    +2 from last month
+                    {clientsThisMonth - clientsLastMonth >= 0 ? "+" : ""}
+                    {clientsThisMonth - clientsLastMonth} from last month
                   </p>
                 </CardContent>
               </Card>
@@ -411,9 +868,11 @@ export default function TrainerDashboard() {
                   <Clock className="h-4 w-4 text-red-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">5</div>
+                  <div className="text-2xl font-bold">
+                    {todaysSessions.length}
+                  </div>
                   <p className="text-xs text-muted-foreground">
-                    3 completed, 2 upcoming
+                    {completedSessions} completed, {upcomingSessions} upcoming
                   </p>
                 </CardContent>
               </Card>
@@ -425,9 +884,10 @@ export default function TrainerDashboard() {
                   <BarChart3 className="h-4 w-4 text-red-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">18</div>
+                  <div className="text-2xl font-bold">{sessionsThisMonth}</div>
                   <p className="text-xs text-muted-foreground">
-                    +3 from last month
+                    {sessionsThisMonth - sessionsLastMonth >= 0 ? "+" : ""}
+                    {sessionsThisMonth - sessionsLastMonth} from last month
                   </p>
                 </CardContent>
               </Card>
@@ -439,9 +899,23 @@ export default function TrainerDashboard() {
                   <DollarSign className="h-4 w-4 text-red-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">$3,240</div>
+                  <div className="text-2xl font-bold">
+                    ${revenueThisMonth.toLocaleString()}
+                  </div>
                   <p className="text-xs text-muted-foreground">
-                    +12% from last month
+                    {revenueLastMonth > 0 ? (
+                      <>
+                        {revenueThisMonth >= revenueLastMonth ? "+" : ""}
+                        {Math.round(
+                          ((revenueThisMonth - revenueLastMonth) /
+                            revenueLastMonth) *
+                            100
+                        )}
+                        % from last month
+                      </>
+                    ) : (
+                      "No revenue last month"
+                    )}
                   </p>
                 </CardContent>
               </Card>
@@ -450,11 +924,15 @@ export default function TrainerDashboard() {
                   <CardTitle className="text-sm font-medium">
                     Pending Payments
                   </CardTitle>
-                  <CreditCard className="h-4 w-4 text-red-600" />
+                  <Clock className="h-4 w-4 text-yellow-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">$420</div>
-                  <p className="text-xs text-muted-foreground">2 clients</p>
+                  <div className="text-2xl font-bold">
+                    {pendingPaymentsCount}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    ${pendingPaymentsAmount.toLocaleString()} total pending
+                  </p>
                 </CardContent>
               </Card>
             </div>
@@ -465,6 +943,10 @@ export default function TrainerDashboard() {
                 <CardTitle className="flex items-center space-x-2">
                   <Calendar className="h-5 w-5 text-red-600" />
                   <span>Today's Schedule</span>
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    ({todaysSessions.length} total, {completedSessions}{" "}
+                    completed, {upcomingSessions} upcoming)
+                  </span>
                 </CardTitle>
                 <CardDescription>
                   Manage your sessions for today
@@ -472,49 +954,45 @@ export default function TrainerDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {mockSessions.map((session) => (
-                    <div
-                      key={session.id}
-                      className="flex items-center justify-between p-4 border rounded-lg"
-                    >
-                      <div className="flex items-center space-x-4">
-                        <div className="text-center">
-                          <p className="font-medium">{session.time}</p>
-                          <p className="text-sm text-gray-500">
-                            {session.date}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="font-medium">{session.client}</p>
-                          <p className="text-sm text-gray-500">
-                            {session.type}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Badge
-                          variant={
-                            session.status === "scheduled"
-                              ? "default"
-                              : "destructive"
-                          }
-                        >
-                          {session.status === "scheduled"
-                            ? "Scheduled"
-                            : "Payment Due"}
-                        </Badge>
-                        {session.status === "scheduled" && (
-                          <Button
-                            size="sm"
-                            className="bg-green-600 hover:bg-green-700"
-                          >
-                            <CheckCircle className="h-4 w-4 mr-1" />
-                            Complete
-                          </Button>
-                        )}
-                      </div>
+                  {todaysSessions.length === 0 ? (
+                    <div className="text-center text-gray-400">
+                      No sessions scheduled for today.
                     </div>
-                  ))}
+                  ) : (
+                    todaysSessions.map((session) => (
+                      <div
+                        key={session.id}
+                        className="flex items-center justify-between p-4 border rounded-lg"
+                      >
+                        <div className="flex items-center space-x-4">
+                          <div className="text-center">
+                            <p className="font-medium">{session.start_time}</p>
+                            <p className="text-sm text-gray-500">
+                              {session.date}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="font-medium">{session.type}</p>
+                            <p className="text-sm text-gray-500">
+                              {session.status}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Badge
+                            variant={
+                              session.status === "completed"
+                                ? "default"
+                                : "secondary"
+                            }
+                          >
+                            {session.status.charAt(0).toUpperCase() +
+                              session.status.slice(1)}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </CardContent>
             </Card>

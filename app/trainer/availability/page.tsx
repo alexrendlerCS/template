@@ -486,7 +486,7 @@ function SaveFooter({
   isSaving: boolean;
 }) {
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg p-4 z-50">
+    <div className="sticky bottom-0 bg-white border-t shadow-lg p-4 z-50">
       <div className="container max-w-7xl mx-auto">
         <Button
           onClick={onSave}
@@ -835,7 +835,7 @@ export default function TrainerAvailabilityPage() {
     <SidebarProvider>
       <div className="flex min-h-screen w-full">
         <TrainerSidebar />
-        <div className="flex-1 pb-20">
+        <div className="flex-1 flex flex-col min-h-screen">
           <header className="border-b bg-white px-6 py-4">
             <div className="flex items-center space-x-4">
               <SidebarTrigger />
@@ -845,7 +845,7 @@ export default function TrainerAvailabilityPage() {
             </div>
           </header>
 
-          <main className="container max-w-7xl mx-auto p-6 space-y-8">
+          <main className="container max-w-7xl mx-auto p-6 space-y-8 flex-grow">
             <section aria-label="Blocked time slots" className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
