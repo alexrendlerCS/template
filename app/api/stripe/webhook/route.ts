@@ -214,8 +214,8 @@ export async function POST(req: Request) {
             // Always add sessions to the most recent package
             const newSessionCount =
               existingPackage.sessions_included + sessionsIncluded;
-            const newOriginalSessions =
-              existingPackage.original_sessions + sessionsIncluded;
+            // Don't update original_sessions - it should remain the original value
+            // Only update sessions_included to add the new sessions
 
             console.log("📝 Attempting package update:", {
               packageId: existingPackage.id,
@@ -223,7 +223,6 @@ export async function POST(req: Request) {
               addingSessions: sessionsIncluded,
               newTotal: newSessionCount,
               currentOriginal: existingPackage.original_sessions,
-              newOriginal: newOriginalSessions,
               transactionId: session.id,
             });
 
@@ -232,7 +231,6 @@ export async function POST(req: Request) {
                 .from("packages")
                 .update({
                   sessions_included: newSessionCount,
-                  original_sessions: newOriginalSessions,
                   transaction_id: session.id,
                   purchase_date: currentDate,
                 })
@@ -277,7 +275,7 @@ export async function POST(req: Request) {
               .insert({
                 client_id: session.metadata.user_id,
                 package_type: session.metadata.package_type,
-                sessions_included: sessionsIncluded,
+                sessions_included: 0, // Start with 0 sessions to avoid double-counting
                 original_sessions: originalSessions,
                 is_prorated: isProrated,
                 sessions_used: 0,
@@ -295,16 +293,84 @@ export async function POST(req: Request) {
                 error: createError,
                 attemptedSessions: sessionsIncluded,
               });
-              console.warn(
-                "⚠️ Package creation failed but payment was recorded"
-              );
+
+              // If it's a duplicate key error, try to find the existing package
+              if (createError.code === "23505") {
+                console.log(
+                  "🔄 Duplicate package detected, looking for existing package..."
+                );
+
+                const { data: existingPackageByCriteria, error: findError } =
+                  await supabaseAdmin
+                    .from("packages")
+                    .select("*")
+                    .eq("client_id", session.metadata.user_id)
+                    .eq("package_type", session.metadata.package_type)
+                    .eq("purchase_date", currentDate)
+                    .eq("sessions_included", sessionsIncluded)
+                    .single();
+
+                if (findError) {
+                  console.error(
+                    "❌ Error finding existing package:",
+                    findError
+                  );
+                } else if (existingPackageByCriteria) {
+                  console.log(
+                    "✅ Found existing package for duplicate transaction:",
+                    {
+                      packageId: existingPackageByCriteria.id,
+                      transactionId: existingPackageByCriteria.transaction_id,
+                    }
+                  );
+                  packageId = existingPackageByCriteria.id;
+                }
+              }
+
+              if (!packageId) {
+                console.warn(
+                  "⚠️ Package creation failed and no existing package found"
+                );
+              }
             } else {
-              console.log("✅ Successfully created package:", {
+              console.log("✅ Successfully created package with 0 sessions:", {
                 id: newPackage.id,
                 sessions: newPackage.sessions_included,
                 type: newPackage.package_type,
                 operation: "create",
               });
+
+              // Now add the sessions to the newly created package
+              console.log("🔄 Adding sessions to newly created package:", {
+                packageId: newPackage.id,
+                addingSessions: sessionsIncluded,
+              });
+
+              const { data: updatedPackage, error: updateError } =
+                await supabaseAdmin
+                  .from("packages")
+                  .update({
+                    sessions_included: sessionsIncluded,
+                    original_sessions: originalSessions,
+                  })
+                  .eq("id", newPackage.id)
+                  .select()
+                  .single();
+
+              if (updateError) {
+                console.error("❌ Failed to add sessions to new package:", {
+                  error: updateError,
+                  packageId: newPackage.id,
+                  attemptedSessions: sessionsIncluded,
+                });
+              } else {
+                console.log("✅ Successfully added sessions to new package:", {
+                  id: updatedPackage.id,
+                  oldSessions: newPackage.sessions_included,
+                  newSessions: updatedPackage.sessions_included,
+                });
+              }
+
               packageId = newPackage.id;
             }
           }
@@ -317,11 +383,36 @@ export async function POST(req: Request) {
               : sessionsIncluded,
           });
 
-          // After package creation/update, update the payment record
-          if (packageId) {
-            console.log("💳 Updating payment record with package ID:", {
+          // After package creation/update, create or update the payment record
+          // Note: We'll create the payment record even if packageId is undefined
+          // to ensure all successful payments are recorded
+          console.log("💳 Processing payment record:", {
+            packageId,
+            transactionId: session.id,
+            packageType: session.metadata.package_type,
+            amount: session.amount_total ? session.amount_total / 100 : 0,
+          });
+
+          // First, check if payment record already exists
+          const { data: existingPayment, error: paymentCheckError } =
+            await supabaseAdmin
+              .from("payments")
+              .select("*")
+              .eq("transaction_id", session.id)
+              .single();
+
+          if (paymentCheckError && paymentCheckError.code !== "PGRST116") {
+            console.error(
+              "❌ Error checking existing payment:",
+              paymentCheckError
+            );
+          }
+
+          if (existingPayment) {
+            // Update existing payment record
+            console.log("💳 Updating existing payment record:", {
+              paymentId: existingPayment.id,
               packageId,
-              transactionId: session.id,
               packageType: session.metadata.package_type,
             });
 
@@ -329,7 +420,7 @@ export async function POST(req: Request) {
               .from("payments")
               .update({
                 package_id: packageId,
-                package_type: session.metadata.package_type, // Ensure package_type is set during update
+                package_type: session.metadata.package_type,
               })
               .eq("transaction_id", session.id);
 
@@ -339,6 +430,49 @@ export async function POST(req: Request) {
                 transactionId: session.id,
                 packageId,
                 packageType: session.metadata.package_type,
+              });
+            } else {
+              console.log("✅ Successfully updated payment record");
+            }
+          } else {
+            // Create new payment record
+            console.log("💳 Creating new payment record:", {
+              clientId: session.metadata.user_id,
+              transactionId: session.id,
+              amount: session.amount_total ? session.amount_total / 100 : 0,
+              sessionCount: sessionsIncluded,
+              packageType: session.metadata.package_type,
+              packageId,
+            });
+
+            const { data: newPayment, error: paymentCreateError } =
+              await supabaseAdmin
+                .from("payments")
+                .insert({
+                  client_id: session.metadata.user_id,
+                  transaction_id: session.id,
+                  amount: session.amount_total ? session.amount_total / 100 : 0,
+                  session_count: sessionsIncluded,
+                  status: "completed",
+                  paid_at: currentDate,
+                  package_id: packageId,
+                  package_type: session.metadata.package_type,
+                })
+                .select()
+                .single();
+
+            if (paymentCreateError) {
+              console.error("❌ Failed to create payment record:", {
+                error: paymentCreateError,
+                transactionId: session.id,
+                packageId,
+                packageType: session.metadata.package_type,
+              });
+            } else {
+              console.log("✅ Successfully created payment record:", {
+                paymentId: newPayment.id,
+                amount: newPayment.amount,
+                sessionCount: newPayment.session_count,
               });
             }
           }

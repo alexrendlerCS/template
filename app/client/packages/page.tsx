@@ -238,7 +238,7 @@ function PackagesContent() {
         .from("payments")
         .select("*")
         .eq("client_id", user.id)
-        .order("paid_at", { ascending: false });
+        .order("id", { ascending: false }); // Order by ID to get the most recent payment
 
       if (paymentError) {
         console.error("❌ Error fetching latest payment:", paymentError);
@@ -278,22 +278,50 @@ function PackagesContent() {
       let packageType = latestPayment.package_type;
       if (!packageType && latestPayment) {
         console.log("🔍 Package type is null, looking up in packages table...");
-        const { data: relatedPackage } = await supabase
-          .from("packages")
-          .select("package_type")
-          .eq("client_id", user.id)
-          .eq("sessions_included", latestPayment.session_count)
-          .eq(
-            "purchase_date",
-            new Date(latestPayment.paid_at).toISOString().split("T")[0]
-          )
-          .single();
+
+        // First try to find by transaction_id (most reliable)
+        let relatedPackage = null;
+        if (latestPayment.transaction_id) {
+          const { data: packageByTransaction } = await supabase
+            .from("packages")
+            .select("package_type")
+            .eq("transaction_id", latestPayment.transaction_id)
+            .single();
+
+          if (packageByTransaction) {
+            console.log(
+              "✅ Found package type by transaction_id:",
+              packageByTransaction.package_type
+            );
+            relatedPackage = packageByTransaction;
+          }
+        }
+
+        // If not found by transaction_id, try by session count and date (fallback)
+        if (!relatedPackage) {
+          const { data: packageByCriteria } = await supabase
+            .from("packages")
+            .select("package_type")
+            .eq("client_id", user.id)
+            .eq("sessions_included", latestPayment.session_count)
+            .eq(
+              "purchase_date",
+              new Date(latestPayment.paid_at).toISOString().split("T")[0]
+            )
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .single();
+
+          if (packageByCriteria) {
+            console.log(
+              "✅ Found package type by session count and date:",
+              packageByCriteria.package_type
+            );
+            relatedPackage = packageByCriteria;
+          }
+        }
 
         if (relatedPackage) {
-          console.log(
-            "✅ Found package type from packages table:",
-            relatedPackage.package_type
-          );
           packageType = relatedPackage.package_type;
         }
       }
