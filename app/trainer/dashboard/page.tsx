@@ -1289,7 +1289,7 @@ export default function TrainerDashboard() {
                         className="pl-10"
                       />
                     </div>
-                    <div className="space-y-3">
+                    <div className="space-y-3 max-h-96 overflow-y-auto">
                       {clientsWithSessions
                         .filter(
                           (client) =>
