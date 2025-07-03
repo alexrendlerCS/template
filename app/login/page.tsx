@@ -89,36 +89,123 @@ export default function LoginPage() {
     setIsLoading(true);
     setStatusMessage({ type: null, message: "" });
 
+    // Validate input fields
+    if (!loginData.email.trim()) {
+      setStatusMessage({
+        type: "error",
+        message: "Please enter your email address.",
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    if (!loginData.password.trim()) {
+      setStatusMessage({
+        type: "error",
+        message: "Please enter your password.",
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(loginData.email)) {
+      setStatusMessage({
+        type: "error",
+        message: "Please enter a valid email address.",
+      });
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const { error } = await supabase.auth.signInWithPassword({
         email: loginData.email,
         password: loginData.password,
       });
 
-      if (error) throw error;
+      if (error) {
+        // Handle specific authentication errors
+        let errorMessage = "Failed to log in";
+
+        if (error.message === "Invalid login credentials") {
+          errorMessage = "Invalid email or password. Please try again.";
+        } else if (error.message.includes("Email not confirmed")) {
+          errorMessage =
+            "Please check your email and confirm your account before signing in.";
+        } else if (error.message.includes("Too many requests")) {
+          errorMessage = "Too many login attempts. Please try again later.";
+        } else if (error.message.includes("User not found")) {
+          errorMessage =
+            "No account found with this email address. Please check your email or create a new account.";
+        } else if (error.message.includes("Account disabled")) {
+          errorMessage =
+            "Your account has been disabled. Please contact support for assistance.";
+        } else if (error.message.includes("Password expired")) {
+          errorMessage =
+            "Your password has expired. Please reset your password.";
+        } else if (error.message.includes("Invalid email")) {
+          errorMessage = "Please enter a valid email address.";
+        } else {
+          errorMessage = error.message;
+        }
+
+        setStatusMessage({
+          type: "error",
+          message: errorMessage,
+        });
+        return;
+      }
 
       // Get user's role from the database
       const { data: userData, error: userError } = await supabase
         .from("users")
-        .select("role")
+        .select("role, full_name")
         .eq("email", loginData.email)
         .single();
 
       if (userError) {
-        throw new Error("Failed to fetch user role");
+        console.error("Error fetching user role:", userError);
+        setStatusMessage({
+          type: "error",
+          message: "Failed to fetch user information. Please try again.",
+        });
+        return;
+      }
+
+      // Check if user exists in the users table
+      if (!userData) {
+        setStatusMessage({
+          type: "error",
+          message: "User account not found. Please contact support.",
+        });
+        return;
+      }
+
+      // Validate role-based login
+      if (userData.role !== userType) {
+        const correctRole = userData.role === "trainer" ? "Trainer" : "Client";
+        const selectedRole = userType === "trainer" ? "Trainer" : "Client";
+
+        setStatusMessage({
+          type: "error",
+          message: `You are trying to sign in as a ${selectedRole}, but your account is registered as a ${correctRole}. Please select the correct account type and try again.`,
+        });
+        return;
       }
 
       // Redirect based on role
       const redirectTo =
-        userData?.role === "trainer"
+        userData.role === "trainer"
           ? "/trainer/dashboard"
           : "/client/dashboard";
       router.push(redirectTo);
     } catch (error) {
-      console.error("Error logging in:", error);
+      console.error("Unexpected error during login:", error);
       setStatusMessage({
         type: "error",
-        message: error instanceof Error ? error.message : "Failed to log in",
+        message: "An unexpected error occurred. Please try again.",
       });
     } finally {
       setIsLoading(false);
@@ -293,12 +380,16 @@ export default function LoginPage() {
                       className="pl-10"
                       required
                       value={loginData.email}
-                      onChange={(e) =>
+                      onChange={(e) => {
                         setLoginData((prev) => ({
                           ...prev,
                           email: e.target.value,
-                        }))
-                      }
+                        }));
+                        // Clear error message when user starts typing
+                        if (statusMessage.type === "error") {
+                          setStatusMessage({ type: null, message: "" });
+                        }
+                      }}
                     />
                   </div>
                 </div>
@@ -314,12 +405,16 @@ export default function LoginPage() {
                       className="pl-10"
                       required
                       value={loginData.password}
-                      onChange={(e) =>
+                      onChange={(e) => {
                         setLoginData((prev) => ({
                           ...prev,
                           password: e.target.value,
-                        }))
-                      }
+                        }));
+                        // Clear error message when user starts typing
+                        if (statusMessage.type === "error") {
+                          setStatusMessage({ type: null, message: "" });
+                        }
+                      }}
                     />
                   </div>
                 </div>

@@ -1,13 +1,19 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
-import { TrainerSidebar } from "@/components/trainer-sidebar"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { useState, useEffect, useCallback, useRef } from "react";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { TrainerSidebar } from "@/components/trainer-sidebar";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Dialog,
   DialogContent,
@@ -15,8 +21,33 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"
-import { Users, Search, Plus, Mail, Phone, Calendar, DollarSign, MoreHorizontal, MessageSquare } from "lucide-react"
+} from "@/components/ui/dialog";
+import {
+  Users,
+  Search,
+  Plus,
+  Mail,
+  Phone,
+  Calendar,
+  DollarSign,
+  MoreHorizontal,
+  MessageSquare,
+  Loader2,
+} from "lucide-react";
+import { createClient } from "@/lib/supabaseClient";
+import { useRouter } from "next/navigation";
+import { startOfMonth } from "date-fns";
+
+// Interface for real client data
+interface Client {
+  id: string;
+  full_name: string;
+  email: string;
+  avatar_url: string | null;
+  google_account_connected: boolean;
+  contract_accepted: boolean;
+  created_at: string;
+}
 
 const mockClients = [
   {
@@ -89,43 +120,185 @@ const mockClients = [
     totalSpent: 1800,
     avatar: "/placeholder.svg?height=40&width=40",
   },
-]
+];
 
 export default function TrainerClientsPage() {
-  const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "payment_due">("all")
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "active" | "no_upcoming" | "new_this_month"
+  >("all");
+  const [clients, setClients] = useState<Client[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const supabase = createClient();
+  const router = useRouter();
+  const [clientsWithNoUpcoming, setClientsWithNoUpcoming] = useState<number>(0);
+  const [newClientsThisMonth, setNewClientsThisMonth] = useState<number>(0);
+  const sessionsDataRef = useRef<any[]>([]);
 
-  const filteredClients = mockClients.filter((client) => {
+  // Fetch clients data
+  const fetchClients = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Get current trainer's session
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.user) {
+        router.push("/login");
+        return;
+      }
+
+      // Fetch all clients with their info
+      const { data: clientsData, error: clientsError } = await supabase
+        .from("users")
+        .select(
+          `
+          id,
+          full_name,
+          email,
+          avatar_url,
+          google_account_connected,
+          contract_accepted,
+          created_at
+        `
+        )
+        .eq("role", "client")
+        .order("created_at", { ascending: false });
+
+      if (clientsError) {
+        console.error("Error fetching clients:", clientsError);
+        setError("Failed to fetch clients");
+        return;
+      }
+
+      // Process avatar URLs for each client
+      const processedClients = await Promise.all(
+        (clientsData || []).map(async (client) => {
+          let avatarUrl = client.avatar_url;
+          if (avatarUrl) {
+            const { data: publicUrl } = supabase.storage
+              .from("avatars")
+              .getPublicUrl(avatarUrl);
+            avatarUrl = publicUrl.publicUrl;
+          }
+
+          return {
+            ...client,
+            avatar_url: avatarUrl,
+          };
+        })
+      );
+
+      setClients(processedClients);
+
+      // New Clients This Month
+      const now = new Date();
+      const monthStart = startOfMonth(now);
+      setNewClientsThisMonth(
+        processedClients.filter((c) => new Date(c.created_at) >= monthStart)
+          .length
+      );
+
+      // Clients With No Upcoming Sessions
+      // Fetch all sessions for this trainer
+      console.log(
+        "[DEBUG] Client IDs:",
+        processedClients.map((c) => c.id)
+      );
+      const { data: sessionsData, error: sessionsError } = await supabase
+        .from("sessions")
+        .select("id, client_id, date")
+        .eq("trainer_id", session.user.id);
+      console.log("[DEBUG] sessionsData:", sessionsData);
+      if (sessionsError) {
+        setClientsWithNoUpcoming(0);
+      } else {
+        const today = new Date().toISOString().slice(0, 10);
+        console.log("[DEBUG] Today:", today);
+        // Map client_id to array of future sessions
+        const clientFutureSessions: Record<string, boolean> = {};
+        for (const c of processedClients) clientFutureSessions[c.id] = false;
+        (sessionsData || []).forEach((s) => {
+          if (s.date >= today) clientFutureSessions[s.client_id] = true;
+        });
+        console.log("[DEBUG] clientFutureSessions:", clientFutureSessions);
+        const noUpcomingCount = Object.values(clientFutureSessions).filter(
+          (v) => !v
+        ).length;
+        console.log(
+          "[DEBUG] Clients With No Upcoming Sessions:",
+          noUpcomingCount
+        );
+        setClientsWithNoUpcoming(noUpcomingCount);
+      }
+
+      sessionsDataRef.current = sessionsData || [];
+    } catch (error) {
+      console.error("Error in fetchClients:", error);
+      setError("An unexpected error occurred");
+    } finally {
+      setLoading(false);
+    }
+  }, [supabase, router]);
+
+  // Fetch clients on component mount
+  useEffect(() => {
+    fetchClients();
+  }, [fetchClients]);
+
+  // Filter clients based on search and status
+  const filteredClients = clients.filter((client) => {
     const matchesSearch =
-      client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.email.toLowerCase().includes(searchTerm.toLowerCase())
+      client.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.email.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesStatus = statusFilter === "all" || client.status === statusFilter
-
-    return matchesSearch && matchesStatus
-  })
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "active":
-        return "bg-green-100 text-green-800"
-      case "payment_due":
-        return "bg-red-100 text-red-800"
-      default:
-        return "bg-gray-100 text-gray-800"
+    let matchesStatus = true;
+    if (statusFilter === "active") {
+      matchesStatus = client.google_account_connected;
+    } else if (statusFilter === "no_upcoming") {
+      matchesStatus = !clientHasUpcomingSession(client.id);
+    } else if (statusFilter === "new_this_month") {
+      const now = new Date();
+      const monthStart = startOfMonth(now);
+      matchesStatus = new Date(client.created_at) >= monthStart;
     }
+
+    return matchesSearch && matchesStatus;
+  });
+
+  // Helper to check if a client has an upcoming session
+  function clientHasUpcomingSession(clientId: string) {
+    // Use the same logic as the stat card
+    if (!sessionsDataRef.current) return false;
+    const today = new Date().toISOString().slice(0, 10);
+    return sessionsDataRef.current.some(
+      (s) => s.client_id === clientId && s.date >= today
+    );
   }
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case "active":
-        return "Active"
-      case "payment_due":
-        return "Payment Due"
-      default:
-        return "Unknown"
+  const getStatusColor = (client: Client) => {
+    if (client.sessions_remaining === 0) {
+      return "bg-red-100 text-red-800";
+    } else if (client.google_account_connected) {
+      return "bg-green-100 text-green-800";
+    } else {
+      return "bg-gray-100 text-gray-800";
     }
-  }
+  };
+
+  const getStatusText = (client: Client) => {
+    if (client.sessions_remaining === 0) {
+      return "Payment Due";
+    } else if (client.google_account_connected) {
+      return "Active";
+    } else {
+      return "Inactive";
+    }
+  };
 
   return (
     <SidebarProvider>
@@ -148,12 +321,16 @@ export default function TrainerClientsPage() {
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Add New Client</DialogTitle>
-                    <DialogDescription>Add a new client to your training roster</DialogDescription>
+                    <DialogDescription>
+                      Add a new client to your training roster
+                    </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <label className="text-sm font-medium">First Name</label>
+                        <label className="text-sm font-medium">
+                          First Name
+                        </label>
                         <Input placeholder="John" />
                       </div>
                       <div className="space-y-2">
@@ -169,7 +346,9 @@ export default function TrainerClientsPage() {
                       <label className="text-sm font-medium">Phone</label>
                       <Input placeholder="+1 (555) 123-4567" />
                     </div>
-                    <Button className="w-full bg-red-600 hover:bg-red-700">Add Client</Button>
+                    <Button className="w-full bg-red-600 hover:bg-red-700">
+                      Add Client
+                    </Button>
                   </div>
                 </DialogContent>
               </Dialog>
@@ -178,13 +357,21 @@ export default function TrainerClientsPage() {
 
           <main className="p-6">
             {/* Stats Overview */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-4 gap-6 mb-8">
               <Card>
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Total Clients</p>
-                      <p className="text-2xl font-bold">{mockClients.length}</p>
+                      <p className="text-sm font-medium text-gray-600">
+                        Total Clients
+                      </p>
+                      <p className="text-2xl font-bold">
+                        {loading ? (
+                          <Loader2 className="h-6 w-6 animate-spin" />
+                        ) : (
+                          clients.length
+                        )}
+                      </p>
                     </div>
                     <Users className="h-8 w-8 text-red-600" />
                   </div>
@@ -194,8 +381,17 @@ export default function TrainerClientsPage() {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Active Clients</p>
-                      <p className="text-2xl font-bold">{mockClients.filter((c) => c.status === "active").length}</p>
+                      <p className="text-sm font-medium text-gray-600">
+                        Active Clients
+                      </p>
+                      <p className="text-2xl font-bold">
+                        {loading ? (
+                          <Loader2 className="h-6 w-6 animate-spin" />
+                        ) : (
+                          clients.filter((c) => c.google_account_connected)
+                            .length
+                        )}
+                      </p>
                     </div>
                     <Users className="h-8 w-8 text-green-600" />
                   </div>
@@ -205,12 +401,18 @@ export default function TrainerClientsPage() {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Payment Due</p>
+                      <p className="text-sm font-medium text-gray-600">
+                        New Clients This Month
+                      </p>
                       <p className="text-2xl font-bold">
-                        {mockClients.filter((c) => c.status === "payment_due").length}
+                        {loading ? (
+                          <Loader2 className="h-6 w-6 animate-spin" />
+                        ) : (
+                          newClientsThisMonth
+                        )}
                       </p>
                     </div>
-                    <DollarSign className="h-8 w-8 text-red-600" />
+                    <Users className="h-8 w-8 text-blue-600" />
                   </div>
                 </CardContent>
               </Card>
@@ -218,12 +420,18 @@ export default function TrainerClientsPage() {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Total Revenue</p>
+                      <p className="text-sm font-medium text-gray-600">
+                        Clients With No Upcoming Sessions
+                      </p>
                       <p className="text-2xl font-bold">
-                        ${mockClients.reduce((sum, c) => sum + c.totalSpent, 0).toLocaleString()}
+                        {loading ? (
+                          <Loader2 className="h-6 w-6 animate-spin" />
+                        ) : (
+                          clientsWithNoUpcoming
+                        )}
                       </p>
                     </div>
-                    <DollarSign className="h-8 w-8 text-green-600" />
+                    <Users className="h-8 w-8 text-gray-600" />
                   </div>
                 </CardContent>
               </Card>
@@ -233,7 +441,9 @@ export default function TrainerClientsPage() {
             <Card className="mb-6">
               <CardHeader>
                 <CardTitle>Client Management</CardTitle>
-                <CardDescription>Search and filter your clients</CardDescription>
+                <CardDescription>
+                  Search and filter your clients
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex flex-col sm:flex-row gap-4">
@@ -250,23 +460,54 @@ export default function TrainerClientsPage() {
                     <Button
                       variant={statusFilter === "all" ? "default" : "outline"}
                       onClick={() => setStatusFilter("all")}
-                      className={statusFilter === "all" ? "bg-red-600 hover:bg-red-700" : ""}
+                      className={
+                        statusFilter === "all"
+                          ? "bg-red-600 hover:bg-red-700"
+                          : ""
+                      }
                     >
                       All
                     </Button>
                     <Button
-                      variant={statusFilter === "active" ? "default" : "outline"}
+                      variant={
+                        statusFilter === "active" ? "default" : "outline"
+                      }
                       onClick={() => setStatusFilter("active")}
-                      className={statusFilter === "active" ? "bg-red-600 hover:bg-red-700" : ""}
+                      className={
+                        statusFilter === "active"
+                          ? "bg-red-600 hover:bg-red-700"
+                          : ""
+                      }
                     >
                       Active
                     </Button>
                     <Button
-                      variant={statusFilter === "payment_due" ? "default" : "outline"}
-                      onClick={() => setStatusFilter("payment_due")}
-                      className={statusFilter === "payment_due" ? "bg-red-600 hover:bg-red-700" : ""}
+                      variant={
+                        statusFilter === "no_upcoming" ? "default" : "outline"
+                      }
+                      onClick={() => setStatusFilter("no_upcoming")}
+                      className={
+                        statusFilter === "no_upcoming"
+                          ? "bg-red-600 hover:bg-red-700"
+                          : ""
+                      }
                     >
-                      Payment Due
+                      No Upcoming Sessions
+                    </Button>
+                    <Button
+                      variant={
+                        statusFilter === "new_this_month"
+                          ? "default"
+                          : "outline"
+                      }
+                      onClick={() => setStatusFilter("new_this_month")}
+                      className={
+                        statusFilter === "new_this_month"
+                          ? "bg-red-600 hover:bg-red-700"
+                          : ""
+                      }
+                    >
+                      New This Month
                     </Button>
                   </div>
                 </div>
@@ -279,66 +520,71 @@ export default function TrainerClientsPage() {
                 <CardTitle>Clients ({filteredClients.length})</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {filteredClients.map((client) => (
-                    <div
-                      key={client.id}
-                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      <div className="flex items-center space-x-4">
-                        <Avatar className="h-12 w-12">
-                          <AvatarImage src={client.avatar || "/placeholder.svg"} />
-                          <AvatarFallback className="bg-red-600 text-white">
-                            {client.name
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <h3 className="font-medium text-lg">{client.name}</h3>
-                          <div className="flex items-center space-x-4 text-sm text-gray-500">
-                            <div className="flex items-center space-x-1">
-                              <Mail className="h-4 w-4" />
-                              <span>{client.email}</span>
+                {loading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-red-600" />
+                    <span className="ml-2 text-gray-600">
+                      Loading clients...
+                    </span>
+                  </div>
+                ) : error ? (
+                  <div className="text-center py-8">
+                    <p className="text-red-600 mb-4">{error}</p>
+                    <Button onClick={fetchClients} variant="outline">
+                      Try Again
+                    </Button>
+                  </div>
+                ) : filteredClients.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-gray-600">No clients found</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {filteredClients.map((client) => (
+                      <div
+                        key={client.id}
+                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex items-center space-x-4">
+                          <Avatar className="h-12 w-12">
+                            <AvatarImage
+                              src={client.avatar_url || "/placeholder-user.jpg"}
+                              alt={client.full_name}
+                            />
+                            <AvatarFallback className="bg-red-600 text-white">
+                              {client.full_name
+                                .split(" ")
+                                .map((n) => n[0])
+                                .join("")}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <h3 className="font-medium text-lg">
+                              {client.full_name}
+                            </h3>
+                            <div className="flex items-center space-x-4 text-sm text-gray-500">
+                              <div className="flex items-center space-x-1">
+                                <Mail className="h-4 w-4" />
+                                <span>{client.email}</span>
+                              </div>
                             </div>
-                            <div className="flex items-center space-x-1">
-                              <Phone className="h-4 w-4" />
-                              <span>{client.phone}</span>
+                            <div className="flex items-center space-x-4 text-sm text-gray-500 mt-1">
+                              <span>
+                                Joined:{" "}
+                                {new Date(
+                                  client.created_at
+                                ).toLocaleDateString()}
+                              </span>
                             </div>
                           </div>
-                          <div className="flex items-center space-x-4 text-sm text-gray-500 mt-1">
-                            <span>Joined: {new Date(client.joinDate).toLocaleDateString()}</span>
-                            <span>Total spent: ${client.totalSpent}</span>
-                          </div>
                         </div>
-                      </div>
-
-                      <div className="flex items-center space-x-6">
-                        <div className="text-center">
-                          <p className="text-sm text-gray-500">Sessions</p>
-                          <p className="font-medium">
-                            {client.sessionsRemaining}/{client.totalSessions}
-                          </p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-sm text-gray-500">Last Session</p>
-                          <p className="font-medium">{new Date(client.lastSession).toLocaleDateString()}</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-sm text-gray-500">Next Session</p>
-                          <p className="font-medium">
-                            {client.nextSession ? new Date(client.nextSession).toLocaleDateString() : "Not scheduled"}
-                          </p>
-                        </div>
-                        <div className="flex items-center space-x-3">
-                          <Badge className={getStatusColor(client.status)}>{getStatusText(client.status)}</Badge>
+                        <div className="flex items-center space-x-6">
+                          <Badge className={getStatusColor(client)}>
+                            {getStatusText(client)}
+                          </Badge>
                           <div className="flex space-x-1">
                             <Button size="sm" variant="outline">
                               <MessageSquare className="h-4 w-4" />
-                            </Button>
-                            <Button size="sm" variant="outline">
-                              <Calendar className="h-4 w-4" />
                             </Button>
                             <Button size="sm" variant="outline">
                               <MoreHorizontal className="h-4 w-4" />
@@ -346,14 +592,14 @@ export default function TrainerClientsPage() {
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </main>
         </div>
       </div>
     </SidebarProvider>
-  )
+  );
 }

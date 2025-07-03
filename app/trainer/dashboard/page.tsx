@@ -256,18 +256,27 @@ export default function TrainerDashboard() {
         const contractAccepted = userData.contract_accepted || false;
         const googleConnected = userData.google_account_connected || false;
 
+        // Process avatar URL to get public URL from Supabase storage
+        let avatarUrl = userData.avatar_url;
+        if (avatarUrl) {
+          const { data: publicUrl } = supabase.storage
+            .from("avatars")
+            .getPublicUrl(avatarUrl);
+          avatarUrl = publicUrl.publicUrl;
+        }
+
         console.log("Setting trainer status:", {
           contractAccepted,
           googleConnected,
           userName: userData.full_name || "",
-          avatarUrl: userData.avatar_url,
+          avatarUrl: avatarUrl,
         });
 
         setUserStatus({
           contractAccepted,
           googleConnected,
           userName: userData.full_name || "",
-          avatarUrl: userData.avatar_url,
+          avatarUrl: avatarUrl,
         });
 
         if (!contractAccepted) {
@@ -1000,6 +1009,49 @@ export default function TrainerDashboard() {
           </header>
 
           <main className="p-6 space-y-6">
+            {/* Welcome Banner */}
+            <Card className="bg-gradient-to-r from-red-600 to-red-700 text-white border-0">
+              <CardContent className="p-6">
+                <div className="flex items-center space-x-4">
+                  <Avatar className="h-16 w-16">
+                    <AvatarImage
+                      src={userStatus.avatarUrl || "/placeholder-user.jpg"}
+                      alt={userStatus.userName}
+                      onError={(e) => {
+                        console.error(
+                          "Dashboard avatar image failed to load:",
+                          e
+                        );
+                        console.log(
+                          "Attempted avatar URL:",
+                          userStatus.avatarUrl
+                        );
+                        // Force fallback to initials
+                        e.currentTarget.style.display = "none";
+                      }}
+                    />
+                    <AvatarFallback className="bg-white text-red-600 text-xl font-bold">
+                      {userStatus.userName
+                        .split(" ")
+                        .map((n: string) => n[0])
+                        .join("")
+                        .toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <h2 className="text-2xl font-bold">
+                      Welcome back, {userStatus.userName}!
+                    </h2>
+                    <p className="text-red-100">
+                      {todaysSessions.length > 0
+                        ? `You have ${todaysSessions.length} session${todaysSessions.length === 1 ? "" : "s"} scheduled for today`
+                        : "No sessions scheduled for today"}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Stats Overview */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
               <Card>
