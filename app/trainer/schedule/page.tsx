@@ -32,6 +32,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { GoogleCalendarBanner } from "@/components/GoogleCalendarBanner";
+import { createClient } from "@/lib/supabaseClient";
 
 interface GoogleEvent {
   id: string;
@@ -118,21 +119,6 @@ function getSessionType(event: GoogleEvent): string {
   return event.summary;
 }
 
-const timeSlots = [
-  "8:00 AM",
-  "9:00 AM",
-  "10:00 AM",
-  "11:00 AM",
-  "12:00 PM",
-  "1:00 PM",
-  "2:00 PM",
-  "3:00 PM",
-  "4:00 PM",
-  "5:00 PM",
-  "6:00 PM",
-  "7:00 PM",
-];
-
 const daysOfWeek = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export default function TrainerSchedulePage() {
@@ -144,6 +130,110 @@ export default function TrainerSchedulePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isGoogleConnected, setIsGoogleConnected] = useState(true);
+  const [timeSlots, setTimeSlots] = useState<string[]>([]);
+  const [trainerAvailability, setTrainerAvailability] = useState<any[]>([]);
+  const supabase = createClient();
+
+  // Function to fetch trainer availability and generate time slots
+  const fetchTrainerAvailability = async () => {
+    try {
+      // Get current trainer's session
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.user) {
+        console.error("No authenticated user found");
+        return;
+      }
+
+      console.log("🔍 Fetching trainer availability for:", session.user.id);
+
+      // Fetch trainer availability
+      const { data: availability, error } = await supabase
+        .from("trainer_availability")
+        .select("*")
+        .eq("trainer_id", session.user.id);
+
+      if (error) {
+        console.error("❌ Error fetching trainer availability:", error);
+        return;
+      }
+
+      console.log("✅ Trainer availability fetched:", availability);
+      setTrainerAvailability(availability || []);
+
+      // Generate time slots based on availability
+      if (availability && availability.length > 0) {
+        const timeSlotsSet = new Set<string>();
+
+        availability.forEach((slot) => {
+          const startTime = new Date(`2000-01-01T${slot.start_time}`);
+          const endTime = new Date(`2000-01-01T${slot.end_time}`);
+
+          // Generate hourly slots from start_time to end_time - 1 hour
+          let currentTime = new Date(startTime);
+          const endTimeMinusOneHour = new Date(
+            endTime.getTime() - 60 * 60 * 1000
+          ); // Subtract 1 hour
+
+          while (currentTime <= endTimeMinusOneHour) {
+            const timeString = currentTime.toLocaleTimeString("en-US", {
+              hour: "numeric",
+              minute: "2-digit",
+              hour12: true,
+            });
+            timeSlotsSet.add(timeString);
+            currentTime.setHours(currentTime.getHours() + 1);
+          }
+        });
+
+        // Convert to array and sort
+        const sortedTimeSlots = Array.from(timeSlotsSet).sort((a, b) => {
+          const timeA = new Date(`2000-01-01T${a}`);
+          const timeB = new Date(`2000-01-01T${b}`);
+          return timeA.getTime() - timeB.getTime();
+        });
+
+        console.log("🕐 Generated time slots:", sortedTimeSlots);
+        setTimeSlots(sortedTimeSlots);
+      } else {
+        // Fallback to default time slots if no availability found
+        const defaultTimeSlots = [
+          "8:00 AM",
+          "9:00 AM",
+          "10:00 AM",
+          "11:00 AM",
+          "12:00 PM",
+          "1:00 PM",
+          "2:00 PM",
+          "3:00 PM",
+          "4:00 PM",
+          "5:00 PM",
+          "6:00 PM",
+          "7:00 PM",
+        ];
+        setTimeSlots(defaultTimeSlots);
+      }
+    } catch (error) {
+      console.error("❌ Error in fetchTrainerAvailability:", error);
+      // Fallback to default time slots
+      const defaultTimeSlots = [
+        "8:00 AM",
+        "9:00 AM",
+        "10:00 AM",
+        "11:00 AM",
+        "12:00 PM",
+        "1:00 PM",
+        "2:00 PM",
+        "3:00 PM",
+        "4:00 PM",
+        "5:00 PM",
+        "6:00 PM",
+        "7:00 PM",
+      ];
+      setTimeSlots(defaultTimeSlots);
+    }
+  };
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -173,6 +263,7 @@ export default function TrainerSchedulePage() {
     };
 
     fetchEvents();
+    fetchTrainerAvailability();
   }, [currentDate]);
 
   const getWeekDates = (date: Date) => {
