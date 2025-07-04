@@ -1,146 +1,211 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
-import { TrainerSidebar } from "@/components/trainer-sidebar"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { DollarSign, Download, Search, Calendar, CreditCard, TrendingUp } from "lucide-react"
+import { useState, useEffect } from "react";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { TrainerSidebar } from "@/components/trainer-sidebar";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  DollarSign,
+  Download,
+  Search,
+  Calendar,
+  CreditCard,
+  TrendingUp,
+} from "lucide-react";
+import { createClient } from "@/lib/supabaseClient";
+import { startOfMonth, subMonths, endOfMonth } from "date-fns";
 
-const mockPayments = [
-  {
-    id: 1,
-    client: "Sarah Johnson",
-    date: "2024-01-10",
-    amount: 240,
-    method: "Credit Card",
-    sessionCount: 4,
-    status: "completed",
-    transactionId: "txn_1234567890",
-  },
-  {
-    id: 2,
-    client: "Mike Chen",
-    date: "2024-01-12",
-    amount: 180,
-    method: "Credit Card",
-    sessionCount: 3,
-    status: "completed",
-    transactionId: "txn_1234567891",
-  },
-  {
-    id: 3,
-    client: "Emma Davis",
-    date: "2024-01-08",
-    amount: 300,
-    method: "Bank Transfer",
-    sessionCount: 5,
-    status: "pending",
-    transactionId: "txn_1234567892",
-  },
-  {
-    id: 4,
-    client: "James Wilson",
-    date: "2024-01-05",
-    amount: 360,
-    method: "Credit Card",
-    sessionCount: 6,
-    status: "completed",
-    transactionId: "txn_1234567893",
-  },
-  {
-    id: 5,
-    client: "Lisa Rodriguez",
-    date: "2024-01-03",
-    amount: 420,
-    method: "Credit Card",
-    sessionCount: 7,
-    status: "completed",
-    transactionId: "txn_1234567894",
-  },
-  {
-    id: 6,
-    client: "David Kim",
-    date: "2024-01-01",
-    amount: 240,
-    method: "PayPal",
-    sessionCount: 4,
-    status: "failed",
-    transactionId: "txn_1234567895",
-  },
-]
+interface Payment {
+  id: string;
+  client_id: string;
+  amount: number;
+  method: string;
+  session_count: number;
+  status: string;
+  transaction_id: string;
+  paid_at: string;
+}
+
+interface ClientMap {
+  [clientId: string]: string;
+}
 
 export default function TrainerPaymentsPage() {
-  const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState<"all" | "completed" | "pending" | "failed">("all")
-  const [dateRange, setDateRange] = useState("all")
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "completed" | "pending" | "failed"
+  >("all");
+  const [dateRange, setDateRange] = useState("all");
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [clientMap, setClientMap] = useState<ClientMap>({});
+  const [loading, setLoading] = useState(true);
 
-  const filteredPayments = mockPayments.filter((payment) => {
-    const matchesSearch = payment.client.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === "all" || payment.status === statusFilter
-    return matchesSearch && matchesStatus
-  })
+  const supabase = createClient();
 
-  const totalRevenue = mockPayments.filter((p) => p.status === "completed").reduce((sum, p) => sum + p.amount, 0)
-  const pendingAmount = mockPayments.filter((p) => p.status === "pending").reduce((sum, p) => sum + p.amount, 0)
-  const completedPayments = mockPayments.filter((p) => p.status === "completed").length
-  const failedPayments = mockPayments.filter((p) => p.status === "failed").length
+  useEffect(() => {
+    async function fetchPayments() {
+      setLoading(true);
+      // Fetch all payments
+      const { data: paymentsData, error: paymentsError } = await supabase
+        .from("payments")
+        .select(
+          "id, client_id, amount, method, session_count, status, transaction_id, paid_at"
+        );
+      if (paymentsError) {
+        setPayments([]);
+        setLoading(false);
+        return;
+      }
+      setPayments(paymentsData || []);
+      // Fetch all clients referenced in payments
+      const clientIds = Array.from(
+        new Set((paymentsData || []).map((p) => p.client_id))
+      );
+      if (clientIds.length > 0) {
+        const { data: usersData } = await supabase
+          .from("users")
+          .select("id, full_name")
+          .in("id", clientIds);
+        const map: ClientMap = {};
+        (usersData || []).forEach((u) => {
+          map[u.id] = u.full_name;
+        });
+        setClientMap(map);
+      }
+      setLoading(false);
+    }
+    fetchPayments();
+  }, [supabase]);
+
+  const filteredPayments = payments.filter((payment) => {
+    const clientName = clientMap[payment.client_id] || "Unknown Client";
+    const matchesSearch = clientName
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase());
+    const matchesStatus =
+      statusFilter === "all" || payment.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  // Calculate revenue for this month and last month
+  const now = new Date();
+  const monthStart = startOfMonth(now);
+  const lastMonthStart = startOfMonth(subMonths(now, 1));
+  const lastMonthEnd = endOfMonth(subMonths(now, 1));
+
+  const revenueThisMonth = payments
+    .filter(
+      (p) =>
+        p.status === "completed" &&
+        p.paid_at &&
+        new Date(p.paid_at) >= monthStart
+    )
+    .reduce((sum, p) => sum + (p.amount || 0), 0);
+  const revenueLastMonth = payments
+    .filter(
+      (p) =>
+        p.status === "completed" &&
+        p.paid_at &&
+        new Date(p.paid_at) >= lastMonthStart &&
+        new Date(p.paid_at) <= lastMonthEnd
+    )
+    .reduce((sum, p) => sum + (p.amount || 0), 0);
+  const revenueDiff = revenueThisMonth - revenueLastMonth;
+
+  const totalRevenue = payments
+    .filter((p) => p.status === "completed")
+    .reduce((sum, p) => sum + (p.amount || 0), 0);
+  const pendingAmount = payments
+    .filter((p) => p.status === "pending")
+    .reduce((sum, p) => sum + (p.amount || 0), 0);
+  const completedPayments = payments.filter(
+    (p) => p.status === "completed"
+  ).length;
+  const failedPayments = payments.filter((p) => p.status === "failed").length;
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case "completed":
-        return "bg-green-100 text-green-800"
+        return "bg-green-100 text-green-800";
       case "pending":
-        return "bg-yellow-100 text-yellow-800"
+        return "bg-yellow-100 text-yellow-800";
       case "failed":
-        return "bg-red-100 text-red-800"
+        return "bg-red-100 text-red-800";
       default:
-        return "bg-gray-100 text-gray-800"
+        return "bg-gray-100 text-gray-800";
     }
-  }
+  };
 
   const getStatusText = (status: string) => {
     switch (status) {
       case "completed":
-        return "Completed"
+        return "Completed";
       case "pending":
-        return "Pending"
+        return "Pending";
       case "failed":
-        return "Failed"
+        return "Failed";
       default:
-        return "Unknown"
+        return "Unknown";
     }
-  }
+  };
 
   const exportToCSV = () => {
-    const headers = ["Client", "Date", "Amount", "Method", "Sessions", "Status", "Transaction ID"]
+    const headers = [
+      "Client",
+      "Date",
+      "Amount",
+      "Method",
+      "Sessions",
+      "Status",
+      "Transaction ID",
+    ];
     const csvContent = [
       headers.join(","),
       ...filteredPayments.map((payment) =>
         [
-          payment.client,
-          payment.date,
+          clientMap[payment.client_id] || "Unknown Client",
+          payment.paid_at,
           payment.amount,
           payment.method,
-          payment.sessionCount,
+          payment.session_count,
           payment.status,
-          payment.transactionId,
-        ].join(","),
+          payment.transaction_id,
+        ].join(",")
       ),
-    ].join("\n")
+    ].join("\n");
 
-    const blob = new Blob([csvContent], { type: "text/csv" })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = "payments.csv"
-    a.click()
-    window.URL.revokeObjectURL(url)
-  }
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "payments.csv";
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
 
   return (
     <SidebarProvider>
@@ -153,7 +218,10 @@ export default function TrainerPaymentsPage() {
                 <SidebarTrigger />
                 <h1 className="text-2xl font-bold text-gray-900">Payments</h1>
               </div>
-              <Button onClick={exportToCSV} className="bg-red-600 hover:bg-red-700">
+              <Button
+                onClick={exportToCSV}
+                className="bg-red-600 hover:bg-red-700"
+              >
                 <Download className="h-4 w-4 mr-2" />
                 Export CSV
               </Button>
@@ -167,9 +235,19 @@ export default function TrainerPaymentsPage() {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                      <p className="text-2xl font-bold text-green-600">${totalRevenue.toLocaleString()}</p>
-                      <p className="text-xs text-gray-500">This month</p>
+                      <p className="text-sm font-medium text-gray-600">
+                        Total Revenue
+                      </p>
+                      <p className="text-2xl font-bold text-green-600">
+                        ${revenueThisMonth.toLocaleString()}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {revenueLastMonth === 0
+                          ? "No revenue last month"
+                          : revenueDiff >= 0
+                            ? `+$${revenueDiff.toLocaleString()} from last month`
+                            : `-$${Math.abs(revenueDiff).toLocaleString()} from last month`}
+                      </p>
                     </div>
                     <DollarSign className="h-8 w-8 text-green-600" />
                   </div>
@@ -179,9 +257,15 @@ export default function TrainerPaymentsPage() {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Pending Amount</p>
-                      <p className="text-2xl font-bold text-yellow-600">${pendingAmount}</p>
-                      <p className="text-xs text-gray-500">Awaiting processing</p>
+                      <p className="text-sm font-medium text-gray-600">
+                        Pending Amount
+                      </p>
+                      <p className="text-2xl font-bold text-yellow-600">
+                        ${pendingAmount}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Awaiting processing
+                      </p>
                     </div>
                     <Calendar className="h-8 w-8 text-yellow-600" />
                   </div>
@@ -191,9 +275,15 @@ export default function TrainerPaymentsPage() {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Completed</p>
-                      <p className="text-2xl font-bold text-blue-600">{completedPayments}</p>
-                      <p className="text-xs text-gray-500">Successful payments</p>
+                      <p className="text-sm font-medium text-gray-600">
+                        Completed
+                      </p>
+                      <p className="text-2xl font-bold text-blue-600">
+                        {completedPayments}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Successful payments
+                      </p>
                     </div>
                     <CreditCard className="h-8 w-8 text-blue-600" />
                   </div>
@@ -203,8 +293,12 @@ export default function TrainerPaymentsPage() {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Failed</p>
-                      <p className="text-2xl font-bold text-red-600">{failedPayments}</p>
+                      <p className="text-sm font-medium text-gray-600">
+                        Failed
+                      </p>
+                      <p className="text-2xl font-bold text-red-600">
+                        {failedPayments}
+                      </p>
                       <p className="text-xs text-gray-500">Need attention</p>
                     </div>
                     <TrendingUp className="h-8 w-8 text-red-600" />
@@ -217,7 +311,9 @@ export default function TrainerPaymentsPage() {
             <Card className="mb-6">
               <CardHeader>
                 <CardTitle>Payment Filters</CardTitle>
-                <CardDescription>Search and filter payment records</CardDescription>
+                <CardDescription>
+                  Search and filter payment records
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex flex-col sm:flex-row gap-4">
@@ -230,7 +326,10 @@ export default function TrainerPaymentsPage() {
                       className="pl-10"
                     />
                   </div>
-                  <Select value={statusFilter} onValueChange={(value: any) => setStatusFilter(value)}>
+                  <Select
+                    value={statusFilter}
+                    onValueChange={(value: any) => setStatusFilter(value)}
+                  >
                     <SelectTrigger className="w-48">
                       <SelectValue placeholder="Filter by status" />
                     </SelectTrigger>
@@ -260,8 +359,12 @@ export default function TrainerPaymentsPage() {
             {/* Payments Table */}
             <Card>
               <CardHeader>
-                <CardTitle>Payment Records ({filteredPayments.length})</CardTitle>
-                <CardDescription>Complete history of all payment transactions</CardDescription>
+                <CardTitle>
+                  Payment Records ({filteredPayments.length})
+                </CardTitle>
+                <CardDescription>
+                  Complete history of all payment transactions
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <Table>
@@ -280,22 +383,35 @@ export default function TrainerPaymentsPage() {
                   <TableBody>
                     {filteredPayments.map((payment) => (
                       <TableRow key={payment.id}>
-                        <TableCell className="font-medium">{payment.client}</TableCell>
-                        <TableCell>{new Date(payment.date).toLocaleDateString()}</TableCell>
-                        <TableCell className="font-bold">${payment.amount}</TableCell>
-                        <TableCell>{payment.method}</TableCell>
-                        <TableCell>{payment.sessionCount}</TableCell>
-                        <TableCell>
-                          <Badge className={getStatusColor(payment.status)}>{getStatusText(payment.status)}</Badge>
+                        <TableCell className="font-medium">
+                          {clientMap[payment.client_id] || "Unknown Client"}
                         </TableCell>
-                        <TableCell className="font-mono text-sm">{payment.transactionId}</TableCell>
+                        <TableCell>
+                          {new Date(payment.paid_at).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell className="font-bold">
+                          ${payment.amount}
+                        </TableCell>
+                        <TableCell>{payment.method}</TableCell>
+                        <TableCell>{payment.session_count}</TableCell>
+                        <TableCell>
+                          <Badge className={getStatusColor(payment.status)}>
+                            {getStatusText(payment.status)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">
+                          {payment.transaction_id}
+                        </TableCell>
                         <TableCell>
                           <div className="flex space-x-2">
                             <Button size="sm" variant="outline">
                               View
                             </Button>
                             {payment.status === "failed" && (
-                              <Button size="sm" className="bg-red-600 hover:bg-red-700">
+                              <Button
+                                size="sm"
+                                className="bg-red-600 hover:bg-red-700"
+                              >
                                 Retry
                               </Button>
                             )}
@@ -312,9 +428,12 @@ export default function TrainerPaymentsPage() {
             <Card className="mt-6 border-dashed border-2 border-gray-300">
               <CardContent className="p-6 text-center">
                 <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="font-medium text-gray-900 mb-2">Stripe Integration</h3>
+                <h3 className="font-medium text-gray-900 mb-2">
+                  Stripe Integration
+                </h3>
                 <p className="text-gray-600 mb-4">
-                  Connect your Stripe account to automatically track payments and generate invoices
+                  Connect your Stripe account to automatically track payments
+                  and generate invoices
                 </p>
                 <Button variant="outline" disabled>
                   Connect Stripe Account (Coming Soon)
@@ -325,5 +444,5 @@ export default function TrainerPaymentsPage() {
         </div>
       </div>
     </SidebarProvider>
-  )
+  );
 }
