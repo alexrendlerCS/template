@@ -500,60 +500,60 @@ export function TrainerSidebar() {
 
   return (
     <>
-      <Sidebar>
-        <SidebarHeader className="border-b border-sidebar-border">
-          <div className="flex items-center space-x-3 px-2 py-2">
-            <Image
-              src="/logo.jpg"
-              alt="Fitness Trainer Logo"
-              width={36}
-              height={36}
-              className="rounded-full shadow"
-              priority
-            />
-            <div>
-              <h2 className="font-bold text-sidebar-foreground">
-                Fitness Trainer
-              </h2>
+    <Sidebar>
+      <SidebarHeader className="border-b border-sidebar-border">
+        <div className="flex items-center space-x-3 px-2 py-2">
+          <Image
+            src="/logo.jpg"
+            alt="Fitness Trainer Logo"
+            width={36}
+            height={36}
+            className="rounded-full shadow"
+            priority
+          />
+          <div>
+            <h2 className="font-bold text-sidebar-foreground">
+              Fitness Trainer
+            </h2>
               <p className="text-xs text-sidebar-foreground/70">
                 Trainer Portal
               </p>
-            </div>
           </div>
-        </SidebarHeader>
+        </div>
+      </SidebarHeader>
 
-        <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupLabel>Navigation</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {menuItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={pathname === item.url}
-                      className="w-full"
-                    >
-                      <Link href={item.url}>
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {menuItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === item.url}
+                    className="w-full"
+                  >
+                    <Link href={item.url}>
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
                         {item.badge && (
                           <span className="ml-2 text-xs text-gray-500">
                             {item.badge}
                           </span>
                         )}
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
 
-          <SidebarGroup>
+        <SidebarGroup>
             <SidebarGroupLabel>General</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
+          <SidebarGroupContent>
+            <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
@@ -565,31 +565,31 @@ export function TrainerSidebar() {
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={pathname === "/trainer/settings"}
-                  >
-                    <Link href="/trainer/settings">
-                      <Settings className="h-4 w-4" />
-                      <span>Settings</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        </SidebarContent>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={pathname === "/trainer/settings"}
+                >
+                  <Link href="/trainer/settings">
+                    <Settings className="h-4 w-4" />
+                    <span>Settings</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
 
-        <SidebarFooter>
-          <SidebarMenu>
-            <SidebarMenuItem>
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
               <SidebarMenuButton
                 onClick={() => setIsSettingsOpen(true)}
                 className="w-full"
               >
-                <div className="flex items-center space-x-3 px-2 py-2">
-                  <Avatar className="h-8 w-8">
+            <div className="flex items-center space-x-3 px-2 py-2">
+              <Avatar className="h-8 w-8">
                     <AvatarImage
                       src={
                         previewUrl ||
@@ -598,32 +598,32 @@ export function TrainerSidebar() {
                       }
                       alt={userData.full_name}
                     />
-                    <AvatarFallback className="bg-red-600 text-white text-sm">
+                <AvatarFallback className="bg-red-600 text-white text-sm">
                       {initials}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-sidebar-foreground truncate">
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-sidebar-foreground truncate">
                       {userData.full_name || "Trainer"}
-                    </p>
-                    <p className="text-xs text-sidebar-foreground/70 truncate">
+                </p>
+                <p className="text-xs text-sidebar-foreground/70 truncate">
                       {userData.email || "trainer@example.com"}
-                    </p>
-                  </div>
-                </div>
+                </p>
+              </div>
+            </div>
               </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton onClick={handleSignOut}>
-                <LogOut className="h-4 w-4" />
-                <span>Sign Out</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarFooter>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton onClick={handleSignOut}>
+              <LogOut className="h-4 w-4" />
+              <span>Sign Out</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
 
-        <SidebarRail />
-      </Sidebar>
+      <SidebarRail />
+    </Sidebar>
 
       {/* Account Settings Modal */}
       <Dialog

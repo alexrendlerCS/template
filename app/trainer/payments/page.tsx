@@ -66,6 +66,16 @@ export default function TrainerPaymentsPage() {
 
   const supabase = createClient();
 
+  // Handle client search from URL query parameter
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const clientParam = urlParams.get("client");
+    if (clientParam) {
+      const decodedClient = decodeURIComponent(clientParam);
+      setSearchTerm(decodedClient);
+    }
+  }, []);
+
   useEffect(() => {
     async function fetchPayments() {
       setLoading(true);
@@ -421,23 +431,6 @@ export default function TrainerPaymentsPage() {
                     ))}
                   </TableBody>
                 </Table>
-              </CardContent>
-            </Card>
-
-            {/* Stripe Integration Placeholder */}
-            <Card className="mt-6 border-dashed border-2 border-gray-300">
-              <CardContent className="p-6 text-center">
-                <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="font-medium text-gray-900 mb-2">
-                  Stripe Integration
-                </h3>
-                <p className="text-gray-600 mb-4">
-                  Connect your Stripe account to automatically track payments
-                  and generate invoices
-                </p>
-                <Button variant="outline" disabled>
-                  Connect Stripe Account (Coming Soon)
-                </Button>
               </CardContent>
             </Card>
           </main>

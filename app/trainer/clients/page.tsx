@@ -34,6 +34,12 @@ import {
   MessageSquare,
   Loader2,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { createClient } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 import { startOfMonth } from "date-fns";
@@ -535,34 +541,34 @@ export default function TrainerClientsPage() {
                     <p className="text-gray-600">No clients found</p>
                   </div>
                 ) : (
-                <div className="space-y-4">
-                  {filteredClients.map((client) => (
-                    <div
-                      key={client.id}
-                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      <div className="flex items-center space-x-4">
-                        <Avatar className="h-12 w-12">
+                  <div className="space-y-4">
+                    {filteredClients.map((client) => (
+                      <div
+                        key={client.id}
+                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex items-center space-x-4">
+                          <Avatar className="h-12 w-12">
                             <AvatarImage
                               src={client.avatar_url || "/placeholder-user.jpg"}
                               alt={client.full_name}
                             />
-                          <AvatarFallback className="bg-red-600 text-white">
+                            <AvatarFallback className="bg-red-600 text-white">
                               {client.full_name
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
+                                .split(" ")
+                                .map((n) => n[0])
+                                .join("")}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
                             <h3 className="font-medium text-lg">
                               {client.full_name}
                             </h3>
-                          <div className="flex items-center space-x-4 text-sm text-gray-500">
-                            <div className="flex items-center space-x-1">
-                              <Mail className="h-4 w-4" />
-                              <span>{client.email}</span>
-                            </div>
+                            <div className="flex items-center space-x-4 text-sm text-gray-500">
+                              <div className="flex items-center space-x-1">
+                                <Mail className="h-4 w-4" />
+                                <span>{client.email}</span>
+                              </div>
                             </div>
                             <div className="flex items-center space-x-4 text-sm text-gray-500 mt-1">
                               <span>
@@ -574,22 +580,58 @@ export default function TrainerClientsPage() {
                             </div>
                           </div>
                         </div>
-                      <div className="flex items-center space-x-6">
+                        <div className="flex items-center space-x-6">
                           <Badge className={getStatusColor(client)}>
                             {getStatusText(client)}
                           </Badge>
                           <div className="flex space-x-1">
-                            <Button size="sm" variant="outline">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                router.push("/trainer/messages");
+                              }}
+                            >
                               <MessageSquare className="h-4 w-4" />
                             </Button>
-                            <Button size="sm" variant="outline">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button size="sm" variant="outline">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    const encodedClientName =
+                                      encodeURIComponent(client.full_name);
+                                    router.push(
+                                      `/trainer/schedule?client=${encodedClientName}`
+                                    );
+                                  }}
+                                >
+                                  <Calendar className="h-4 w-4 mr-2" />
+                                  View Sessions
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    const encodedClientName =
+                                      encodeURIComponent(client.full_name);
+                                    router.push(
+                                      `/trainer/payments?client=${encodedClientName}`
+                                    );
+                                  }}
+                                >
+                                  <DollarSign className="h-4 w-4 mr-2" />
+                                  View Payments
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
                 )}
               </CardContent>
             </Card>

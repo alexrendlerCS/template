@@ -9,12 +9,14 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -30,6 +32,9 @@ import {
   CheckCircle,
   AlertCircle,
   Loader2,
+  Users,
+  User,
+  Clock,
 } from "lucide-react";
 import { GoogleCalendarBanner } from "@/components/GoogleCalendarBanner";
 import { createClient } from "@/lib/supabaseClient";
@@ -121,6 +126,28 @@ function getSessionType(event: GoogleEvent): string {
 
 const daysOfWeek = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
+// Session types for trainer to choose from
+const sessionTypes = [
+  {
+    id: "In-Person Training",
+    name: "In-Person Training",
+    duration: "60 min",
+    description: "One-on-one personal training sessions at our facility",
+  },
+  {
+    id: "Virtual Training",
+    name: "Virtual Training",
+    duration: "60 min",
+    description: "Live online training sessions from the comfort of your home",
+  },
+  {
+    id: "Partner Training",
+    name: "Partner Training",
+    duration: "60 min",
+    description: "Train with a partner for a more engaging workout experience",
+  },
+];
+
 export default function TrainerSchedulePage() {
   const [viewMode, setViewMode] = useState<"week" | "month">("week");
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -132,7 +159,66 @@ export default function TrainerSchedulePage() {
   const [isGoogleConnected, setIsGoogleConnected] = useState(true);
   const [timeSlots, setTimeSlots] = useState<string[]>([]);
   const [trainerAvailability, setTrainerAvailability] = useState<any[]>([]);
+  const [clients, setClients] = useState<any[]>([]);
+  const [selectedClientForSession, setSelectedClientForSession] = useState("");
+  const [selectedDateForSession, setSelectedDateForSession] = useState("");
+  const [selectedTimeForSession, setSelectedTimeForSession] = useState("");
+  const [selectedSessionType, setSelectedSessionType] = useState("");
+  const [sessionNotes, setSessionNotes] = useState("");
+  const [isCreatingSession, setIsCreatingSession] = useState(false);
+  const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([]);
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [showErrorDialog, setShowErrorDialog] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [sessionTrackingInfo, setSessionTrackingInfo] = useState<{
+    sessionsBefore: number;
+    sessionsAfter: number;
+    packageType: string;
+    clientName: string;
+  } | null>(null);
   const supabase = createClient();
+
+  // Handle client filter from URL query parameter
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const clientParam = urlParams.get("client");
+    if (clientParam) {
+      const decodedClient = decodeURIComponent(clientParam);
+      setSelectedClient(decodedClient);
+    }
+  }, []);
+
+  // Function to get unique clients from events
+  const getUniqueClients = () => {
+    const clients = new Set<string>();
+    events.forEach((event) => {
+      const clientName = getClientName(event);
+      if (clientName && clientName !== "Client") {
+        clients.add(clientName);
+      }
+    });
+    return Array.from(clients).sort();
+  };
+
+  // Function to filter events by selected client
+  const filterEventsByClient = (eventsToFilter: GoogleEvent[]) => {
+    if (selectedClient === "all") {
+      return eventsToFilter;
+    }
+    return eventsToFilter.filter((event) => {
+      const clientName = getClientName(event);
+      return clientName === selectedClient;
+    });
+  };
+
+  // Function to sort events by client name
+  const sortEventsByClient = (eventsToSort: GoogleEvent[]) => {
+    return [...eventsToSort].sort((a, b) => {
+      const clientA = getClientName(a);
+      const clientB = getClientName(b);
+      return clientA.localeCompare(clientB);
+    });
+  };
 
   // Function to fetch trainer availability and generate time slots
   const fetchTrainerAvailability = async () => {
@@ -235,36 +321,463 @@ export default function TrainerSchedulePage() {
     }
   };
 
-  useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const response = await fetch("/api/google/events");
+  // Function to fetch events
+  const fetchEvents = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await fetch("/api/google/events");
 
-        if (!response.ok) {
-          if (response.status === 400) {
-            setIsGoogleConnected(false);
-            return;
-          }
-          throw new Error("Failed to fetch events");
+      if (!response.ok) {
+        if (response.status === 400) {
+          setIsGoogleConnected(false);
+          return;
         }
-
-        const data = await response.json();
-        console.log("Fetched events for trainer:", data);
-        setEvents(data);
-        setIsGoogleConnected(true);
-      } catch (err) {
-        setError("Failed to load calendar events");
-        console.error("Error fetching events:", err);
-      } finally {
-        setLoading(false);
+        throw new Error("Failed to fetch events");
       }
-    };
 
+      const data = await response.json();
+      console.log("Fetched events for trainer:", data);
+      setEvents(data);
+      setIsGoogleConnected(true);
+    } catch (err) {
+      setError("Failed to load calendar events");
+      console.error("Error fetching events:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchEvents();
     fetchTrainerAvailability();
+    fetchClients();
   }, [currentDate]);
+
+  // Generate time slots when date is selected
+  useEffect(() => {
+    generateTimeSlotsForDate(selectedDateForSession);
+  }, [selectedDateForSession, trainerAvailability]);
+
+  // Function to fetch clients
+  const fetchClients = async () => {
+    try {
+      const { data: clientsData, error } = await supabase
+        .from("users")
+        .select("id, full_name, email")
+        .eq("role", "client")
+        .order("full_name");
+
+      if (error) {
+        console.error("Error fetching clients:", error);
+        return;
+      }
+
+      setClients(clientsData || []);
+    } catch (error) {
+      console.error("Error fetching clients:", error);
+    }
+  };
+
+  // Function to generate time slots based on trainer availability for a specific date
+  const generateTimeSlotsForDate = (date: string) => {
+    if (!date || !trainerAvailability.length) {
+      setAvailableTimeSlots([]);
+      return;
+    }
+
+    // Parse the date string as local time to avoid timezone issues
+    const [year, month, day] = date.split("-").map(Number);
+    const selectedDate = new Date(year, month - 1, day); // Local time
+    // JS: 0=Sunday, 1=Monday, ..., 6=Saturday
+    // DB: 1=Monday, 2=Tuesday, ..., 7=Sunday
+    const jsDay = selectedDate.getDay();
+    const weekday = jsDay === 0 ? 7 : jsDay; // 1 (Mon) - 7 (Sun)
+
+    // Find availability for this weekday
+    const dayAvailability = trainerAvailability.filter(
+      (availability) => availability.weekday === weekday
+    );
+
+    if (dayAvailability.length === 0) {
+      setAvailableTimeSlots([]);
+      return;
+    }
+
+    const timeSlotsSet = new Set<string>();
+
+    dayAvailability.forEach((availability) => {
+      const startTime = new Date(`2000-01-01T${availability.start_time}`);
+      const endTime = new Date(`2000-01-01T${availability.end_time}`);
+
+      // Generate 30-minute slots from start_time to end_time - 1 hour
+      let currentTime = new Date(startTime);
+      const endTimeMinusOneHour = new Date(endTime.getTime() - 60 * 60 * 1000); // Subtract 1 hour
+
+      while (currentTime <= endTimeMinusOneHour) {
+        const timeString = currentTime.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        });
+        timeSlotsSet.add(timeString);
+        currentTime.setMinutes(currentTime.getMinutes() + 30); // Add 30 minutes
+      }
+    });
+
+    // Convert to array and sort
+    const sortedTimeSlots = Array.from(timeSlotsSet).sort((a, b) => {
+      const timeA = new Date(`2000-01-01T${a}`);
+      const timeB = new Date(`2000-01-01T${b}`);
+      return timeA.getTime() - timeB.getTime();
+    });
+
+    setAvailableTimeSlots(sortedTimeSlots);
+  };
+
+  // Function to create a new session
+  const handleCreateSession = async () => {
+    if (
+      !selectedClientForSession ||
+      !selectedDateForSession ||
+      !selectedTimeForSession ||
+      !selectedSessionType
+    ) {
+      return;
+    }
+
+    setIsCreatingSession(true);
+
+    try {
+      // Get current trainer's session
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.user) {
+        throw new Error("No authenticated user found");
+      }
+
+      // Parse selectedTimeForSession (e.g., "10:30 AM") to HH:mm:ss
+      const timeMatch = selectedTimeForSession.match(/(\d+):(\d+)\s*(AM|PM)/);
+      let startHour = parseInt(timeMatch?.[1] || "0", 10);
+      const startMinute = parseInt(timeMatch?.[2] || "0", 10);
+      const period = timeMatch?.[3] || "AM";
+      if (period === "PM" && startHour !== 12) startHour += 12;
+      if (period === "AM" && startHour === 12) startHour = 0;
+      const startTimeStr = `${String(startHour).padStart(2, "0")}:${String(startMinute).padStart(2, "0")}:00`;
+
+      // Calculate end time (60 minutes after start time)
+      const endDate = new Date(`2000-01-01T${startTimeStr}`);
+      endDate.setMinutes(endDate.getMinutes() + 60);
+      const endTimeStr = endDate.toTimeString().slice(0, 8);
+
+      // Check for existing session at the same date and time for this client BEFORE creating
+      console.debug("=== SESSION CONFLICT CHECK DEBUG ===");
+      console.debug("Selected client ID:", selectedClientForSession);
+      console.debug("Selected date (raw):", selectedDateForSession);
+      console.debug("Selected date type:", typeof selectedDateForSession);
+      console.debug("Selected time (raw):", startTimeStr);
+      console.debug("Selected time type:", typeof startTimeStr);
+      console.debug("Checking for existing sessions:", {
+        client_id: selectedClientForSession,
+        date: selectedDateForSession,
+        start_time: startTimeStr,
+        status: ["confirmed", "pending"],
+      });
+      const { data: existingSessions, error: sessionCheckError } =
+        await supabase
+          .from("sessions")
+          .select("*")
+          .eq("client_id", selectedClientForSession)
+          .eq("date", selectedDateForSession)
+          .eq("start_time", startTimeStr)
+          .in("status", ["confirmed", "pending"]);
+      console.debug("Existing sessions found:", existingSessions);
+      console.debug(
+        "Full existing session details:",
+        existingSessions?.map((s) => ({
+          id: s.id,
+          client_id: s.client_id,
+          date: s.date,
+          start_time: s.start_time,
+          end_time: s.end_time,
+          type: s.type,
+          status: s.status,
+          created_at: s.created_at,
+        }))
+      );
+
+      // Also check ALL sessions for this client on this date for debugging
+      const { data: allSessionsForDate } = await supabase
+        .from("sessions")
+        .select("*")
+        .eq("client_id", selectedClientForSession)
+        .eq("date", selectedDateForSession);
+      console.debug(
+        "ALL sessions for this client on this date:",
+        allSessionsForDate
+      );
+
+      if (sessionCheckError) {
+        setErrorMessage(
+          "Error checking for existing sessions. Please try again."
+        );
+        setShowErrorDialog(true);
+        setIsCreatingSession(false);
+        return;
+      }
+      if (existingSessions && existingSessions.length > 0) {
+        console.warn(
+          "Booking blocked: found existing sessions:",
+          existingSessions
+        );
+        console.warn(
+          "Comparing startTimeStr:",
+          startTimeStr,
+          "with DB start_time(s):",
+          existingSessions.map((s) => s.start_time)
+        );
+        setErrorMessage(
+          "This client already has a session booked at the selected date and time."
+        );
+        setShowErrorDialog(true);
+        setIsCreatingSession(false);
+        return;
+      }
+
+      // Insert into sessions table
+      const { data: sessionData, error: sessionError } = await supabase
+        .from("sessions")
+        .insert({
+          client_id: selectedClientForSession,
+          trainer_id: session.user.id,
+          date: selectedDateForSession,
+          start_time: startTimeStr,
+          end_time: endTimeStr,
+          duration_minutes: null,
+          type: selectedSessionType,
+          status: "confirmed",
+          notes: null,
+          is_recurring: false,
+          google_event_id: null,
+          session_notes: sessionNotes || null,
+        })
+        .select()
+        .single();
+
+      if (sessionError) {
+        setErrorMessage("Failed to create session. Please try again.");
+        setShowErrorDialog(true);
+        throw sessionError;
+      }
+
+      // Get package information BEFORE booking to track sessions
+      const { data: packages, error: packageError } = await supabase
+        .from("packages")
+        .select("*")
+        .eq("client_id", selectedClientForSession)
+        .eq("package_type", selectedSessionType)
+        .eq("status", "active")
+        .order("expiry_date", { ascending: true });
+
+      if (packageError) {
+        setErrorMessage(
+          "Error fetching packages. Session was created, but package usage was not updated."
+        );
+        setShowErrorDialog(true);
+        setIsCreatingSession(false);
+        return;
+      }
+      // Find the first package with available sessions
+      console.debug("Available packages for client:", {
+        clientId: selectedClientForSession,
+        sessionType: selectedSessionType,
+        packages: packages?.map((p) => ({
+          id: p.id,
+          package_type: p.package_type,
+          sessions_included: p.sessions_included,
+          sessions_used: p.sessions_used,
+          status: p.status,
+          available: (p.sessions_included || 0) > (p.sessions_used || 0),
+        })),
+      });
+
+      const packageToUpdate =
+        packages &&
+        packages.find(
+          (pkg) => (pkg.sessions_included || 0) > (pkg.sessions_used || 0)
+        );
+
+      console.debug("Selected package to update:", packageToUpdate);
+
+      if (!packageToUpdate) {
+        setErrorMessage(
+          "This client does not have any available sessions for this package type. Please ask them to purchase or renew a package."
+        );
+        setShowErrorDialog(true);
+        setIsCreatingSession(false);
+        return;
+      }
+
+      // Store session count before booking
+      const sessionsBefore = packageToUpdate.sessions_used || 0;
+      const sessionsAfter = sessionsBefore + 1;
+
+      // Now update the package (increment sessions_used)
+      console.debug("Updating package:", {
+        packageId: packageToUpdate.id,
+        currentSessionsUsed: packageToUpdate.sessions_used,
+        newSessionsUsed: (packageToUpdate.sessions_used || 0) + 1,
+        packageType: packageToUpdate.package_type,
+        clientId: packageToUpdate.client_id,
+      });
+
+      const { data: updateData, error: updateError } = await supabase
+        .from("packages")
+        .update({ sessions_used: (packageToUpdate.sessions_used || 0) + 1 })
+        .eq("id", packageToUpdate.id)
+        .select();
+
+      console.debug("Package update result:", { updateData, updateError });
+
+      if (updateError) {
+        console.error("Package update error:", updateError);
+        setErrorMessage(
+          "Error updating package usage. Session was created, but package usage was not updated."
+        );
+        setShowErrorDialog(true);
+        setIsCreatingSession(false);
+        return;
+      }
+
+      // Get client and trainer details for calendar event
+      const selectedClient = clients.find(
+        (c) => c.id === selectedClientForSession
+      );
+
+      let calendarSuccess = true;
+      let calendarErrorMsg = "";
+
+      if (selectedClient) {
+        // Create calendar event for trainer
+        const baseEventDetails = {
+          description: `${selectedSessionType} training session${sessionNotes ? ` - ${sessionNotes}` : ""}`,
+          start: {
+            dateTime: `${selectedDateForSession}T${startTimeStr}`,
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          },
+          end: {
+            dateTime: `${selectedDateForSession}T${endTimeStr}`,
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          },
+          attendees: [
+            { email: selectedClient.email },
+            { email: session.user.email || "" },
+          ],
+          reminders: {
+            useDefault: true,
+          },
+        };
+
+        // Trainer calendar event
+        try {
+          const trainerEventDetails = {
+            ...baseEventDetails,
+            summary: `${selectedSessionType} with ${selectedClient.full_name}`,
+          };
+
+          const trainerEventResponse = await fetch(
+            `/api/google/calendar/event?trainerId=${session.user.id}`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(trainerEventDetails),
+            }
+          );
+
+          if (!trainerEventResponse.ok) {
+            calendarSuccess = false;
+            calendarErrorMsg += "Failed to create trainer calendar event. ";
+          }
+        } catch (error) {
+          calendarSuccess = false;
+          calendarErrorMsg += "Error creating trainer calendar event. ";
+        }
+
+        // Client calendar event
+        try {
+          const clientEventDetails = {
+            ...baseEventDetails,
+            summary: `${selectedSessionType} with ${session.user.user_metadata?.full_name || "Trainer"}`,
+          };
+
+          const clientEventResponse = await fetch(
+            `/api/google/calendar/client-event?clientId=${selectedClientForSession}`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(clientEventDetails),
+            }
+          );
+
+          if (!clientEventResponse.ok) {
+            calendarSuccess = false;
+            calendarErrorMsg += "Failed to create client calendar event. ";
+          }
+        } catch (error) {
+          calendarSuccess = false;
+          calendarErrorMsg += "Error creating client calendar event. ";
+        }
+      }
+
+      // Reset form and close dialog
+      setSelectedClientForSession("");
+      setSelectedDateForSession("");
+      setSelectedTimeForSession("");
+      setSelectedSessionType("");
+      setSessionNotes("");
+      setIsAddSessionOpen(false);
+
+      // Refresh events
+      fetchEvents();
+
+      // Get client name and package type for tracking info
+      const clientForTracking = clients.find(
+        (c) => c.id === selectedClientForSession
+      );
+      const selectedSessionTypeName =
+        sessionTypes.find((t) => t.id === selectedSessionType)?.name ||
+        selectedSessionType;
+
+      // Set session tracking information
+      setSessionTrackingInfo({
+        sessionsBefore,
+        sessionsAfter,
+        packageType: selectedSessionTypeName,
+        clientName: clientForTracking?.full_name || "Unknown Client",
+      });
+
+      // Show success or error dialog
+      if (calendarSuccess) {
+        setShowSuccessDialog(true);
+      } else {
+        setErrorMessage(
+          calendarErrorMsg ||
+            "Session booked, but there was a problem adding to Google Calendar."
+        );
+        setShowErrorDialog(true);
+      }
+    } catch (error) {
+      console.error("Error creating session:", error);
+    } finally {
+      setIsCreatingSession(false);
+    }
+  };
 
   const getWeekDates = (date: Date) => {
     const week = [];
@@ -290,8 +803,13 @@ export default function TrainerSchedulePage() {
         eventDate.getDate() === date.getDate()
       );
     });
-    console.log(`Sessions for ${date.toDateString()}:`, filteredEvents);
-    return filteredEvents;
+
+    // Apply client filtering and sorting
+    const clientFilteredEvents = filterEventsByClient(filteredEvents);
+    const sortedEvents = sortEventsByClient(clientFilteredEvents);
+
+    console.log(`Sessions for ${date.toDateString()}:`, sortedEvents);
+    return sortedEvents;
   };
 
   const getSessionsForTimeSlot = (date: Date, time: string) => {
@@ -381,7 +899,7 @@ export default function TrainerSchedulePage() {
   const getSessionsForDay = (day: number | null) => {
     if (!day) return [];
 
-    return events.filter((event) => {
+    const filteredEvents = events.filter((event) => {
       const eventDate = new Date(event.start.dateTime);
       return (
         eventDate.getFullYear() === currentDate.getFullYear() &&
@@ -389,6 +907,12 @@ export default function TrainerSchedulePage() {
         eventDate.getDate() === day
       );
     });
+
+    // Apply client filtering and sorting
+    const clientFilteredEvents = filterEventsByClient(filteredEvents);
+    const sortedEvents = sortEventsByClient(clientFilteredEvents);
+
+    return sortedEvents;
   };
 
   const renderEvent = (event: GoogleEvent) => {
@@ -637,6 +1161,27 @@ export default function TrainerSchedulePage() {
                 </div>
               </div>
               <div className="flex items-center space-x-4">
+                {/* Client Filter */}
+                <div className="flex items-center space-x-2">
+                  <Users className="h-4 w-4 text-gray-500" />
+                  <Select
+                    value={selectedClient}
+                    onValueChange={setSelectedClient}
+                  >
+                    <SelectTrigger className="w-48">
+                      <SelectValue placeholder="Filter by client" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Clients</SelectItem>
+                      {getUniqueClients().map((client) => (
+                        <SelectItem key={client} value={client}>
+                          {client}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div className="flex items-center space-x-2 bg-gray-100 p-1 rounded-lg">
                   <Button
                     variant={viewMode === "week" ? "default" : "ghost"}
@@ -694,6 +1239,203 @@ export default function TrainerSchedulePage() {
           </main>
         </div>
       </div>
+
+      {/* Add Session Dialog */}
+      <Dialog open={isAddSessionOpen} onOpenChange={setIsAddSessionOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add New Session</DialogTitle>
+            <DialogDescription>
+              Create a new training session for a client
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* Client Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="client">Client</Label>
+              <Select
+                value={selectedClientForSession}
+                onValueChange={setSelectedClientForSession}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a client" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id}>
+                      {client.full_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Session Type */}
+            <div className="space-y-2">
+              <Label htmlFor="sessionType">Session Type</Label>
+              <Select
+                value={selectedSessionType}
+                onValueChange={setSelectedSessionType}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select session type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sessionTypes.map((type) => (
+                    <SelectItem key={type.id} value={type.id}>
+                      {type.name} ({type.duration})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Date Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="date">Date</Label>
+              <Input
+                type="date"
+                value={selectedDateForSession}
+                onChange={(e) => setSelectedDateForSession(e.target.value)}
+                min={new Date().toISOString().split("T")[0]}
+              />
+            </div>
+
+            {/* Time Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="time">Time</Label>
+              <Select
+                value={selectedTimeForSession}
+                onValueChange={setSelectedTimeForSession}
+                disabled={availableTimeSlots.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={
+                      availableTimeSlots.length === 0
+                        ? "No availability for selected date"
+                        : "Select time"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableTimeSlots.map((time) => (
+                    <SelectItem key={time} value={time}>
+                      {time}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {availableTimeSlots.length === 0 && selectedDateForSession && (
+                <p className="text-sm text-gray-500">
+                  No available time slots for the selected date. Please choose a
+                  different date.
+                </p>
+              )}
+            </div>
+
+            {/* Notes */}
+            <div className="space-y-2">
+              <Label htmlFor="notes">Notes (Optional)</Label>
+              <Textarea
+                placeholder="Add any notes about the session..."
+                value={sessionNotes}
+                onChange={(e) => setSessionNotes(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="flex space-x-2 sm:space-x-0">
+            <Button
+              variant="outline"
+              onClick={() => setIsAddSessionOpen(false)}
+              disabled={isCreatingSession}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700"
+              onClick={handleCreateSession}
+              disabled={
+                isCreatingSession ||
+                !selectedClientForSession ||
+                !selectedDateForSession ||
+                !selectedTimeForSession ||
+                !selectedSessionType ||
+                availableTimeSlots.length === 0
+              }
+            >
+              {isCreatingSession ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                "Create Session"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Success Dialog */}
+      <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Session Booked!</DialogTitle>
+            <DialogDescription>
+              The session was successfully booked and added to both calendars.
+            </DialogDescription>
+          </DialogHeader>
+
+          {sessionTrackingInfo && (
+            <div className="space-y-4">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <h4 className="font-medium text-green-800 mb-2">
+                  Session Tracking
+                </h4>
+                <div className="space-y-2 text-sm text-green-700">
+                  <p>
+                    <strong>Client:</strong> {sessionTrackingInfo.clientName}
+                  </p>
+                  <p>
+                    <strong>Package:</strong> {sessionTrackingInfo.packageType}
+                  </p>
+                  <div className="flex items-center space-x-2">
+                    <span>Sessions used:</span>
+                    <span className="font-mono bg-green-100 px-2 py-1 rounded">
+                      {sessionTrackingInfo.sessionsBefore}
+                    </span>
+                    <span>→</span>
+                    <span className="font-mono bg-green-100 px-2 py-1 rounded">
+                      {sessionTrackingInfo.sessionsAfter}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button onClick={() => setShowSuccessDialog(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Error Dialog */}
+      <Dialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Booking Error</DialogTitle>
+            <DialogDescription>{errorMessage}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setShowErrorDialog(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </SidebarProvider>
   );
 }

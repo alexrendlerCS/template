@@ -1302,11 +1302,18 @@ export default function TrainerDashboard() {
                                 </Badge>
                               </div>
                               <Button
-                                asChild
                                 variant="outline"
                                 className="ml-auto"
+                                onClick={() => {
+                                  // Navigate to schedule page with client filter
+                                  const encodedClientName =
+                                    encodeURIComponent(clientName);
+                                  router.push(
+                                    `/trainer/schedule?client=${encodedClientName}`
+                                  );
+                                }}
                               >
-                                <a href={sessionDetailUrl}>View</a>
+                                View
                               </Button>
                             </Card>
                           );
