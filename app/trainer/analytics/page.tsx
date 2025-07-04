@@ -288,7 +288,7 @@ export default function TrainerAnalyticsPage() {
       });
       // Fetch client names
       const clientIds = Array.from(clientTotals.keys());
-      let clientNames = {};
+      let clientNames: Record<string, string> = {};
       if (clientIds.length > 0) {
         const { data: users, error: usersError } = await supabase
           .from("users")
@@ -370,7 +370,7 @@ export default function TrainerAnalyticsPage() {
       const clientIds = Array.from(
         new Set(payments.map((p) => p.client_id).filter(Boolean))
       );
-      let clientNames = {};
+      let clientNames: Record<string, string> = {};
       if (clientIds.length > 0) {
         const { data: users, error: usersError } = await supabase
           .from("users")
@@ -424,7 +424,7 @@ export default function TrainerAnalyticsPage() {
       const clientIds = Array.from(
         new Set(filtered.map((s) => s.client_id).filter(Boolean))
       );
-      let clientNames = {};
+      let clientNames: Record<string, string> = {};
       if (clientIds.length > 0) {
         const { data: users, error: usersError } = await supabase
           .from("users")

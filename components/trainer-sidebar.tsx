@@ -27,6 +27,7 @@ import {
   Camera,
   Eye,
   EyeOff,
+  Gift,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -553,6 +554,17 @@ export function TrainerSidebar() {
             <SidebarGroupLabel>General</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === "/trainer/referral"}
+                  >
+                    <Link href="/trainer/referral">
+                      <Gift className="h-4 w-4" />
+                      <span>Referral Program</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
