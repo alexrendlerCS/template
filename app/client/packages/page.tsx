@@ -13,7 +13,13 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Menu, CheckCircle, Loader2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Menu,
+  CheckCircle,
+  Loader2,
+  PlusCircle,
+} from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { createClient } from "@/lib/supabaseClient";
 import {
@@ -25,6 +31,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import CountUp from "react-countup";
+import { useRef } from "react";
 
 interface Package {
   id: string;
@@ -213,6 +220,25 @@ function PackagesContent() {
   const [retryCount, setRetryCount] = useState(0);
   const MAX_RETRIES = 3;
   const RETRY_DELAY = 2000; // 2 seconds
+  const [showSingleSessionModal, setShowSingleSessionModal] = useState(false);
+  const [selectedSessionType, setSelectedSessionType] =
+    useState<PackageType | null>(null);
+  const singleSessionPrice = 150;
+  const singleSessionSection: PackageSection = {
+    title: selectedSessionType || "In-Person Training",
+    description: "Single session purchase",
+    icon: "✨",
+    packages: [],
+  };
+  const singleSessionPkg: Package = {
+    id: "single-session",
+    name: "Single Session",
+    sessionsPerWeek: 1,
+    hourlyRate: singleSessionPrice,
+    monthlyPrice: singleSessionPrice,
+    monthlySessionCount: 1,
+    priceId: "single-session",
+  };
 
   // Function to fetch user's package information
   const fetchPackageInformation = async () => {
@@ -352,7 +378,6 @@ function PackagesContent() {
       setShouldFetchPackages(false);
     }
   };
-
 
   // Effect to handle initial mount and URL parameters
   useEffect(() => {
@@ -549,6 +574,66 @@ function PackagesContent() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Single Session Modal */}
+      <Dialog
+        open={showSingleSessionModal}
+        onOpenChange={setShowSingleSessionModal}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold text-center mb-2">
+              Try a Single Session
+            </DialogTitle>
+            <DialogDescription className="text-center text-base text-gray-700 mb-4">
+              Not ready to commit? Try one session for now and if you enjoy it,
+              come back and try one of our many package options.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-4">
+            <div className="text-lg font-semibold text-gray-800 text-center mb-2">
+              Select Session Type
+            </div>
+            {(
+              [
+                "In-Person Training",
+                "Virtual Training",
+                "Partner Training",
+              ] as PackageType[]
+            ).map((type) => (
+              <Button
+                key={type}
+                variant={selectedSessionType === type ? "default" : "outline"}
+                className="w-full justify-start text-base py-3"
+                onClick={() => setSelectedSessionType(type)}
+              >
+                {type}
+              </Button>
+            ))}
+          </div>
+          <div className="text-center text-lg font-semibold py-2">
+            Price: <span className="text-green-700">$150</span>
+          </div>
+          <DialogFooter>
+            <Button
+              className="w-full bg-green-600 hover:bg-green-700 text-lg py-3"
+              disabled={!selectedSessionType}
+              onClick={() => {
+                if (selectedSessionType) {
+                  handleCheckout(singleSessionPkg, {
+                    ...singleSessionSection,
+                    title: selectedSessionType,
+                  });
+                  setShowSingleSessionModal(false);
+                  setSelectedSessionType(null);
+                }
+              }}
+            >
+              Continue to Checkout
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Success Dialog */}
       <Dialog
         open={showSuccessDialog}
@@ -743,14 +828,25 @@ function PackagesContent() {
         <div className="space-y-12">
           {packageSections.map((section) => (
             <div key={section.title} className="space-y-6">
-              <div>
-                <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
-                  <span>{section.icon}</span>
-                  <span>{section.title}</span>
-                </h2>
-                <p className="mt-2 text-lg text-gray-600">
-                  {section.description}
-                </p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
+                    <span>{section.icon}</span>
+                    <span>{section.title}</span>
+                  </h2>
+                  <p className="mt-2 text-lg text-gray-600">
+                    {section.description}
+                  </p>
+                </div>
+                {section.title === "In-Person Training" && (
+                  <Button
+                    className="bg-blue-600 hover:bg-blue-700 text-white text-lg px-6 py-3 rounded shadow-lg font-semibold transition-all duration-150"
+                    onClick={() => setShowSingleSessionModal(true)}
+                  >
+                    <PlusCircle className="h-5 w-5 mr-2" />
+                    Try a Single Session
+                  </Button>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

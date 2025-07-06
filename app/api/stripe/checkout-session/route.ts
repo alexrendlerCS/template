@@ -20,12 +20,14 @@ export async function POST(req: Request) {
     // Define valid pricing structure (cents)
     const pricingMatrix: Record<string, Record<number, number>> = {
       "In-Person Training": {
+        1: 15000, // $150 for single session
         8: 100000, // $1,000
         12: 138000, // $1,380
         16: 176000, // $1,760
         20: 200000, // $2,000
       },
       "Virtual Training": {
+        1: 15000, // $150 for single session
         4: 48000, // $480
         8: 92000, // $920
         12: 126000, // $1,260
@@ -33,6 +35,7 @@ export async function POST(req: Request) {
         20: 180000, // $1,800
       },
       "Partner Training": {
+        1: 15000, // $150 for single session
         4: 36000, // $360
         8: 68000, // $680
         12: 96000, // $960
