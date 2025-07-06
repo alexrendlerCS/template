@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense, useRef } from "react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { TrainerSidebar } from "@/components/trainer-sidebar";
 import {
@@ -35,6 +35,15 @@ import GoogleCalendarPopup from "@/components/GoogleCalendarPopup";
 import GoogleCalendarSuccessDialog from "@/components/GoogleCalendarSuccessDialog";
 import { createClient } from "@/lib/supabaseClient";
 import { saveAs } from "file-saver";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/use-toast";
 
 // Separate the Google Calendar section into its own client component
 function GoogleCalendarSection() {
@@ -306,12 +315,224 @@ function ClientContractsSection() {
   );
 }
 
+function AddSessionsModal({ open, onOpenChange }) {
+  const [clients, setClients] = useState<any[]>([]);
+  const [loadingClients, setLoadingClients] = useState(true);
+  const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const [sessionType, setSessionType] = useState<string>("In-Person Training");
+  const [numSessions, setNumSessions] = useState<number>(1);
+  const [submitting, setSubmitting] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  const supabase = createClient();
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (open) {
+      setLoadingClients(true);
+      supabase
+        .from("users")
+        .select("id, full_name, email")
+        .eq("role", "client")
+        .then(({ data, error }) => {
+          if (!error && data) setClients(data);
+          setLoadingClients(false);
+        });
+    }
+  }, [open, supabase]);
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    try {
+      // Check for existing package
+      const { data: existing, error: pkgError } = await supabase
+        .from("packages")
+        .select("id, sessions_included, original_sessions")
+        .eq("client_id", selectedUserId)
+        .eq("package_type", sessionType)
+        .eq("status", "active")
+        .single();
+      if (pkgError && pkgError.code !== "PGRST116") throw pkgError;
+      if (existing) {
+        // Add sessions to existing package
+        const { error: updateError } = await supabase
+          .from("packages")
+          .update({
+            sessions_included: existing.sessions_included + numSessions,
+            original_sessions: (existing.original_sessions || 0) + numSessions,
+          })
+          .eq("id", existing.id);
+        if (updateError) throw updateError;
+        setSuccessMessage(
+          `Added ${numSessions} session(s) to ${clients.find((c) => c.id === selectedUserId)?.full_name || "user"}.`
+        );
+      } else {
+        // Create new package
+        const { error: createError } = await supabase.from("packages").insert({
+          client_id: selectedUserId,
+          package_type: sessionType,
+          sessions_included: numSessions,
+          original_sessions: numSessions,
+          status: "active",
+          purchase_date: new Date().toISOString().split("T")[0],
+        });
+        if (createError) throw createError;
+        setSuccessMessage(
+          `Created new package and added ${numSessions} session(s) to ${clients.find((c) => c.id === selectedUserId)?.full_name || "user"}.`
+        );
+      }
+      setShowSuccess(true);
+      onOpenChange(false);
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: err.message || err.toString(),
+        status: "error",
+      });
+    } finally {
+      setSubmitting(false);
+      setShowConfirm(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Add Sessions to User</DialogTitle>
+          <DialogDescription>
+            Select a client, session type, and number of sessions to add.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div>
+            <Label>Client</Label>
+            <select
+              className="w-full border rounded p-2 mt-1"
+              value={selectedUserId}
+              onChange={(e) => setSelectedUserId(e.target.value)}
+              disabled={loadingClients}
+            >
+              <option value="">Select a client...</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.full_name} ({c.email})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label>Session Type</Label>
+            <select
+              className="w-full border rounded p-2 mt-1"
+              value={sessionType}
+              onChange={(e) => setSessionType(e.target.value)}
+            >
+              <option>In-Person Training</option>
+              <option>Virtual Training</option>
+              <option>Partner Training</option>
+            </select>
+          </div>
+          <div>
+            <Label>Number of Sessions</Label>
+            <Input
+              type="number"
+              min={1}
+              value={numSessions}
+              onChange={(e) => setNumSessions(Number(e.target.value))}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button
+            className="w-full bg-red-600 hover:bg-red-700"
+            disabled={submitting || !selectedUserId || numSessions < 1}
+            onClick={() => setShowConfirm(true)}
+          >
+            {submitting ? "Adding..." : "Add Sessions"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+      {/* Confirmation Dialog */}
+      <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Add Sessions</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to{" "}
+              <span className="font-bold text-blue-700">
+                give {numSessions} free session(s)
+              </span>{" "}
+              to{" "}
+              <span className="font-bold">
+                {clients.find((c) => c.id === selectedUserId)?.full_name ||
+                  "this user"}
+              </span>
+              ? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowConfirm(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="w-full bg-red-600 hover:bg-red-700 text-white"
+              onClick={handleSubmit}
+              disabled={submitting}
+            >
+              {submitting ? "Adding..." : "Confirm"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Success Dialog */}
+      <Dialog open={showSuccess} onOpenChange={setShowSuccess}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader className="text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100 mb-4">
+              <svg
+                className="h-6 w-6 text-green-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            </div>
+            <DialogTitle className="text-xl font-semibold text-green-800 text-center">
+              Sessions Added Successfully!
+            </DialogTitle>
+            <DialogDescription className="text-gray-600 mt-2 text-center">
+              {successMessage}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-6">
+            <Button
+              className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
+              onClick={() => setShowSuccess(false)}
+            >
+              Great! Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Dialog>
+  );
+}
+
 export default function TrainerSettings() {
   const [notifications, setNotifications] = useState({
     email: true,
     sms: false,
     push: true,
   });
+  const [showAddSessions, setShowAddSessions] = useState(false);
 
   return (
     <SidebarProvider>
@@ -325,7 +546,7 @@ export default function TrainerSettings() {
             </div>
           </header>
 
-          <main className="p-6 max-w-4xl">
+          <main className="p-6 max-w-4xl mx-auto">
             <div className="space-y-8">
               {/* Calendar Integration */}
               <Suspense fallback={<div>Loading calendar settings...</div>}>
@@ -369,13 +590,38 @@ export default function TrainerSettings() {
                     Create and manage promotional codes for your clients
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="py-12 flex flex-col items-center justify-center">
-                  <span className="text-gray-500 text-sm mb-2">
-                    Promo code functionality
-                  </span>
-                  <span className="text-lg font-semibold text-gray-700">
-                    Coming Soon
-                  </span>
+                <CardContent className="py-8">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        <tr>
+                          <td className="px-4 py-3 text-base font-medium text-gray-800">
+                            Add Free Sessions to a user's account
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <Button
+                              className="bg-red-600 hover:bg-red-700 text-white"
+                              onClick={() => setShowAddSessions(true)}
+                            >
+                              Add Sessions to User
+                            </Button>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td
+                            className="px-4 py-3 text-center text-gray-500 text-base font-medium"
+                            colSpan={2}
+                          >
+                            More Promo Code/Discounts Options Coming Soon
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <AddSessionsModal
+                    open={showAddSessions}
+                    onOpenChange={setShowAddSessions}
+                  />
                 </CardContent>
               </Card>
 
@@ -420,14 +666,6 @@ export default function TrainerSettings() {
                   </span>
                 </CardContent>
               </Card>
-
-              {/* Save Button */}
-              <div className="flex justify-end">
-                <Button className="bg-red-600 hover:bg-red-700">
-                  <Save className="h-4 w-4 mr-2" />
-                  Save All Changes
-                </Button>
-              </div>
             </div>
           </main>
         </div>
