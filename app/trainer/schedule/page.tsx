@@ -38,7 +38,7 @@ import {
 import { GoogleCalendarBanner } from "@/components/GoogleCalendarBanner";
 import { createClient } from "@/lib/supabaseClient";
 
-interface GoogleEvent {
+interface DatabaseSession {
   id: string;
   summary: string;
   description?: string;
@@ -54,6 +54,16 @@ interface GoogleEvent {
     displayName?: string;
     responseStatus?: string;
   }>;
+  _dbData?: {
+    client_id: string;
+    trainer_id: string;
+    type: string;
+    notes?: string;
+  };
+  users?: {
+    full_name: string;
+    email: string;
+  };
 }
 
 // Add color palette for clients
@@ -95,32 +105,18 @@ function formatEventTime(dateTimeStr: string) {
   });
 }
 
-// Helper function to extract client name from event
-function getClientName(event: GoogleEvent): string {
-  // Try to get client name from attendees first
-  const clientAttendee = event.attendees?.find(
-    (a) => a.responseStatus !== "declined"
+// Helper function to get client name from session
+function getClientName(session: any): string {
+  return (
+    session.users?.full_name ||
+    session.attendees?.[0]?.displayName ||
+    "Unknown Client"
   );
-  if (clientAttendee?.displayName) {
-    return clientAttendee.displayName;
-  }
-
-  // Fall back to parsing from summary
-  const summaryParts = event.summary.split("with");
-  if (summaryParts.length > 1) {
-    return summaryParts[1].trim();
-  }
-
-  return "Client";
 }
 
 // Helper function to get session type
-function getSessionType(event: GoogleEvent): string {
-  const summaryParts = event.summary.split("with");
-  if (summaryParts.length > 0) {
-    return summaryParts[0].trim();
-  }
-  return event.summary;
+function getSessionType(session: any): string {
+  return session.type || session._dbData?.type || "Unknown Type";
 }
 
 const daysOfWeek = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -152,7 +148,7 @@ export default function TrainerSchedulePage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedClient, setSelectedClient] = useState("all");
   const [isAddSessionOpen, setIsAddSessionOpen] = useState(false);
-  const [events, setEvents] = useState<GoogleEvent[]>([]);
+  const [events, setEvents] = useState<DatabaseSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isGoogleConnected, setIsGoogleConnected] = useState(true);
@@ -200,7 +196,7 @@ export default function TrainerSchedulePage() {
   };
 
   // Function to filter events by selected client
-  const filterEventsByClient = (eventsToFilter: GoogleEvent[]) => {
+  const filterEventsByClient = (eventsToFilter: DatabaseSession[]) => {
     if (selectedClient === "all") {
       return eventsToFilter;
     }
@@ -211,7 +207,7 @@ export default function TrainerSchedulePage() {
   };
 
   // Function to sort events by client name
-  const sortEventsByClient = (eventsToSort: GoogleEvent[]) => {
+  const sortEventsByClient = (eventsToSort: DatabaseSession[]) => {
     return [...eventsToSort].sort((a, b) => {
       const clientA = getClientName(a);
       const clientB = getClientName(b);
@@ -325,23 +321,85 @@ export default function TrainerSchedulePage() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch("/api/google/events");
 
-      if (!response.ok) {
-        if (response.status === 400) {
-          setIsGoogleConnected(false);
-          return;
-        }
-        throw new Error("Failed to fetch events");
+      // Get current trainer's session
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.user) {
+        throw new Error("No authenticated user found");
       }
 
-      const data = await response.json();
-      console.log("Fetched events for trainer:", data);
-      setEvents(data);
-      setIsGoogleConnected(true);
+      // Fetch sessions from database for this trainer
+      const { data: sessionsData, error } = await supabase
+        .from("sessions")
+        .select(
+          `
+          id,
+          client_id,
+          trainer_id,
+          date,
+          start_time,
+          end_time,
+          type,
+          status,
+          notes,
+          session_notes,
+          created_at,
+          users!sessions_client_id_fkey (
+            full_name,
+            email
+          )
+        `
+        )
+        .eq("trainer_id", session.user.id)
+        .in("status", ["confirmed", "pending"])
+        .order("date", { ascending: true })
+        .order("start_time", { ascending: true });
+
+      if (error) {
+        console.error("Error fetching sessions:", error);
+        setError("Failed to load sessions");
+        return;
+      }
+
+      console.log("Fetched sessions from database:", sessionsData);
+
+      // Convert database sessions to the format expected by the UI
+      const convertedEvents =
+        sessionsData?.map((session: any) => ({
+          id: session.id,
+          summary: `${session.type} with ${session.users?.full_name || "Unknown Client"}`,
+          description: session.session_notes || session.notes || "",
+          start: {
+            dateTime: `${session.date}T${session.start_time}`,
+          },
+          end: {
+            dateTime: `${session.date}T${session.end_time}`,
+          },
+          status: session.status,
+          attendees: [
+            {
+              email: session.users?.email || "",
+              displayName: session.users?.full_name || "Unknown Client",
+              responseStatus: "accepted",
+            },
+          ],
+          // Add database fields for reference
+          _dbData: {
+            client_id: session.client_id,
+            trainer_id: session.trainer_id,
+            type: session.type,
+            notes: session.session_notes || session.notes,
+          },
+        })) || [];
+
+      setEvents(convertedEvents);
+      setIsGoogleConnected(true); // Keep this for UI consistency
     } catch (err) {
-      setError("Failed to load calendar events");
-      console.error("Error fetching events:", err);
+      setError("Failed to load sessions");
+      console.error("Error fetching sessions:", err);
     } finally {
       setLoading(false);
     }
@@ -1042,7 +1100,7 @@ export default function TrainerSchedulePage() {
     return sortedEvents;
   };
 
-  const renderEvent = (event: GoogleEvent) => {
+  const renderEvent = (event: DatabaseSession) => {
     const clientName = getClientName(event);
     const sessionType = getSessionType(event);
     const startTime = new Date(event.start.dateTime);
