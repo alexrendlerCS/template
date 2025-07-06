@@ -320,8 +320,8 @@ export default function ClientCalendarPage() {
                 event?.status?.toLowerCase() === "confirmed"
                   ? "bg-green-500"
                   : event?.status?.toLowerCase() === "tentative"
-                  ? "bg-yellow-500"
-                  : "bg-red-500"
+                    ? "bg-yellow-500"
+                    : "bg-red-500"
               }`}
           />
         </div>
@@ -444,47 +444,49 @@ export default function ClientCalendarPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-7 gap-px bg-gray-200 rounded-lg overflow-hidden">
-              {/* Day headers */}
-              {daysOfWeek.map((day) => (
-                <div
-                  key={day}
-                  className="bg-gray-50 p-2 text-center text-sm font-medium text-gray-500"
-                >
-                  {day}
-                </div>
-              ))}
+            <div className="overflow-x-auto">
+              <div className="grid grid-cols-7 gap-px bg-gray-200 rounded-lg overflow-hidden min-w-[600px]">
+                {/* Day headers */}
+                {daysOfWeek.map((day) => (
+                  <div
+                    key={day}
+                    className="bg-gray-50 p-1 sm:p-2 text-center text-xs sm:text-sm font-medium text-gray-500"
+                  >
+                    {day}
+                  </div>
+                ))}
 
-              {/* Calendar days */}
-              {days.map((day, index) => (
-                <div
-                  key={`day-${currentDate.getFullYear()}-${currentDate.getMonth()}-${index}`}
-                  className={`relative p-2 min-h-[120px] ${
-                    !day
-                      ? "bg-gray-50"
-                      : isToday(day)
-                      ? "bg-red-50 ring-2 ring-red-500 ring-inset"
-                      : "bg-white"
-                  }`}
-                >
-                  {day && (
-                    <>
-                      <div
-                        className={`font-medium text-sm mb-2 sticky top-0 z-10 ${
-                          isToday(day) ? "text-red-900 font-semibold" : ""
-                        }`}
-                      >
-                        {day}
-                      </div>
-                      <div className="space-y-2 max-h-[100px] overflow-y-auto">
-                        {getSessionsForDate(day).map((event) =>
-                          renderEvent(event)
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
+                {/* Calendar days */}
+                {days.map((day, index) => (
+                  <div
+                    key={`day-${currentDate.getFullYear()}-${currentDate.getMonth()}-${index}`}
+                    className={`relative p-1 sm:p-2 min-h-[90px] sm:min-h-[120px] ${
+                      !day
+                        ? "bg-gray-50"
+                        : isToday(day)
+                          ? "bg-red-50 ring-2 ring-red-500 ring-inset"
+                          : "bg-white"
+                    }`}
+                  >
+                    {day && (
+                      <>
+                        <div
+                          className={`font-medium text-xs sm:text-sm mb-1 sm:mb-2 sticky top-0 z-10 ${
+                            isToday(day) ? "text-red-900 font-semibold" : ""
+                          }`}
+                        >
+                          {day}
+                        </div>
+                        <div className="space-y-1 sm:space-y-2 max-h-[80px] sm:max-h-[100px] overflow-y-auto">
+                          {getSessionsForDate(day).map((event) =>
+                            renderEvent(event)
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           </CardContent>
         </Card>

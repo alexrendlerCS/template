@@ -824,23 +824,23 @@ function PackagesContent() {
         </div>
       </div>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="space-y-12">
+      <main className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-8">
+        <div className="space-y-8 sm:space-y-12">
           {packageSections.map((section) => (
-            <div key={section.title} className="space-y-6">
-              <div className="flex items-center justify-between">
+            <div key={section.title} className="space-y-4 sm:space-y-6">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
                 <div>
-                  <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
+                  <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2">
                     <span>{section.icon}</span>
                     <span>{section.title}</span>
                   </h2>
-                  <p className="mt-2 text-lg text-gray-600">
+                  <p className="mt-1 sm:mt-2 text-base sm:text-lg text-gray-600">
                     {section.description}
                   </p>
                 </div>
                 {section.title === "In-Person Training" && (
                   <Button
-                    className="bg-blue-600 hover:bg-blue-700 text-white text-lg px-6 py-3 rounded shadow-lg font-semibold transition-all duration-150"
+                    className="bg-blue-600 hover:bg-blue-700 text-white text-base sm:text-lg px-4 sm:px-6 py-2 sm:py-3 rounded shadow-lg font-semibold transition-all duration-150 w-full sm:w-auto"
                     onClick={() => setShowSingleSessionModal(true)}
                   >
                     <PlusCircle className="h-5 w-5 mr-2" />
@@ -849,25 +849,27 @@ function PackagesContent() {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                 {section.packages.map((pkg) => (
                   <Card key={pkg.id} className="flex flex-col">
-                    <CardHeader>
-                      <CardTitle className="text-xl">{pkg.name}</CardTitle>
-                      <CardDescription>
+                    <CardHeader className="pb-2 sm:pb-4">
+                      <CardTitle className="text-lg sm:text-xl">
+                        {pkg.name}
+                      </CardTitle>
+                      <CardDescription className="text-sm sm:text-base">
                         ${pkg.hourlyRate}/hour • {pkg.monthlySessionCount}{" "}
                         sessions/month
                       </CardDescription>
                     </CardHeader>
-                    <CardContent className="flex-grow">
-                      <div className="space-y-4">
-                        <div className="text-4xl font-bold text-gray-900">
+                    <CardContent className="flex-grow pb-2 sm:pb-4">
+                      <div className="space-y-2 sm:space-y-4">
+                        <div className="text-2xl sm:text-4xl font-bold text-gray-900">
                           ${pkg.monthlyPrice}
-                          <span className="text-base font-normal text-gray-500">
+                          <span className="text-xs sm:text-base font-normal text-gray-500">
                             /month
                           </span>
                         </div>
-                        <ul className="space-y-2 text-sm text-gray-600">
+                        <ul className="space-y-1 sm:space-y-2 text-xs sm:text-sm text-gray-600">
                           <li>• {pkg.sessionsPerWeek}x sessions per week</li>
                           <li>
                             • {pkg.monthlySessionCount} sessions per month
@@ -878,7 +880,7 @@ function PackagesContent() {
                     </CardContent>
                     <CardFooter>
                       <Button
-                        className="w-full bg-red-600 hover:bg-red-700 text-white py-6"
+                        className="w-full bg-red-600 hover:bg-red-700 text-white py-4 sm:py-6 text-base sm:text-lg"
                         onClick={() => handleCheckout(pkg, section)}
                         disabled={isLoading === pkg.id}
                       >

@@ -960,10 +960,10 @@ export default function TrainerSchedulePage() {
 
     return (
       <div className="flex flex-col h-full">
-        <div className="flex items-center justify-between mb-4 px-4">
+        <div className="flex items-center justify-between mb-4 px-2 sm:px-4">
           <div className="flex items-center gap-3">
             <div className="w-1 h-8 bg-gradient-to-b from-red-500 to-red-600 rounded-full"></div>
-            <h2 className="text-xl font-bold text-gray-900">
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900">
               Week of{" "}
               {startDate.toLocaleDateString("en-US", {
                 month: "long",
@@ -997,15 +997,15 @@ export default function TrainerSchedulePage() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto">
-          <div className="grid grid-cols-[100px_repeat(7,1fr)] gap-0 bg-white rounded-xl shadow-lg overflow-hidden h-[calc(100vh-12rem)] border border-gray-200 divide-x divide-gray-300">
+        <div className="flex-1 overflow-x-auto">
+          <div className="grid grid-cols-[80px_repeat(7,1fr)] gap-0 bg-white rounded-xl shadow-lg overflow-hidden min-w-[700px] h-[calc(100vh-12rem)] border border-gray-200 divide-x divide-gray-300">
             {/* Time column */}
             <div className="bg-gradient-to-b from-gray-50 to-gray-100">
-              <div className="h-12 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100" />
+              <div className="h-10 sm:h-12 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100" />
               {timeSlots.map((time) => (
                 <div
                   key={time}
-                  className="h-20 bg-gradient-to-r from-gray-50 to-gray-100 p-2 text-sm font-medium text-gray-600 flex items-center justify-end pr-4 border-b border-gray-100"
+                  className="h-16 sm:h-20 bg-gradient-to-r from-gray-50 to-gray-100 p-1 sm:p-2 text-xs sm:text-sm font-medium text-gray-600 flex items-center justify-end pr-2 sm:pr-4 border-b border-gray-100"
                 >
                   {time}
                 </div>
@@ -1019,16 +1019,16 @@ export default function TrainerSchedulePage() {
                 className={`bg-white ${isToday(date.getDate()) ? "bg-red-50" : ""}`}
               >
                 <div
-                  className={`h-12 border-b border-gray-200 p-2 bg-gradient-to-b from-gray-50 to-white ${isToday(date.getDate()) ? "bg-gradient-to-b from-red-50 to-red-100" : ""}`}
+                  className={`h-10 sm:h-12 border-b border-gray-200 p-1 sm:p-2 bg-gradient-to-b from-gray-50 to-white ${isToday(date.getDate()) ? "bg-gradient-to-b from-red-50 to-red-100" : ""}`}
                 >
                   <div className="flex items-center justify-between">
                     <div
-                      className={`text-sm font-semibold uppercase tracking-wide ${isToday(date.getDate()) ? "text-red-800" : "text-gray-900"}`}
+                      className={`text-xs sm:text-sm font-semibold uppercase tracking-wide ${isToday(date.getDate()) ? "text-red-800" : "text-gray-900"}`}
                     >
                       {daysOfWeek[index]}
                     </div>
                     <div
-                      className={`text-lg font-bold ${isToday(date.getDate()) ? "text-red-600" : "text-gray-700"}`}
+                      className={`text-base sm:text-lg font-bold ${isToday(date.getDate()) ? "text-red-600" : "text-gray-700"}`}
                     >
                       {date.getDate()}
                     </div>
@@ -1039,7 +1039,7 @@ export default function TrainerSchedulePage() {
                   return (
                     <div
                       key={`${date.toISOString()}-${time}`}
-                      className={`h-20 border-b border-gray-200 p-1 relative transition-colors duration-150 ${
+                      className={`h-16 sm:h-20 border-b border-gray-200 p-1 sm:p-2 relative transition-colors duration-150 ${
                         isToday(date.getDate())
                           ? "bg-red-50 hover:bg-red-100 border-red-200"
                           : "bg-white hover:bg-gray-50 border-gray-100"
@@ -1066,10 +1066,12 @@ export default function TrainerSchedulePage() {
 
     return (
       <div className="space-y-4">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 px-2 sm:px-0">
           <div className="flex items-center gap-3">
             <div className="w-1 h-10 bg-gradient-to-b from-red-500 to-red-600 rounded-full"></div>
-            <h2 className="text-3xl font-bold text-gray-900">{monthName}</h2>
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">
+              {monthName}
+            </h2>
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -1091,41 +1093,43 @@ export default function TrainerSchedulePage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-7 gap-0 bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200 h-[calc(100vh-12rem)] divide-x divide-gray-300">
-          {/* Day headers */}
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-            <div
-              key={day}
-              className="bg-gradient-to-b from-gray-50 to-gray-100 p-3 text-center text-sm font-semibold text-gray-900 uppercase tracking-wide border-b border-gray-200"
-            >
-              {day}
-            </div>
-          ))}
+        <div className="overflow-x-auto">
+          <div className="grid grid-cols-7 gap-0 bg-white rounded-xl shadow-lg overflow-hidden min-w-[700px] border border-gray-200 h-[calc(100vh-12rem)] divide-x divide-gray-300">
+            {/* Day headers */}
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+              <div
+                key={day}
+                className="bg-gradient-to-b from-gray-50 to-gray-100 p-1 sm:p-3 text-xs sm:text-sm text-center font-semibold text-gray-900 uppercase tracking-wide border-b border-gray-200"
+              >
+                {day}
+              </div>
+            ))}
 
-          {/* Calendar days */}
-          {days.map((day, index) => (
-            <div
-              key={index}
-              className={`bg-white p-2 border-b border-gray-200 hover:bg-gray-50 transition-colors duration-150 overflow-y-auto ${
-                isToday(day)
-                  ? "bg-red-50 hover:bg-red-100 ring-2 ring-red-500 ring-opacity-50"
-                  : ""
-              }`}
-            >
-              {day && (
-                <>
-                  <div
-                    className={`text-lg font-bold mb-2 text-right ${isToday(day) ? "text-red-600" : "text-gray-900"}`}
-                  >
-                    {day}
-                  </div>
-                  <div className="space-y-1">
-                    {getSessionsForDay(day).map(renderEvent)}
-                  </div>
-                </>
-              )}
-            </div>
-          ))}
+            {/* Calendar days */}
+            {days.map((day, index) => (
+              <div
+                key={index}
+                className={`bg-white p-1 sm:p-2 min-h-[80px] sm:min-h-[120px] border-b border-gray-200 hover:bg-gray-50 transition-colors duration-150 overflow-y-auto ${
+                  isToday(day)
+                    ? "bg-red-50 hover:bg-red-100 ring-2 ring-red-500 ring-opacity-50"
+                    : ""
+                }`}
+              >
+                {day && (
+                  <>
+                    <div
+                      className={`text-base sm:text-lg font-bold mb-1 sm:mb-2 text-right ${isToday(day) ? "text-red-600" : "text-gray-900"}`}
+                    >
+                      {day}
+                    </div>
+                    <div className="space-y-1">
+                      {getSessionsForDay(day).map(renderEvent)}
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );

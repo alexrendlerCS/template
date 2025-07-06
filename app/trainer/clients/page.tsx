@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { TrainerSidebar } from "@/components/trainer-sidebar";
+import { SidebarTrigger } from "@/components/ui/sidebar";
+
 import {
   Card,
   CardContent,
@@ -303,341 +303,323 @@ export default function TrainerClientsPage() {
   };
 
   return (
-    <SidebarProvider>
-      <div className="flex min-h-screen w-full">
-        <TrainerSidebar />
-        <div className="flex-1">
-          <header className="border-b bg-white px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <SidebarTrigger />
-                <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
-              </div>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button className="bg-red-600 hover:bg-red-700">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Client
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Add New Client</DialogTitle>
-                    <DialogDescription>
-                      Add a new client to your training roster
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">
-                          First Name
-                        </label>
-                        <Input placeholder="John" />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Last Name</label>
-                        <Input placeholder="Doe" />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Email</label>
-                      <Input type="email" placeholder="john@email.com" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Phone</label>
-                      <Input placeholder="+1 (555) 123-4567" />
-                    </div>
-                    <Button className="w-full bg-red-600 hover:bg-red-700">
-                      Add Client
-                    </Button>
+    <>
+      <header className="border-b bg-white px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <SidebarTrigger />
+            <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
+          </div>
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button className="bg-red-600 hover:bg-red-700">
+                <Plus className="h-4 w-4 mr-2" />
+                Add Client
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add New Client</DialogTitle>
+                <DialogDescription>
+                  Add a new client to your training roster
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">First Name</label>
+                    <Input placeholder="John" />
                   </div>
-                </DialogContent>
-              </Dialog>
-            </div>
-          </header>
-
-          <main className="p-6">
-            {/* Stats Overview */}
-            <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-4 gap-6 mb-8">
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">
-                        Total Clients
-                      </p>
-                      <p className="text-2xl font-bold">
-                        {loading ? (
-                          <Loader2 className="h-6 w-6 animate-spin" />
-                        ) : (
-                          clients.length
-                        )}
-                      </p>
-                    </div>
-                    <Users className="h-8 w-8 text-red-600" />
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">
-                        Active Clients
-                      </p>
-                      <p className="text-2xl font-bold">
-                        {loading ? (
-                          <Loader2 className="h-6 w-6 animate-spin" />
-                        ) : (
-                          clients.filter((c) => c.google_account_connected)
-                            .length
-                        )}
-                      </p>
-                    </div>
-                    <Users className="h-8 w-8 text-green-600" />
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">
-                        New Clients This Month
-                      </p>
-                      <p className="text-2xl font-bold">
-                        {loading ? (
-                          <Loader2 className="h-6 w-6 animate-spin" />
-                        ) : (
-                          newClientsThisMonth
-                        )}
-                      </p>
-                    </div>
-                    <Users className="h-8 w-8 text-blue-600" />
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">
-                        Clients With No Upcoming Sessions
-                      </p>
-                      <p className="text-2xl font-bold">
-                        {loading ? (
-                          <Loader2 className="h-6 w-6 animate-spin" />
-                        ) : (
-                          clientsWithNoUpcoming
-                        )}
-                      </p>
-                    </div>
-                    <Users className="h-8 w-8 text-gray-600" />
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Filters and Search */}
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle>Client Management</CardTitle>
-                <CardDescription>
-                  Search and filter your clients
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <Input
-                      placeholder="Search clients by name or email..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant={statusFilter === "all" ? "default" : "outline"}
-                      onClick={() => setStatusFilter("all")}
-                      className={
-                        statusFilter === "all"
-                          ? "bg-red-600 hover:bg-red-700"
-                          : ""
-                      }
-                    >
-                      All
-                    </Button>
-                    <Button
-                      variant={
-                        statusFilter === "active" ? "default" : "outline"
-                      }
-                      onClick={() => setStatusFilter("active")}
-                      className={
-                        statusFilter === "active"
-                          ? "bg-red-600 hover:bg-red-700"
-                          : ""
-                      }
-                    >
-                      Active
-                    </Button>
-                    <Button
-                      variant={
-                        statusFilter === "no_upcoming" ? "default" : "outline"
-                      }
-                      onClick={() => setStatusFilter("no_upcoming")}
-                      className={
-                        statusFilter === "no_upcoming"
-                          ? "bg-red-600 hover:bg-red-700"
-                          : ""
-                      }
-                    >
-                      No Upcoming Sessions
-                    </Button>
-                    <Button
-                      variant={
-                        statusFilter === "new_this_month"
-                          ? "default"
-                          : "outline"
-                      }
-                      onClick={() => setStatusFilter("new_this_month")}
-                      className={
-                        statusFilter === "new_this_month"
-                          ? "bg-red-600 hover:bg-red-700"
-                          : ""
-                      }
-                    >
-                      New This Month
-                    </Button>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Last Name</label>
+                    <Input placeholder="Doe" />
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Email</label>
+                  <Input type="email" placeholder="john@email.com" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Phone</label>
+                  <Input placeholder="+1 (555) 123-4567" />
+                </div>
+                <Button className="w-full bg-red-600 hover:bg-red-700">
+                  Add Client
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </header>
 
-            {/* Client List */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Clients ({filteredClients.length})</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-8 w-8 animate-spin text-red-600" />
-                    <span className="ml-2 text-gray-600">
-                      Loading clients...
-                    </span>
-                  </div>
-                ) : error ? (
-                  <div className="text-center py-8">
-                    <p className="text-red-600 mb-4">{error}</p>
-                    <Button onClick={fetchClients} variant="outline">
-                      Try Again
-                    </Button>
-                  </div>
-                ) : filteredClients.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-gray-600">No clients found</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {filteredClients.map((client) => (
-                      <div
-                        key={client.id}
-                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="flex items-center space-x-4">
-                          <Avatar className="h-12 w-12">
-                            <AvatarImage
-                              src={client.avatar_url || "/placeholder-user.jpg"}
-                              alt={client.full_name}
-                            />
-                            <AvatarFallback className="bg-red-600 text-white">
-                              {client.full_name
-                                .split(" ")
-                                .map((n) => n[0])
-                                .join("")}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <h3 className="font-medium text-lg">
-                              {client.full_name}
-                            </h3>
-                            <div className="flex items-center space-x-4 text-sm text-gray-500">
-                              <div className="flex items-center space-x-1">
-                                <Mail className="h-4 w-4" />
-                                <span>{client.email}</span>
-                              </div>
-                            </div>
-                            <div className="flex items-center space-x-4 text-sm text-gray-500 mt-1">
-                              <span>
-                                Joined:{" "}
-                                {new Date(
-                                  client.created_at
-                                ).toLocaleDateString()}
-                              </span>
-                            </div>
+      <main className="p-6">
+        {/* Stats Overview */}
+        <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-4 gap-6 mb-8">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">
+                    Total Clients
+                  </p>
+                  <p className="text-2xl font-bold">
+                    {loading ? (
+                      <Loader2 className="h-6 w-6 animate-spin" />
+                    ) : (
+                      clients.length
+                    )}
+                  </p>
+                </div>
+                <Users className="h-8 w-8 text-red-600" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">
+                    Active Clients
+                  </p>
+                  <p className="text-2xl font-bold">
+                    {loading ? (
+                      <Loader2 className="h-6 w-6 animate-spin" />
+                    ) : (
+                      clients.filter((c) => c.google_account_connected).length
+                    )}
+                  </p>
+                </div>
+                <Users className="h-8 w-8 text-green-600" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">
+                    New Clients This Month
+                  </p>
+                  <p className="text-2xl font-bold">
+                    {loading ? (
+                      <Loader2 className="h-6 w-6 animate-spin" />
+                    ) : (
+                      newClientsThisMonth
+                    )}
+                  </p>
+                </div>
+                <Users className="h-8 w-8 text-blue-600" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">
+                    Clients With No Upcoming Sessions
+                  </p>
+                  <p className="text-2xl font-bold">
+                    {loading ? (
+                      <Loader2 className="h-6 w-6 animate-spin" />
+                    ) : (
+                      clientsWithNoUpcoming
+                    )}
+                  </p>
+                </div>
+                <Users className="h-8 w-8 text-gray-600" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Filters and Search */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Client Management</CardTitle>
+            <CardDescription>Search and filter your clients</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Search clients by name or email..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant={statusFilter === "all" ? "default" : "outline"}
+                  onClick={() => setStatusFilter("all")}
+                  className={
+                    statusFilter === "all" ? "bg-red-600 hover:bg-red-700" : ""
+                  }
+                >
+                  All
+                </Button>
+                <Button
+                  variant={statusFilter === "active" ? "default" : "outline"}
+                  onClick={() => setStatusFilter("active")}
+                  className={
+                    statusFilter === "active"
+                      ? "bg-red-600 hover:bg-red-700"
+                      : ""
+                  }
+                >
+                  Active
+                </Button>
+                <Button
+                  variant={
+                    statusFilter === "no_upcoming" ? "default" : "outline"
+                  }
+                  onClick={() => setStatusFilter("no_upcoming")}
+                  className={
+                    statusFilter === "no_upcoming"
+                      ? "bg-red-600 hover:bg-red-700"
+                      : ""
+                  }
+                >
+                  No Upcoming Sessions
+                </Button>
+                <Button
+                  variant={
+                    statusFilter === "new_this_month" ? "default" : "outline"
+                  }
+                  onClick={() => setStatusFilter("new_this_month")}
+                  className={
+                    statusFilter === "new_this_month"
+                      ? "bg-red-600 hover:bg-red-700"
+                      : ""
+                  }
+                >
+                  New This Month
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Client List */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Clients ({filteredClients.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-red-600" />
+                <span className="ml-2 text-gray-600">Loading clients...</span>
+              </div>
+            ) : error ? (
+              <div className="text-center py-8">
+                <p className="text-red-600 mb-4">{error}</p>
+                <Button onClick={fetchClients} variant="outline">
+                  Try Again
+                </Button>
+              </div>
+            ) : filteredClients.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-600">No clients found</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredClients.map((client) => (
+                  <div
+                    key={client.id}
+                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-center space-x-4">
+                      <Avatar className="h-12 w-12">
+                        <AvatarImage
+                          src={client.avatar_url || "/placeholder-user.jpg"}
+                          alt={client.full_name}
+                        />
+                        <AvatarFallback className="bg-red-600 text-white">
+                          {client.full_name
+                            .split(" ")
+                            .map((n) => n[0])
+                            .join("")}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <h3 className="font-medium text-lg">
+                          {client.full_name}
+                        </h3>
+                        <div className="flex items-center space-x-4 text-sm text-gray-500">
+                          <div className="flex items-center space-x-1">
+                            <Mail className="h-4 w-4" />
+                            <span>{client.email}</span>
                           </div>
                         </div>
-                        <div className="flex items-center space-x-6">
-                          <Badge className={getStatusColor(client)}>
-                            {getStatusText(client)}
-                          </Badge>
-                          <div className="flex space-x-1">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                router.push("/trainer/messages");
-                              }}
-                            >
-                              <MessageSquare className="h-4 w-4" />
-                            </Button>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button size="sm" variant="outline">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    const encodedClientName =
-                                      encodeURIComponent(client.full_name);
-                                    router.push(
-                                      `/trainer/schedule?client=${encodedClientName}`
-                                    );
-                                  }}
-                                >
-                                  <Calendar className="h-4 w-4 mr-2" />
-                                  View Sessions
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    const encodedClientName =
-                                      encodeURIComponent(client.full_name);
-                                    router.push(
-                                      `/trainer/payments?client=${encodedClientName}`
-                                    );
-                                  }}
-                                >
-                                  <DollarSign className="h-4 w-4 mr-2" />
-                                  View Payments
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
+                        <div className="flex items-center space-x-4 text-sm text-gray-500 mt-1">
+                          <span>
+                            Joined:{" "}
+                            {new Date(client.created_at).toLocaleDateString()}
+                          </span>
                         </div>
                       </div>
-                    ))}
+                    </div>
+                    <div className="flex items-center space-x-6">
+                      <Badge className={getStatusColor(client)}>
+                        {getStatusText(client)}
+                      </Badge>
+                      <div className="flex space-x-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            router.push("/trainer/messages");
+                          }}
+                        >
+                          <MessageSquare className="h-4 w-4" />
+                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="sm" variant="outline">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => {
+                                const encodedClientName = encodeURIComponent(
+                                  client.full_name
+                                );
+                                router.push(
+                                  `/trainer/schedule?client=${encodedClientName}`
+                                );
+                              }}
+                            >
+                              <Calendar className="h-4 w-4 mr-2" />
+                              View Sessions
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                const encodedClientName = encodeURIComponent(
+                                  client.full_name
+                                );
+                                router.push(
+                                  `/trainer/payments?client=${encodedClientName}`
+                                );
+                              }}
+                            >
+                              <DollarSign className="h-4 w-4 mr-2" />
+                              View Payments
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          </main>
-        </div>
-      </div>
-    </SidebarProvider>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </main>
+    </>
   );
 }

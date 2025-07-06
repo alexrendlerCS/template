@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, Suspense, useRef } from "react";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { TrainerSidebar } from "@/components/trainer-sidebar";
+import { SidebarTrigger } from "@/components/ui/sidebar";
+
 import {
   Card,
   CardContent,
@@ -543,141 +543,136 @@ export default function TrainerSettings() {
   const [showAddSessions, setShowAddSessions] = useState(false);
 
   return (
-    <SidebarProvider>
-      <div className="flex min-h-screen w-full">
-        <TrainerSidebar />
-        <div className="flex-1">
-          <header className="border-b bg-white px-6 py-4">
-            <div className="flex items-center space-x-4">
-              <SidebarTrigger />
-              <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-            </div>
-          </header>
-
-          <main className="p-6 max-w-4xl mx-auto">
-            <div className="space-y-8">
-              {/* Calendar Integration */}
-              <Suspense fallback={<div>Loading calendar settings...</div>}>
-                <GoogleCalendarSection />
-              </Suspense>
-
-              {/* Client Contracts */}
-              <Suspense fallback={<div>Loading client contracts...</div>}>
-                <ClientContractsSection />
-              </Suspense>
-
-              {/* Notifications */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <Bell className="h-5 w-5 text-red-600" />
-                    <span>Notifications</span>
-                  </CardTitle>
-                  <CardDescription>
-                    Manage how you receive notifications
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="py-12 flex flex-col items-center justify-center">
-                  <span className="text-gray-500 text-sm mb-2">
-                    Notifications functionality
-                  </span>
-                  <span className="text-lg font-semibold text-gray-700">
-                    Coming Soon
-                  </span>
-                </CardContent>
-              </Card>
-
-              {/* Promo Codes & Discounts */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <Tag className="h-5 w-5 text-red-600" />
-                    <span>Promo Codes & Discounts</span>
-                  </CardTitle>
-                  <CardDescription>
-                    Create and manage promotional codes for your clients
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="py-8">
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        <tr>
-                          <td className="px-4 py-3 text-base font-medium text-gray-800">
-                            Add Free Sessions to a user's account
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <Button
-                              className="bg-red-600 hover:bg-red-700 text-white"
-                              onClick={() => setShowAddSessions(true)}
-                            >
-                              Add Sessions to User
-                            </Button>
-                          </td>
-                        </tr>
-                        <tr>
-                          <td
-                            className="px-4 py-3 text-center text-gray-500 text-base font-medium"
-                            colSpan={2}
-                          >
-                            More Promo Code/Discounts Options Coming Soon
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                  <AddSessionsModal
-                    open={showAddSessions}
-                    onOpenChange={setShowAddSessions}
-                  />
-                </CardContent>
-              </Card>
-
-              {/* Bulk Message */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <Mail className="h-5 w-5 text-red-600" />
-                    <span>Bulk Message</span>
-                  </CardTitle>
-                  <CardDescription>
-                    Send announcements or updates to multiple clients at once
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="py-12 flex flex-col items-center justify-center">
-                  <span className="text-gray-500 text-sm mb-2">
-                    Bulk messaging functionality
-                  </span>
-                  <span className="text-lg font-semibold text-gray-700">
-                    Coming Soon
-                  </span>
-                </CardContent>
-              </Card>
-
-              {/* Referral Program */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <Gift className="h-5 w-5 text-red-600" />
-                    <span>Referral Program</span>
-                  </CardTitle>
-                  <CardDescription>
-                    Reward clients for referring friends and family
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="py-12 flex flex-col items-center justify-center">
-                  <span className="text-gray-500 text-sm mb-2">
-                    Referral program functionality
-                  </span>
-                  <span className="text-lg font-semibold text-gray-700">
-                    Coming Soon
-                  </span>
-                </CardContent>
-              </Card>
-            </div>
-          </main>
+    <>
+      <header className="border-b bg-white px-6 py-4">
+        <div className="flex items-center space-x-4">
+          <SidebarTrigger />
+          <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
         </div>
-      </div>
-    </SidebarProvider>
+      </header>
+
+      <main className="p-6 max-w-4xl mx-auto">
+        <div className="space-y-8">
+          {/* Calendar Integration */}
+          <Suspense fallback={<div>Loading calendar settings...</div>}>
+            <GoogleCalendarSection />
+          </Suspense>
+
+          {/* Client Contracts */}
+          <Suspense fallback={<div>Loading client contracts...</div>}>
+            <ClientContractsSection />
+          </Suspense>
+
+          {/* Notifications */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <Bell className="h-5 w-5 text-red-600" />
+                <span>Notifications</span>
+              </CardTitle>
+              <CardDescription>
+                Manage how you receive notifications
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="py-12 flex flex-col items-center justify-center">
+              <span className="text-gray-500 text-sm mb-2">
+                Notifications functionality
+              </span>
+              <span className="text-lg font-semibold text-gray-700">
+                Coming Soon
+              </span>
+            </CardContent>
+          </Card>
+
+          {/* Promo Codes & Discounts */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <Tag className="h-5 w-5 text-red-600" />
+                <span>Promo Codes & Discounts</span>
+              </CardTitle>
+              <CardDescription>
+                Create and manage promotional codes for your clients
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="py-8">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    <tr>
+                      <td className="px-4 py-3 text-base font-medium text-gray-800">
+                        Add Free Sessions to a user's account
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Button
+                          className="bg-red-600 hover:bg-red-700 text-white"
+                          onClick={() => setShowAddSessions(true)}
+                        >
+                          Add Sessions to User
+                        </Button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td
+                        className="px-4 py-3 text-center text-gray-500 text-base font-medium"
+                        colSpan={2}
+                      >
+                        More Promo Code/Discounts Options Coming Soon
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <AddSessionsModal
+                open={showAddSessions}
+                onOpenChange={setShowAddSessions}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Bulk Message */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <Mail className="h-5 w-5 text-red-600" />
+                <span>Bulk Message</span>
+              </CardTitle>
+              <CardDescription>
+                Send announcements or updates to multiple clients at once
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="py-12 flex flex-col items-center justify-center">
+              <span className="text-gray-500 text-sm mb-2">
+                Bulk messaging functionality
+              </span>
+              <span className="text-lg font-semibold text-gray-700">
+                Coming Soon
+              </span>
+            </CardContent>
+          </Card>
+
+          {/* Referral Program */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <Gift className="h-5 w-5 text-red-600" />
+                <span>Referral Program</span>
+              </CardTitle>
+              <CardDescription>
+                Reward clients for referring friends and family
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="py-12 flex flex-col items-center justify-center">
+              <span className="text-gray-500 text-sm mb-2">
+                Referral program functionality
+              </span>
+              <span className="text-lg font-semibold text-gray-700">
+                Coming Soon
+              </span>
+            </CardContent>
+          </Card>
+        </div>
+      </main>
+    </>
   );
 }
