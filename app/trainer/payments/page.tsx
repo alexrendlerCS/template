@@ -157,6 +157,36 @@ export default function TrainerPaymentsPage() {
   ).length;
   const failedPayments = payments.filter((p) => p.status === "failed").length;
 
+  // Calculate post-tax revenue for Colorado-based trainer
+  const calculatePostTaxRevenue = (grossRevenue: number) => {
+    // Stripe fees: 2.9% + 30 cents per transaction
+    // For simplicity, we'll use an average fee rate of 3.2% (including the 30 cent flat fee)
+    const stripeFeeRate = 0.032;
+    const revenueAfterStripe = grossRevenue * (1 - stripeFeeRate);
+
+    // Federal taxes for Colorado middle-income self-employed person (2024 rates)
+    // Self-employment tax: 15.3% (12.4% Social Security + 2.9% Medicare)
+    const selfEmploymentTaxRate = 0.153;
+
+    // Income tax: Assuming 22% bracket for middle income ($47,151 - $100,525)
+    // Note: This is simplified - actual rate depends on total annual income
+    const federalIncomeTaxRate = 0.22;
+
+    // Combined federal tax rate
+    const federalTaxRate = selfEmploymentTaxRate + federalIncomeTaxRate; // 37.3%
+    const revenueAfterFederalTax = revenueAfterStripe * (1 - federalTaxRate);
+
+    // Colorado state tax: 4.4% flat rate (2024)
+    const coloradoStateTaxRate = 0.044;
+    const postTaxRevenue = revenueAfterFederalTax * (1 - coloradoStateTaxRate);
+
+    return postTaxRevenue;
+  };
+
+  const postTaxRevenueThisMonth = calculatePostTaxRevenue(revenueThisMonth);
+  const postTaxRevenueLastMonth = calculatePostTaxRevenue(revenueLastMonth);
+  const postTaxRevenueDiff = postTaxRevenueThisMonth - postTaxRevenueLastMonth;
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "completed":
@@ -268,16 +298,24 @@ export default function TrainerPaymentsPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-gray-600">
-                        Pending Amount
+                        Post-Tax Revenue
                       </p>
-                      <p className="text-2xl font-bold text-yellow-600">
-                        ${pendingAmount}
+                      <p className="text-2xl font-bold text-purple-600">
+                        $
+                        {postTaxRevenueThisMonth.toLocaleString(undefined, {
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 0,
+                        })}
                       </p>
                       <p className="text-xs text-gray-500">
-                        Awaiting processing
+                        {postTaxRevenueLastMonth === 0
+                          ? "No revenue last month"
+                          : postTaxRevenueDiff >= 0
+                            ? `+$${postTaxRevenueDiff.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} from last month`
+                            : `-$${Math.abs(postTaxRevenueDiff).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} from last month`}
                       </p>
                     </div>
-                    <Calendar className="h-8 w-8 text-yellow-600" />
+                    <TrendingUp className="h-8 w-8 text-purple-600" />
                   </div>
                 </CardContent>
               </Card>
