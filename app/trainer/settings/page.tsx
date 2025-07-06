@@ -27,10 +27,14 @@ import {
   Tag,
   Mail,
   Gift,
+  FileText,
+  Download,
+  Eye,
 } from "lucide-react";
 import GoogleCalendarPopup from "@/components/GoogleCalendarPopup";
 import GoogleCalendarSuccessDialog from "@/components/GoogleCalendarSuccessDialog";
 import { createClient } from "@/lib/supabaseClient";
+import { saveAs } from "file-saver";
 
 // Separate the Google Calendar section into its own client component
 function GoogleCalendarSection() {
@@ -150,6 +154,158 @@ function GoogleCalendarSection() {
   );
 }
 
+function ClientContractsSection() {
+  const [contracts, setContracts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const supabase = createClient();
+
+  useEffect(() => {
+    const fetchContractsAndUsers = async () => {
+      setLoading(true);
+      // Fetch all contracts (no join)
+      const { data: contractsData, error: contractsError } = await supabase
+        .from("contracts")
+        .select("id, pdf_url, signed_at, user_id")
+        .order("signed_at", { ascending: false });
+      if (contractsError) {
+        console.error("Failed to fetch contracts:", contractsError);
+        setContracts([]);
+        setLoading(false);
+        return;
+      }
+      // Get unique user_ids
+      const userIds = Array.from(
+        new Set((contractsData || []).map((c) => c.user_id))
+      );
+      // Fetch user info for all user_ids
+      let usersMap: Record<string, { full_name?: string; email?: string }> = {};
+      if (userIds.length > 0) {
+        const { data: usersData, error: usersError } = await supabase
+          .from("users")
+          .select("id, full_name, email")
+          .in("id", userIds);
+        if (!usersError && usersData) {
+          usersMap = Object.fromEntries(
+            usersData.map((u: any) => [
+              u.id,
+              { full_name: u.full_name, email: u.email },
+            ])
+          );
+        }
+      }
+      // Attach user info to contracts
+      const contractsWithUser = (contractsData || []).map((c) => ({
+        ...c,
+        user: usersMap[c.user_id] || null,
+      }));
+      setContracts(contractsWithUser);
+      setLoading(false);
+    };
+    fetchContractsAndUsers();
+  }, [supabase]);
+
+  const handleView = (url: string) => {
+    if (url) window.open(url, "_blank");
+  };
+
+  const handleDownload = async (url: string, clientName: string) => {
+    if (url) {
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        saveAs(
+          blob,
+          `${clientName.replace(/\s+/g, "_")}_Training_Agreement.pdf`
+        );
+      } catch (err) {
+        alert("Failed to download contract PDF");
+      }
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center space-x-2">
+          <FileText className="h-5 w-5 text-red-600" />
+          <span>Client Contracts</span>
+        </CardTitle>
+        <CardDescription>
+          View and download signed contracts from your clients
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div>Loading contracts...</div>
+        ) : contracts.length === 0 ? (
+          <div className="text-gray-500">No contracts found.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead>
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                    Client
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                    Email
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                    Date Signed
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {contracts.map((contract) => (
+                  <tr key={contract.id}>
+                    <td className="px-4 py-2 whitespace-nowrap">
+                      {contract.user?.full_name || contract.user_id}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap">
+                      {contract.user?.email || "-"}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap">
+                      {contract.signed_at
+                        ? new Date(contract.signed_at).toLocaleDateString()
+                        : "-"}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleView(contract.pdf_url)}
+                        disabled={!contract.pdf_url}
+                      >
+                        <Eye className="h-4 w-4 mr-1" /> View
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          handleDownload(
+                            contract.pdf_url,
+                            contract.user?.full_name || contract.user_id
+                          )
+                        }
+                        disabled={!contract.pdf_url}
+                      >
+                        <Download className="h-4 w-4 mr-1" /> Download
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function TrainerSettings() {
   const [notifications, setNotifications] = useState({
     email: true,
@@ -174,6 +330,11 @@ export default function TrainerSettings() {
               {/* Calendar Integration */}
               <Suspense fallback={<div>Loading calendar settings...</div>}>
                 <GoogleCalendarSection />
+              </Suspense>
+
+              {/* Client Contracts */}
+              <Suspense fallback={<div>Loading client contracts...</div>}>
+                <ClientContractsSection />
               </Suspense>
 
               {/* Notifications */}
