@@ -315,12 +315,18 @@ function ClientContractsSection() {
   );
 }
 
-function AddSessionsModal({ open, onOpenChange }) {
-  const [clients, setClients] = useState<any[]>([]);
-  const [loadingClients, setLoadingClients] = useState(true);
+function AddSessionsModal({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const [selectedUserId, setSelectedUserId] = useState<string>("");
-  const [sessionType, setSessionType] = useState<string>("In-Person Training");
+  const [sessionType, setSessionType] = useState<string>("");
   const [numSessions, setNumSessions] = useState<number>(1);
+  const [clients, setClients] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -330,14 +336,14 @@ function AddSessionsModal({ open, onOpenChange }) {
 
   useEffect(() => {
     if (open) {
-      setLoadingClients(true);
+      setLoading(true);
       supabase
         .from("users")
         .select("id, full_name, email")
         .eq("role", "client")
         .then(({ data, error }) => {
           if (!error && data) setClients(data);
-          setLoadingClients(false);
+          setLoading(false);
         });
     }
   }, [open, supabase]);
@@ -385,10 +391,12 @@ function AddSessionsModal({ open, onOpenChange }) {
       setShowSuccess(true);
       onOpenChange(false);
     } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "An unknown error occurred";
       toast({
         title: "Error",
-        description: err.message || err.toString(),
-        status: "error",
+        description: errorMessage,
+        variant: "destructive",
       });
     } finally {
       setSubmitting(false);
@@ -412,7 +420,7 @@ function AddSessionsModal({ open, onOpenChange }) {
               className="w-full border rounded p-2 mt-1"
               value={selectedUserId}
               onChange={(e) => setSelectedUserId(e.target.value)}
-              disabled={loadingClients}
+              disabled={loading}
             >
               <option value="">Select a client...</option>
               {clients.map((c) => (
