@@ -75,6 +75,7 @@ export function ContractModal({
           location,
           signature,
           signatureDate: new Date().toISOString().split("T")[0],
+          userId: session.user.id,
         }),
       });
 

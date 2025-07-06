@@ -31,6 +31,7 @@ import {
   CreditCard,
   Menu,
   Settings,
+  Gift,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -893,6 +894,36 @@ export function ClientSidebar() {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+
+          <SidebarGroup>
+            <SidebarGroupLabel>General</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === "/client/referral"}
+                  >
+                    <Link href="/client/referral">
+                      <Gift className="h-4 w-4" />
+                      <span>Referral Program</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === "/client/settings"}
+                  >
+                    <Link href="/client/settings">
+                      <Settings className="h-4 w-4" />
+                      <span>Settings</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

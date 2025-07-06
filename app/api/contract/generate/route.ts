@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { Resend } from "resend";
+import { supabaseAdmin } from "@/lib/supabase-server";
 
 // Initialize Resend client
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -17,6 +18,13 @@ interface ContractPayload {
 
 export async function POST(request: Request) {
   try {
+    // Debug: Log service role key and Supabase URL
+    console.log(
+      "SERVICE ROLE KEY (first 8 chars):",
+      process.env.SUPABASE_SERVICE_ROLE_KEY?.slice(0, 8)
+    );
+    console.log("SUPABASE URL:", process.env.NEXT_PUBLIC_SUPABASE_URL);
+
     const body = await request.json();
 
     // Validate required fields
@@ -380,7 +388,53 @@ export async function POST(request: Request) {
     const pdfBytes = await pdfDoc.save();
     const base64PDF = Buffer.from(pdfBytes).toString("base64");
 
-    // Send email with Resend
+    // --- New: Upload PDF to Supabase Storage ---
+    const userId = body.userId || body.user_id; // Adjust as needed
+    if (!userId) {
+      return NextResponse.json({ error: "Missing userId" }, { status: 400 });
+    }
+    const fileName = `contract_${userId}_${Date.now()}.pdf`;
+    // Debug: Log upload attempt
+    console.log("Uploading to bucket:", "contracts", "as userId:", userId);
+    const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
+      .from("contracts")
+      .upload(fileName, Buffer.from(pdfBytes), {
+        contentType: "application/pdf",
+        upsert: true,
+      });
+    // Debug: Log upload error details
+    if (uploadError) {
+      console.error("Upload error details:", uploadError);
+      console.error("Failed to upload contract PDF:", uploadError);
+      return NextResponse.json(
+        { error: "Failed to upload contract PDF" },
+        { status: 500 }
+      );
+    }
+    // Get the public URL (for private, use createSignedUrl instead)
+    const { data: urlData } = supabaseAdmin.storage
+      .from("contracts")
+      .getPublicUrl(fileName);
+    const pdfUrl = urlData?.publicUrl;
+    // Insert into contracts table
+    const { error: insertError } = await supabaseAdmin
+      .from("contracts")
+      .insert({
+        id:
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : require("crypto").randomUUID(),
+        user_id: userId,
+        pdf_url: pdfUrl,
+        signed_at: new Date().toISOString(),
+        contract_version: 1,
+        created_at: new Date().toISOString(),
+      });
+    if (insertError) {
+      console.error("Failed to insert contract row:", insertError);
+    }
+
+    // --- Existing: Send email with Resend ---
     await resend.emails.send({
       from: "Coach Kilday <no-reply@coachkilday.com>",
       to: [body.email],
@@ -395,7 +449,7 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(
-      { message: "Contract generated and sent successfully" },
+      { message: "Contract generated, stored, and sent successfully", pdfUrl },
       { status: 200 }
     );
   } catch (error) {
