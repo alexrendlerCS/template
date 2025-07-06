@@ -1107,10 +1107,8 @@ export default function TrainerSchedulePage() {
     const endTime = new Date(event.end.dateTime);
     const duration = (endTime.getTime() - startTime.getTime()) / (1000 * 60); // in minutes
 
-    // Get client's email from attendees or use name as fallback
-    const clientEmail = event.attendees?.find(
-      (a) => a.responseStatus !== "declined"
-    )?.email;
+    // Get client's email from users field or attendees as fallback
+    const clientEmail = event.users?.email || event.attendees?.[0]?.email;
     const clientColor = getClientColor(clientEmail, clientName);
 
     return (
@@ -1131,9 +1129,17 @@ export default function TrainerSchedulePage() {
         <div
           className={`text-xs ${clientColor.text} opacity-75 mt-1 flex items-center gap-1`}
         >
-          <div className="w-1.5 h-1.5 rounded-full bg-current opacity-60"></div>
-          {formatEventTime(event.start.dateTime)} • {duration}min
+          <Clock className="h-3 w-3" />
+          {formatEventTime(event.start.dateTime)} -{" "}
+          {formatEventTime(event.end.dateTime)}
         </div>
+        {event.description && (
+          <div
+            className={`text-xs ${clientColor.text} opacity-60 mt-1 line-clamp-2`}
+          >
+            {event.description}
+          </div>
+        )}
       </div>
     );
   };
