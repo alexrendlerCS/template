@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { TrainerSidebar } from "@/components/trainer-sidebar";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -472,54 +471,163 @@ export default function TrainerSchedulePage() {
       endDate.setMinutes(endDate.getMinutes() + 60);
       const endTimeStr = endDate.toTimeString().slice(0, 8);
 
-      // Check for existing session at the same date and time for this client BEFORE creating
+      // Check for existing session conflicts using overlap logic (like client booking)
       console.debug("=== SESSION CONFLICT CHECK DEBUG ===");
       console.debug("Selected client ID:", selectedClientForSession);
       console.debug("Selected date (raw):", selectedDateForSession);
       console.debug("Selected date type:", typeof selectedDateForSession);
       console.debug("Selected time (raw):", startTimeStr);
       console.debug("Selected time type:", typeof startTimeStr);
-      console.debug("Checking for existing sessions:", {
-        client_id: selectedClientForSession,
-        date: selectedDateForSession,
-        start_time: startTimeStr,
-        status: ["confirmed", "pending"],
-      });
-      const { data: existingSessions, error: sessionCheckError } =
+      console.debug("Calculated end time:", endTimeStr);
+
+      // Helper function to convert time string to minutes since midnight
+      const timeToMinutes = (time: string): number => {
+        const [hours, minutes] = time
+          .split(":")
+          .map((num) => parseInt(num, 10));
+        return hours * 60 + minutes;
+      };
+
+      // Helper function to check if two time slots overlap
+      const doSessionsOverlap = (
+        start1: string,
+        end1: string,
+        start2: string,
+        end2: string
+      ): boolean => {
+        const start1Mins = timeToMinutes(start1);
+        const end1Mins = timeToMinutes(end1);
+        const start2Mins = timeToMinutes(start2);
+        const end2Mins = timeToMinutes(end2);
+
+        // Sessions overlap if one doesn't end before the other starts
+        const overlaps = !(end1Mins <= start2Mins || end2Mins <= start1Mins);
+
+        console.debug(
+          `Overlap check: ${start1}-${end1} vs ${start2}-${end2} = ${overlaps}`
+        );
+        console.debug(
+          `  Times in minutes: ${start1Mins}-${end1Mins} vs ${start2Mins}-${end2Mins}`
+        );
+
+        return overlaps;
+      };
+
+      // Get ALL sessions for this client on this date
+      console.debug("Fetching ALL sessions for client on this date...");
+      const { data: allClientSessions, error: clientSessionsError } =
         await supabase
           .from("sessions")
           .select("*")
           .eq("client_id", selectedClientForSession)
           .eq("date", selectedDateForSession)
-          .eq("start_time", startTimeStr)
           .in("status", ["confirmed", "pending"]);
-      console.debug("Existing sessions found:", existingSessions);
-      console.debug(
-        "Full existing session details:",
-        existingSessions?.map((s) => ({
-          id: s.id,
-          client_id: s.client_id,
-          date: s.date,
-          start_time: s.start_time,
-          end_time: s.end_time,
-          type: s.type,
-          status: s.status,
-          created_at: s.created_at,
-        }))
-      );
 
-      // Also check ALL sessions for this client on this date for debugging
-      const { data: allSessionsForDate } = await supabase
+      if (clientSessionsError) {
+        console.error("Error fetching client sessions:", clientSessionsError);
+      }
+
+      console.debug("All client sessions on this date:", allClientSessions);
+
+      // Check for client session overlaps
+      let clientHasConflict = false;
+      if (allClientSessions && allClientSessions.length > 0) {
+        console.debug("=== CLIENT SESSION OVERLAP CHECK ===");
+        for (const existingSession of allClientSessions) {
+          const overlaps = doSessionsOverlap(
+            startTimeStr,
+            endTimeStr,
+            existingSession.start_time,
+            existingSession.end_time
+          );
+
+          if (overlaps) {
+            console.warn("🚨 CLIENT CONFLICT FOUND:", {
+              existingSession: {
+                id: existingSession.id,
+                start_time: existingSession.start_time,
+                end_time: existingSession.end_time,
+                type: existingSession.type,
+                status: existingSession.status,
+              },
+              requestedSession: {
+                start_time: startTimeStr,
+                end_time: endTimeStr,
+              },
+            });
+            clientHasConflict = true;
+            break;
+          }
+        }
+      }
+
+      // Get ALL sessions for this trainer on this date
+      console.debug("Fetching ALL sessions for trainer on this date...");
+      const { data: allTrainerSessions, error: trainerSessionsError } =
+        await supabase
+          .from("sessions")
+          .select("*")
+          .eq("trainer_id", session.user.id)
+          .eq("date", selectedDateForSession)
+          .in("status", ["confirmed", "pending"]);
+
+      if (trainerSessionsError) {
+        console.error("Error fetching trainer sessions:", trainerSessionsError);
+      }
+
+      console.debug("All trainer sessions on this date:", allTrainerSessions);
+
+      // Check for trainer session overlaps
+      let trainerHasConflict = false;
+      if (allTrainerSessions && allTrainerSessions.length > 0) {
+        console.debug("=== TRAINER SESSION OVERLAP CHECK ===");
+        for (const existingSession of allTrainerSessions) {
+          const overlaps = doSessionsOverlap(
+            startTimeStr,
+            endTimeStr,
+            existingSession.start_time,
+            existingSession.end_time
+          );
+
+          if (overlaps) {
+            console.warn("🚨 TRAINER CONFLICT FOUND:", {
+              existingSession: {
+                id: existingSession.id,
+                client_id: existingSession.client_id,
+                start_time: existingSession.start_time,
+                end_time: existingSession.end_time,
+                type: existingSession.type,
+                status: existingSession.status,
+              },
+              requestedSession: {
+                start_time: startTimeStr,
+                end_time: endTimeStr,
+              },
+            });
+            trainerHasConflict = true;
+            break;
+          }
+        }
+      }
+
+      // Check for exact time match (original logic)
+      console.debug("=== EXACT TIME MATCH CHECK ===");
+      const { data: exactTimeSessions, error: exactTimeError } = await supabase
         .from("sessions")
         .select("*")
         .eq("client_id", selectedClientForSession)
-        .eq("date", selectedDateForSession);
-      console.debug(
-        "ALL sessions for this client on this date:",
-        allSessionsForDate
-      );
+        .eq("date", selectedDateForSession)
+        .eq("start_time", startTimeStr)
+        .in("status", ["confirmed", "pending"]);
 
-      if (sessionCheckError) {
+      console.debug("Exact time match sessions:", exactTimeSessions);
+
+      if (exactTimeError) {
+        console.error("Error checking exact time match:", exactTimeError);
+      }
+
+      // Check for errors in fetching sessions
+      if (clientSessionsError || trainerSessionsError || exactTimeError) {
         setErrorMessage(
           "Error checking for existing sessions. Please try again."
         );
@@ -527,24 +635,43 @@ export default function TrainerSchedulePage() {
         setIsCreatingSession(false);
         return;
       }
-      if (existingSessions && existingSessions.length > 0) {
-        console.warn(
-          "Booking blocked: found existing sessions:",
-          existingSessions
-        );
-        console.warn(
-          "Comparing startTimeStr:",
-          startTimeStr,
-          "with DB start_time(s):",
-          existingSessions.map((s) => s.start_time)
-        );
+
+      // Check for conflicts using overlap logic
+      if (clientHasConflict) {
+        console.warn("🚨 BOOKING BLOCKED: Client has conflicting session");
         setErrorMessage(
-          "This client already has a session booked at the selected date and time."
+          "This client already has a session booked that overlaps with the selected time."
         );
         setShowErrorDialog(true);
         setIsCreatingSession(false);
         return;
       }
+
+      if (trainerHasConflict) {
+        console.warn("🚨 BOOKING BLOCKED: Trainer has conflicting session");
+        setErrorMessage(
+          "You already have a session booked that overlaps with the selected time."
+        );
+        setShowErrorDialog(true);
+        setIsCreatingSession(false);
+        return;
+      }
+
+      // Also check for exact time match (for debugging)
+      if (exactTimeSessions && exactTimeSessions.length > 0) {
+        console.warn(
+          "🚨 EXACT TIME MATCH FOUND (but no overlap detected):",
+          exactTimeSessions
+        );
+        console.warn(
+          "Comparing startTimeStr:",
+          startTimeStr,
+          "with DB start_time(s):",
+          exactTimeSessions.map((s: any) => s.start_time)
+        );
+      }
+
+      console.debug("✅ No conflicts found - proceeding with session creation");
 
       // Insert into sessions table
       const { data: sessionData, error: sessionError } = await supabase
@@ -1151,97 +1278,94 @@ export default function TrainerSchedulePage() {
   }
 
   return (
-    <SidebarProvider>
-      <div className="flex min-h-screen w-full">
-        <TrainerSidebar />
-        <div className="flex-1 bg-white">
-          <header className="border-b border-gray-200 bg-white px-6 py-6 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <SidebarTrigger />
-                <div className="flex items-center gap-3">
-                  <div className="w-1 h-8 bg-gradient-to-b from-red-500 to-red-600 rounded-full"></div>
-                  <h1 className="text-3xl font-bold text-gray-900">Schedule</h1>
-                </div>
-              </div>
-              <div className="flex items-center space-x-4">
-                {/* Client Filter */}
-                <div className="flex items-center space-x-2">
-                  <Users className="h-4 w-4 text-gray-500" />
-                  <Select
-                    value={selectedClient}
-                    onValueChange={setSelectedClient}
-                  >
-                    <SelectTrigger className="w-48">
-                      <SelectValue placeholder="Filter by client" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Clients</SelectItem>
-                      {getUniqueClients().map((client) => (
-                        <SelectItem key={client} value={client}>
-                          {client}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex items-center space-x-2 bg-gray-100 p-1 rounded-lg">
-                  <Button
-                    variant={viewMode === "week" ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => setViewMode("week")}
-                    className={
-                      viewMode === "week"
-                        ? "bg-white shadow-sm text-gray-900 hover:bg-gray-50"
-                        : "text-gray-600 hover:text-gray-900 hover:bg-transparent"
-                    }
-                  >
-                    Week
-                  </Button>
-                  <Button
-                    variant={viewMode === "month" ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => setViewMode("month")}
-                    className={
-                      viewMode === "month"
-                        ? "bg-white shadow-sm text-gray-900 hover:bg-gray-50"
-                        : "text-gray-600 hover:text-gray-900 hover:bg-transparent"
-                    }
-                  >
-                    Month
-                  </Button>
-                </div>
-                <Button
-                  onClick={() => setIsAddSessionOpen(true)}
-                  className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 shadow-md hover:shadow-lg transition-all duration-200"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Session
-                </Button>
+    <>
+      <div className="flex-1 bg-white">
+        <header className="border-b border-gray-200 bg-white px-6 py-6 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <SidebarTrigger />
+              <div className="flex items-center gap-3">
+                <div className="w-1 h-8 bg-gradient-to-b from-red-500 to-red-600 rounded-full"></div>
+                <h1 className="text-3xl font-bold text-gray-900">Schedule</h1>
               </div>
             </div>
-          </header>
+            <div className="flex items-center space-x-4">
+              {/* Client Filter */}
+              <div className="flex items-center space-x-2">
+                <Users className="h-4 w-4 text-gray-500" />
+                <Select
+                  value={selectedClient}
+                  onValueChange={setSelectedClient}
+                >
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Filter by client" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Clients</SelectItem>
+                    {getUniqueClients().map((client) => (
+                      <SelectItem key={client} value={client}>
+                        {client}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-          <main className="p-4">
-            {loading ? (
-              <div className="flex items-center justify-center h-[calc(100vh-10rem)]">
-                <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+              <div className="flex items-center space-x-2 bg-gray-100 p-1 rounded-lg">
+                <Button
+                  variant={viewMode === "week" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewMode("week")}
+                  className={
+                    viewMode === "week"
+                      ? "bg-white shadow-sm text-gray-900 hover:bg-gray-50"
+                      : "text-gray-600 hover:text-gray-900 hover:bg-transparent"
+                  }
+                >
+                  Week
+                </Button>
+                <Button
+                  variant={viewMode === "month" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewMode("month")}
+                  className={
+                    viewMode === "month"
+                      ? "bg-white shadow-sm text-gray-900 hover:bg-gray-50"
+                      : "text-gray-600 hover:text-gray-900 hover:bg-transparent"
+                  }
+                >
+                  Month
+                </Button>
               </div>
-            ) : error ? (
-              <div className="flex items-center justify-center h-[calc(100vh-10rem)]">
-                <div className="text-center text-red-600">
-                  <AlertCircle className="h-8 w-8 mx-auto mb-2" />
-                  {error}
-                </div>
+              <Button
+                onClick={() => setIsAddSessionOpen(true)}
+                className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 shadow-md hover:shadow-lg transition-all duration-200"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Session
+              </Button>
+            </div>
+          </div>
+        </header>
+
+        <main className="p-4">
+          {loading ? (
+            <div className="flex items-center justify-center h-[calc(100vh-10rem)]">
+              <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+            </div>
+          ) : error ? (
+            <div className="flex items-center justify-center h-[calc(100vh-10rem)]">
+              <div className="text-center text-red-600">
+                <AlertCircle className="h-8 w-8 mx-auto mb-2" />
+                {error}
               </div>
-            ) : viewMode === "week" ? (
-              renderWeekView()
-            ) : viewMode === "month" ? (
-              renderMonthView()
-            ) : null}
-          </main>
-        </div>
+            </div>
+          ) : viewMode === "week" ? (
+            renderWeekView()
+          ) : viewMode === "month" ? (
+            renderMonthView()
+          ) : null}
+        </main>
       </div>
 
       {/* Add Session Dialog */}
@@ -1440,6 +1564,6 @@ export default function TrainerSchedulePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </SidebarProvider>
+    </>
   );
 }

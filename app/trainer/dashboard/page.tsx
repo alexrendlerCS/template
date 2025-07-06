@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { TrainerSidebar } from "@/components/trainer-sidebar";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import {
   Card,
   CardContent,
@@ -982,539 +981,525 @@ export default function TrainerDashboard() {
   };
 
   return (
-    <SidebarProvider>
-      <div className="flex min-h-screen w-full">
-        {modals}
-        <TrainerSidebar />
-        <div className="flex-1">
-          <header className="border-b">
-            <div className="flex h-16 items-center px-4 gap-4">
-              <SidebarTrigger />
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search clients..."
-                    className="pl-8"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+    <>
+      {modals}
+      <div className="flex-1">
+        <header className="border-b">
+          <div className="flex h-16 items-center px-4 gap-4">
+            <SidebarTrigger />
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search clients..."
+                  className="pl-8"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+            </div>
+            <GoogleCalendarSection
+              isConnected={userStatus.googleConnected}
+              onConnect={handleConnectCalendar}
+            />
+          </div>
+        </header>
+
+        <main className="p-6 space-y-6">
+          {/* Welcome Banner */}
+          <Card className="bg-gradient-to-r from-red-600 to-red-700 text-white border-0">
+            <CardContent className="p-6">
+              <div className="flex items-center space-x-4">
+                <Avatar className="h-16 w-16">
+                  <AvatarImage
+                    src={userStatus.avatarUrl || "/placeholder-user.jpg"}
+                    alt={userStatus.userName}
+                    onError={(e) => {
+                      console.error(
+                        "Dashboard avatar image failed to load:",
+                        e
+                      );
+                      console.log(
+                        "Attempted avatar URL:",
+                        userStatus.avatarUrl
+                      );
+                      // Force fallback to initials
+                      e.currentTarget.style.display = "none";
+                    }}
                   />
+                  <AvatarFallback className="bg-white text-red-600 text-xl font-bold">
+                    {userStatus.userName
+                      .split(" ")
+                      .map((n: string) => n[0])
+                      .join("")
+                      .toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <h2 className="text-2xl font-bold">
+                    Welcome back, {userStatus.userName}!
+                  </h2>
+                  <p className="text-red-100">
+                    {todaysSessions.length > 0
+                      ? `You have ${todaysSessions.length} session${todaysSessions.length === 1 ? "" : "s"} scheduled for today`
+                      : "No sessions scheduled for today"}
+                  </p>
                 </div>
               </div>
-              <GoogleCalendarSection
-                isConnected={userStatus.googleConnected}
-                onConnect={handleConnectCalendar}
-              />
-            </div>
-          </header>
+            </CardContent>
+          </Card>
 
-          <main className="p-6 space-y-6">
-            {/* Welcome Banner */}
-            <Card className="bg-gradient-to-r from-red-600 to-red-700 text-white border-0">
-              <CardContent className="p-6">
-                <div className="flex items-center space-x-4">
-                  <Avatar className="h-16 w-16">
-                    <AvatarImage
-                      src={userStatus.avatarUrl || "/placeholder-user.jpg"}
-                      alt={userStatus.userName}
-                      onError={(e) => {
-                        console.error(
-                          "Dashboard avatar image failed to load:",
-                          e
-                        );
-                        console.log(
-                          "Attempted avatar URL:",
-                          userStatus.avatarUrl
-                        );
-                        // Force fallback to initials
-                        e.currentTarget.style.display = "none";
-                      }}
-                    />
-                    <AvatarFallback className="bg-white text-red-600 text-xl font-bold">
-                      {userStatus.userName
-                        .split(" ")
-                        .map((n: string) => n[0])
-                        .join("")
-                        .toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <h2 className="text-2xl font-bold">
-                      Welcome back, {userStatus.userName}!
-                    </h2>
-                    <p className="text-red-100">
-                      {todaysSessions.length > 0
-                        ? `You have ${todaysSessions.length} session${todaysSessions.length === 1 ? "" : "s"} scheduled for today`
-                        : "No sessions scheduled for today"}
-                    </p>
-                  </div>
+          {/* Stats Overview */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Total Clients
+                </CardTitle>
+                <Users className="h-4 w-4 text-red-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {totalClients !== null ? (
+                    totalClients
+                  ) : (
+                    <span className="text-gray-400">--</span>
+                  )}
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  {clientsThisMonth - clientsLastMonth >= 0 ? "+" : ""}
+                  {clientsThisMonth - clientsLastMonth} from last month
+                </p>
               </CardContent>
             </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Today's Sessions
+                </CardTitle>
+                <Clock className="h-4 w-4 text-red-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {todaysSessions.length}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {completedSessions} completed, {upcomingSessions} upcoming
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Monthly Sessions
+                </CardTitle>
+                <BarChart3 className="h-4 w-4 text-red-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{sessionsThisMonth}</div>
+                <p className="text-xs text-muted-foreground">
+                  {sessionsThisMonth - sessionsLastMonth >= 0 ? "+" : ""}
+                  {sessionsThisMonth - sessionsLastMonth} from last month
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Monthly Revenue
+                </CardTitle>
+                <DollarSign className="h-4 w-4 text-red-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  ${revenueThisMonth.toLocaleString()}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {revenueLastMonth > 0 ? (
+                    <>
+                      {revenueThisMonth >= revenueLastMonth ? "+" : ""}
+                      {Math.round(
+                        ((revenueThisMonth - revenueLastMonth) /
+                          revenueLastMonth) *
+                          100
+                      )}
+                      % from last month
+                    </>
+                  ) : (
+                    "No revenue last month"
+                  )}
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Pending Payments
+                </CardTitle>
+                <Clock className="h-4 w-4 text-yellow-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{pendingPaymentsCount}</div>
+                <p className="text-xs text-muted-foreground">
+                  ${pendingPaymentsAmount.toLocaleString()} total pending
+                </p>
+              </CardContent>
+            </Card>
+          </div>
 
-            {/* Stats Overview */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    Total Clients
-                  </CardTitle>
-                  <Users className="h-4 w-4 text-red-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {totalClients !== null ? (
-                      totalClients
-                    ) : (
-                      <span className="text-gray-400">--</span>
-                    )}
+          {/* Today's Schedule */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <Calendar className="h-5 w-5 text-red-600" />
+                <span>Today's Schedule</span>
+                <span className="ml-2 text-xs text-muted-foreground">
+                  ({todaysSessions.length} total, {completedSessions} completed,{" "}
+                  {upcomingSessions} upcoming)
+                </span>
+              </CardTitle>
+              <CardDescription>Manage your sessions for today</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {todaysSessions.length === 0 ? (
+                  <div className="text-center text-gray-400">
+                    No sessions scheduled for today.
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {clientsThisMonth - clientsLastMonth >= 0 ? "+" : ""}
-                    {clientsThisMonth - clientsLastMonth} from last month
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    Today's Sessions
-                  </CardTitle>
-                  <Clock className="h-4 w-4 text-red-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {todaysSessions.length}
+                ) : (
+                  <div className="flex flex-col gap-4">
+                    <TooltipProvider>
+                      {todaysSessions.map((session) => {
+                        // Format start and end time as 10:00 AM - 11:00 AM
+                        const start = session.start_time
+                          ? new Date(`${session.date}T${session.start_time}`)
+                          : null;
+                        let end: Date | null = null;
+                        if (session.end_time) {
+                          end = new Date(`${session.date}T${session.end_time}`);
+                        } else if (
+                          session.start_time &&
+                          session.duration_minutes
+                        ) {
+                          const startDate = new Date(
+                            `${session.date}T${session.start_time}`
+                          );
+                          end = new Date(
+                            startDate.getTime() +
+                              session.duration_minutes * 60000
+                          );
+                        } else if (session.start_time) {
+                          const startDate = new Date(
+                            `${session.date}T${session.start_time}`
+                          );
+                          end = new Date(startDate.getTime() + 60 * 60000);
+                        }
+                        const formatTime = (date: Date | null) =>
+                          date
+                            ? date.toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                hour12: true,
+                              })
+                            : "";
+                        const formattedTime = `${formatTime(start)} - ${formatTime(end)}`;
+                        // Status badge color
+                        let badgeVariant:
+                          | "default"
+                          | "secondary"
+                          | "destructive" = "default";
+                        let badgeClass = "";
+                        if (session.status === "confirmed") {
+                          badgeVariant = "default";
+                          badgeClass = "bg-green-500 text-white";
+                        } else if (session.status === "completed") {
+                          badgeVariant = "secondary";
+                          badgeClass = "bg-gray-400 text-white";
+                        } else if (session.status === "canceled") {
+                          badgeVariant = "destructive";
+                          badgeClass = "bg-red-500 text-white";
+                        }
+                        // Client info
+                        const client = session.users || {};
+                        const clientName = client.full_name || "Unknown Client";
+                        const clientEmail = client.email || null;
+                        const clientAvatarUrl =
+                          client.avatar_public_url || "/placeholder-user.jpg";
+                        // Avatar fallback: initials
+                        const initials = clientName
+                          .split(" ")
+                          .map((n: string) => n[0])
+                          .join("")
+                          .toUpperCase();
+                        // Session notes (if available)
+                        const notes = session.notes || null;
+                        // Session detail link
+                        const sessionDetailUrl = `/trainer/schedule/session/${session.id}`;
+                        return (
+                          <Card
+                            key={session.id}
+                            className="flex flex-col sm:flex-row items-center justify-between p-4 gap-4 w-full shadow-md"
+                          >
+                            <div className="flex items-center gap-4 w-full">
+                              <span className="flex items-center text-base font-medium text-gray-700 min-w-[150px]">
+                                <Clock className="h-4 w-4 mr-1 text-gray-500" />
+                                {formattedTime}
+                              </span>
+                              <span className="flex items-center font-bold text-lg text-gray-900">
+                                <Dumbbell className="h-4 w-4 mr-1 text-red-600" />
+                                {session.type}
+                              </span>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="flex items-center gap-2 cursor-pointer">
+                                    <Avatar className="h-8 w-8">
+                                      <AvatarImage
+                                        src={clientAvatarUrl}
+                                        alt={clientName}
+                                        onError={(e) => {
+                                          e.currentTarget.style.display =
+                                            "none";
+                                        }}
+                                      />
+                                      <AvatarFallback className="bg-red-600 text-white text-sm">
+                                        {initials}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <span className="font-medium text-gray-800">
+                                      {clientName}
+                                    </span>
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <div className="flex flex-col">
+                                    {clientEmail && <span>{clientEmail}</span>}
+                                    {notes && (
+                                      <span className="text-xs text-gray-500 mt-1">
+                                        {notes}
+                                      </span>
+                                    )}
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                              <Badge
+                                variant={badgeVariant}
+                                className={badgeClass + " ml-2"}
+                              >
+                                {session.status.charAt(0).toUpperCase() +
+                                  session.status.slice(1)}
+                              </Badge>
+                            </div>
+                            <Button
+                              variant="outline"
+                              className="ml-auto"
+                              onClick={() => {
+                                // Navigate to schedule page with client filter
+                                const encodedClientName =
+                                  encodeURIComponent(clientName);
+                                router.push(
+                                  `/trainer/schedule?client=${encodedClientName}`
+                                );
+                              }}
+                            >
+                              View
+                            </Button>
+                          </Card>
+                        );
+                      })}
+                    </TooltipProvider>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {completedSessions} completed, {upcomingSessions} upcoming
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    Monthly Sessions
-                  </CardTitle>
-                  <BarChart3 className="h-4 w-4 text-red-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{sessionsThisMonth}</div>
-                  <p className="text-xs text-muted-foreground">
-                    {sessionsThisMonth - sessionsLastMonth >= 0 ? "+" : ""}
-                    {sessionsThisMonth - sessionsLastMonth} from last month
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    Monthly Revenue
-                  </CardTitle>
-                  <DollarSign className="h-4 w-4 text-red-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    ${revenueThisMonth.toLocaleString()}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {revenueLastMonth > 0 ? (
-                      <>
-                        {revenueThisMonth >= revenueLastMonth ? "+" : ""}
-                        {Math.round(
-                          ((revenueThisMonth - revenueLastMonth) /
-                            revenueLastMonth) *
-                            100
-                        )}
-                        % from last month
-                      </>
-                    ) : (
-                      "No revenue last month"
-                    )}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    Pending Payments
-                  </CardTitle>
-                  <Clock className="h-4 w-4 text-yellow-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {pendingPaymentsCount}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    ${pendingPaymentsAmount.toLocaleString()} total pending
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
 
-            {/* Today's Schedule */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Client Management */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
-                  <Calendar className="h-5 w-5 text-red-600" />
-                  <span>Today's Schedule</span>
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    ({todaysSessions.length} total, {completedSessions}{" "}
-                    completed, {upcomingSessions} upcoming)
-                  </span>
+                  <Users className="h-5 w-5 text-red-600" />
+                  <span>Client Management</span>
                 </CardTitle>
                 <CardDescription>
-                  Manage your sessions for today
+                  Search and manage your clients
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {todaysSessions.length === 0 ? (
-                    <div className="text-center text-gray-400">
-                      No sessions scheduled for today.
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-4">
-                      <TooltipProvider>
-                        {todaysSessions.map((session) => {
-                          // Format start and end time as 10:00 AM - 11:00 AM
-                          const start = session.start_time
-                            ? new Date(`${session.date}T${session.start_time}`)
-                            : null;
-                          let end: Date | null = null;
-                          if (session.end_time) {
-                            end = new Date(
-                              `${session.date}T${session.end_time}`
-                            );
-                          } else if (
-                            session.start_time &&
-                            session.duration_minutes
-                          ) {
-                            const startDate = new Date(
-                              `${session.date}T${session.start_time}`
-                            );
-                            end = new Date(
-                              startDate.getTime() +
-                                session.duration_minutes * 60000
-                            );
-                          } else if (session.start_time) {
-                            const startDate = new Date(
-                              `${session.date}T${session.start_time}`
-                            );
-                            end = new Date(startDate.getTime() + 60 * 60000);
-                          }
-                          const formatTime = (date: Date | null) =>
-                            date
-                              ? date.toLocaleTimeString([], {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                  hour12: true,
-                                })
-                              : "";
-                          const formattedTime = `${formatTime(start)} - ${formatTime(end)}`;
-                          // Status badge color
-                          let badgeVariant:
-                            | "default"
-                            | "secondary"
-                            | "destructive" = "default";
-                          let badgeClass = "";
-                          if (session.status === "confirmed") {
-                            badgeVariant = "default";
-                            badgeClass = "bg-green-500 text-white";
-                          } else if (session.status === "completed") {
-                            badgeVariant = "secondary";
-                            badgeClass = "bg-gray-400 text-white";
-                          } else if (session.status === "canceled") {
-                            badgeVariant = "destructive";
-                            badgeClass = "bg-red-500 text-white";
-                          }
-                          // Client info
-                          const client = session.users || {};
-                          const clientName =
-                            client.full_name || "Unknown Client";
-                          const clientEmail = client.email || null;
-                          const clientAvatarUrl =
-                            client.avatar_public_url || "/placeholder-user.jpg";
-                          // Avatar fallback: initials
-                          const initials = clientName
-                            .split(" ")
-                            .map((n: string) => n[0])
-                            .join("")
-                            .toUpperCase();
-                          // Session notes (if available)
-                          const notes = session.notes || null;
-                          // Session detail link
-                          const sessionDetailUrl = `/trainer/schedule/session/${session.id}`;
-                          return (
-                            <Card
-                              key={session.id}
-                              className="flex flex-col sm:flex-row items-center justify-between p-4 gap-4 w-full shadow-md"
-                            >
-                              <div className="flex items-center gap-4 w-full">
-                                <span className="flex items-center text-base font-medium text-gray-700 min-w-[150px]">
-                                  <Clock className="h-4 w-4 mr-1 text-gray-500" />
-                                  {formattedTime}
-                                </span>
-                                <span className="flex items-center font-bold text-lg text-gray-900">
-                                  <Dumbbell className="h-4 w-4 mr-1 text-red-600" />
-                                  {session.type}
-                                </span>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <span className="flex items-center gap-2 cursor-pointer">
-                                      <Avatar className="h-8 w-8">
-                                        <AvatarImage
-                                          src={clientAvatarUrl}
-                                          alt={clientName}
-                                          onError={(e) => {
-                                            e.currentTarget.style.display =
-                                              "none";
-                                          }}
-                                        />
-                                        <AvatarFallback className="bg-red-600 text-white text-sm">
-                                          {initials}
-                                        </AvatarFallback>
-                                      </Avatar>
-                                      <span className="font-medium text-gray-800">
-                                        {clientName}
-                                      </span>
-                                    </span>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <div className="flex flex-col">
-                                      {clientEmail && (
-                                        <span>{clientEmail}</span>
-                                      )}
-                                      {notes && (
-                                        <span className="text-xs text-gray-500 mt-1">
-                                          {notes}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </TooltipContent>
-                                </Tooltip>
-                                <Badge
-                                  variant={badgeVariant}
-                                  className={badgeClass + " ml-2"}
-                                >
-                                  {session.status.charAt(0).toUpperCase() +
-                                    session.status.slice(1)}
-                                </Badge>
-                              </div>
-                              <Button
-                                variant="outline"
-                                className="ml-auto"
-                                onClick={() => {
-                                  // Navigate to schedule page with client filter
-                                  const encodedClientName =
-                                    encodeURIComponent(clientName);
-                                  router.push(
-                                    `/trainer/schedule?client=${encodedClientName}`
-                                  );
+                  <div className="relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      placeholder="Search clients..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {clientsWithSessions
+                      .filter(
+                        (client) =>
+                          client.full_name
+                            .toLowerCase()
+                            .includes(searchTerm.toLowerCase()) ||
+                          client.email
+                            .toLowerCase()
+                            .includes(searchTerm.toLowerCase())
+                      )
+                      .map((client) => (
+                        <div
+                          key={client.id}
+                          className="flex items-center justify-between p-3 border rounded-lg"
+                        >
+                          <div className="flex items-center gap-4">
+                            <Avatar className="h-10 w-10">
+                              <AvatarImage
+                                src={
+                                  client.avatar_public_url ||
+                                  "/placeholder-user.jpg"
+                                }
+                                alt={client.full_name}
+                                onError={(e) => {
+                                  e.currentTarget.style.display = "none";
                                 }}
+                              />
+                              <AvatarFallback className="bg-red-600 text-white text-sm">
+                                {client.full_name
+                                  .split(" ")
+                                  .map((n: string) => n[0])
+                                  .join("")
+                                  .toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="font-medium">{client.full_name}</p>
+                              <p className="text-sm text-gray-500">
+                                {client.email}
+                              </p>
+                              <p className="text-sm text-gray-500">
+                                {client.sessions_remaining} sessions remaining
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge
+                              variant={
+                                client.google_account_connected
+                                  ? "default"
+                                  : "secondary"
+                              }
+                              className={
+                                client.google_account_connected
+                                  ? "bg-green-500 text-white"
+                                  : "bg-gray-400 text-white"
+                              }
+                            >
+                              Google Connected
+                            </Badge>
+                            <Badge
+                              variant={
+                                client.contract_accepted
+                                  ? "default"
+                                  : "secondary"
+                              }
+                              className={
+                                client.contract_accepted
+                                  ? "bg-green-500 text-white"
+                                  : "bg-gray-400 text-white"
+                              }
+                            >
+                              Contract Signed
+                            </Badge>
+                            {client.sessions_remaining === 0 && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleShowQr(client)}
                               >
-                                View
+                                <QrCode className="h-4 w-4 mr-1" />
+                                Send Payment
                               </Button>
-                            </Card>
-                          );
-                        })}
-                      </TooltipProvider>
-                    </div>
-                  )}
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Client Management */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <Users className="h-5 w-5 text-red-600" />
-                    <span>Client Management</span>
-                  </CardTitle>
-                  <CardDescription>
-                    Search and manage your clients
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                      <Input
-                        placeholder="Search clients..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10"
-                      />
-                    </div>
-                    <div className="space-y-3 max-h-96 overflow-y-auto">
-                      {clientsWithSessions
-                        .filter(
-                          (client) =>
-                            client.full_name
-                              .toLowerCase()
-                              .includes(searchTerm.toLowerCase()) ||
-                            client.email
-                              .toLowerCase()
-                              .includes(searchTerm.toLowerCase())
-                        )
-                        .map((client) => (
-                          <div
-                            key={client.id}
-                            className="flex items-center justify-between p-3 border rounded-lg"
-                          >
-                            <div className="flex items-center gap-4">
-                              <Avatar className="h-10 w-10">
-                                <AvatarImage
-                                  src={
-                                    client.avatar_public_url ||
-                                    "/placeholder-user.jpg"
-                                  }
-                                  alt={client.full_name}
-                                  onError={(e) => {
-                                    e.currentTarget.style.display = "none";
-                                  }}
-                                />
-                                <AvatarFallback className="bg-red-600 text-white text-sm">
-                                  {client.full_name
-                                    .split(" ")
-                                    .map((n: string) => n[0])
-                                    .join("")
-                                    .toUpperCase()}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div>
-                                <p className="font-medium">
-                                  {client.full_name}
-                                </p>
-                                <p className="text-sm text-gray-500">
-                                  {client.email}
-                                </p>
-                                <p className="text-sm text-gray-500">
-                                  {client.sessions_remaining} sessions remaining
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Badge
-                                variant={
-                                  client.google_account_connected
-                                    ? "default"
-                                    : "secondary"
-                                }
-                                className={
-                                  client.google_account_connected
-                                    ? "bg-green-500 text-white"
-                                    : "bg-gray-400 text-white"
-                                }
-                              >
-                                Google Connected
-                              </Badge>
-                              <Badge
-                                variant={
-                                  client.contract_accepted
-                                    ? "default"
-                                    : "secondary"
-                                }
-                                className={
-                                  client.contract_accepted
-                                    ? "bg-green-500 text-white"
-                                    : "bg-gray-400 text-white"
-                                }
-                              >
-                                Contract Signed
-                              </Badge>
-                              {client.sessions_remaining === 0 && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleShowQr(client)}
-                                >
-                                  <QrCode className="h-4 w-4 mr-1" />
-                                  Send Payment
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Recent Payments */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <DollarSign className="h-5 w-5 text-red-600" />
-                    <span>Recent Payments</span>
-                  </CardTitle>
-                  <CardDescription>
-                    Track your recent transactions
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {recentPayments.length > 0 ? (
-                      recentPayments.map((payment) => (
-                        <div
-                          key={payment.id}
-                          className="flex items-center justify-between p-3 border rounded-lg"
-                        >
-                          <div>
-                            <p className="font-medium">
-                              {payment.users?.full_name || "Unknown Client"}
-                            </p>
-                            <p className="text-sm text-gray-500">
-                              {payment.session_count} sessions •{" "}
-                              {payment.package_type}
-                            </p>
-                            <p className="text-sm text-gray-500">
-                              {new Date(payment.paid_at).toLocaleDateString()}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-bold text-green-600">
-                              ${payment.amount}
-                            </p>
-                            <Badge
-                              variant="default"
-                              className={
-                                payment.status === "completed"
-                                  ? "bg-green-100 text-green-800"
-                                  : payment.status === "pending"
-                                    ? "bg-yellow-100 text-yellow-800"
-                                    : "bg-red-100 text-red-800"
-                              }
-                            >
-                              {payment.status === "completed"
-                                ? "Completed"
-                                : payment.status === "pending"
-                                  ? "Pending"
-                                  : "Failed"}
-                            </Badge>
-                          </div>
+            {/* Recent Payments */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <DollarSign className="h-5 w-5 text-red-600" />
+                  <span>Recent Payments</span>
+                </CardTitle>
+                <CardDescription>
+                  Track your recent transactions
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {recentPayments.length > 0 ? (
+                    recentPayments.map((payment) => (
+                      <div
+                        key={payment.id}
+                        className="flex items-center justify-between p-3 border rounded-lg"
+                      >
+                        <div>
+                          <p className="font-medium">
+                            {payment.users?.full_name || "Unknown Client"}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {payment.session_count} sessions •{" "}
+                            {payment.package_type}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {new Date(payment.paid_at).toLocaleDateString()}
+                          </p>
                         </div>
-                      ))
-                    ) : (
-                      <div className="text-center py-8 text-gray-500">
-                        <p>No recent payments found</p>
+                        <div className="text-right">
+                          <p className="font-bold text-green-600">
+                            ${payment.amount}
+                          </p>
+                          <Badge
+                            variant="default"
+                            className={
+                              payment.status === "completed"
+                                ? "bg-green-100 text-green-800"
+                                : payment.status === "pending"
+                                  ? "bg-yellow-100 text-yellow-800"
+                                  : "bg-red-100 text-red-800"
+                            }
+                          >
+                            {payment.status === "completed"
+                              ? "Completed"
+                              : payment.status === "pending"
+                                ? "Pending"
+                                : "Failed"}
+                          </Badge>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                  <Button
-                    variant="outline"
-                    className="w-full mt-4"
-                    onClick={() => router.push("/trainer/payments")}
-                  >
-                    View All Payments
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
-          </main>
-        </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <p>No recent payments found</p>
+                    </div>
+                  )}
+                </div>
+                <Button
+                  variant="outline"
+                  className="w-full mt-4"
+                  onClick={() => router.push("/trainer/payments")}
+                >
+                  View All Payments
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </main>
       </div>
       {/* QR Code Modal */}
       <Dialog open={qrModalOpen} onOpenChange={setQrModalOpen}>
@@ -1553,6 +1538,6 @@ export default function TrainerDashboard() {
           )}
         </DialogContent>
       </Dialog>
-    </SidebarProvider>
+    </>
   );
 }

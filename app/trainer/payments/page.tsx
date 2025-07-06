@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { TrainerSidebar } from "@/components/trainer-sidebar";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import {
   Card,
   CardContent,
@@ -248,232 +247,214 @@ export default function TrainerPaymentsPage() {
   };
 
   return (
-    <SidebarProvider>
-      <div className="flex min-h-screen w-full">
-        <TrainerSidebar />
-        <div className="flex-1">
-          <header className="border-b bg-white px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <SidebarTrigger />
-                <h1 className="text-2xl font-bold text-gray-900">Payments</h1>
-              </div>
-              <Button
-                onClick={exportToCSV}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Export CSV
-              </Button>
-            </div>
-          </header>
-
-          <main className="p-6">
-            {/* Revenue Overview */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">
-                        Total Revenue
-                      </p>
-                      <p className="text-2xl font-bold text-green-600">
-                        ${revenueThisMonth.toLocaleString()}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {revenueLastMonth === 0
-                          ? "No revenue last month"
-                          : revenueDiff >= 0
-                            ? `+$${revenueDiff.toLocaleString()} from last month`
-                            : `-$${Math.abs(revenueDiff).toLocaleString()} from last month`}
-                      </p>
-                    </div>
-                    <DollarSign className="h-8 w-8 text-green-600" />
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">
-                        Post-Tax Revenue
-                      </p>
-                      <p className="text-2xl font-bold text-purple-600">
-                        $
-                        {postTaxRevenueThisMonth.toLocaleString(undefined, {
-                          minimumFractionDigits: 0,
-                          maximumFractionDigits: 0,
-                        })}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {postTaxRevenueLastMonth === 0
-                          ? "No revenue last month"
-                          : postTaxRevenueDiff >= 0
-                            ? `+$${postTaxRevenueDiff.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} from last month`
-                            : `-$${Math.abs(postTaxRevenueDiff).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} from last month`}
-                      </p>
-                    </div>
-                    <TrendingUp className="h-8 w-8 text-purple-600" />
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">
-                        Completed
-                      </p>
-                      <p className="text-2xl font-bold text-blue-600">
-                        {completedPayments}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        Successful payments
-                      </p>
-                    </div>
-                    <CreditCard className="h-8 w-8 text-blue-600" />
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">
-                        Failed
-                      </p>
-                      <p className="text-2xl font-bold text-red-600">
-                        {failedPayments}
-                      </p>
-                      <p className="text-xs text-gray-500">Need attention</p>
-                    </div>
-                    <TrendingUp className="h-8 w-8 text-red-600" />
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Filters */}
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle>Payment Filters</CardTitle>
-                <CardDescription>
-                  Search and filter payment records
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <Input
-                      placeholder="Search by client name..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-                  <Select
-                    value={statusFilter}
-                    onValueChange={(value: any) => setStatusFilter(value)}
-                  >
-                    <SelectTrigger className="w-48">
-                      <SelectValue placeholder="Filter by status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Status</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="failed">Failed</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select value={dateRange} onValueChange={setDateRange}>
-                    <SelectTrigger className="w-48">
-                      <SelectValue placeholder="Date range" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Time</SelectItem>
-                      <SelectItem value="today">Today</SelectItem>
-                      <SelectItem value="week">This Week</SelectItem>
-                      <SelectItem value="month">This Month</SelectItem>
-                      <SelectItem value="quarter">This Quarter</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Payments Table */}
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  Payment Records ({filteredPayments.length})
-                </CardTitle>
-                <CardDescription>
-                  Complete history of all payment transactions
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Client</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Method</TableHead>
-                      <TableHead>Sessions</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Transaction ID</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredPayments.map((payment) => (
-                      <TableRow key={payment.id}>
-                        <TableCell className="font-medium">
-                          {clientMap[payment.client_id] || "Unknown Client"}
-                        </TableCell>
-                        <TableCell>
-                          {new Date(payment.paid_at).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell className="font-bold">
-                          ${payment.amount}
-                        </TableCell>
-                        <TableCell>{payment.method}</TableCell>
-                        <TableCell>{payment.session_count}</TableCell>
-                        <TableCell>
-                          <Badge className={getStatusColor(payment.status)}>
-                            {getStatusText(payment.status)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="font-mono text-sm">
-                          {payment.transaction_id}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex space-x-2">
-                            <Button size="sm" variant="outline">
-                              View
-                            </Button>
-                            {payment.status === "failed" && (
-                              <Button
-                                size="sm"
-                                className="bg-red-600 hover:bg-red-700"
-                              >
-                                Retry
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </main>
+    <div className="flex-1">
+      <header className="border-b bg-white px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <SidebarTrigger />
+            <h1 className="text-2xl font-bold text-gray-900">Payments</h1>
+          </div>
+          <Button onClick={exportToCSV} className="bg-red-600 hover:bg-red-700">
+            <Download className="h-4 w-4 mr-2" />
+            Export CSV
+          </Button>
         </div>
-      </div>
-    </SidebarProvider>
+      </header>
+
+      <main className="p-6">
+        {/* Revenue Overview */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">
+                    Total Revenue
+                  </p>
+                  <p className="text-2xl font-bold text-green-600">
+                    ${revenueThisMonth.toLocaleString()}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {revenueLastMonth === 0
+                      ? "No revenue last month"
+                      : revenueDiff >= 0
+                        ? `+$${revenueDiff.toLocaleString()} from last month`
+                        : `-$${Math.abs(revenueDiff).toLocaleString()} from last month`}
+                  </p>
+                </div>
+                <DollarSign className="h-8 w-8 text-green-600" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">
+                    Post-Tax Revenue
+                  </p>
+                  <p className="text-2xl font-bold text-purple-600">
+                    $
+                    {postTaxRevenueThisMonth.toLocaleString(undefined, {
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 0,
+                    })}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {postTaxRevenueLastMonth === 0
+                      ? "No revenue last month"
+                      : postTaxRevenueDiff >= 0
+                        ? `+$${postTaxRevenueDiff.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} from last month`
+                        : `-$${Math.abs(postTaxRevenueDiff).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} from last month`}
+                  </p>
+                </div>
+                <TrendingUp className="h-8 w-8 text-purple-600" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Completed</p>
+                  <p className="text-2xl font-bold text-blue-600">
+                    {completedPayments}
+                  </p>
+                  <p className="text-xs text-gray-500">Successful payments</p>
+                </div>
+                <CreditCard className="h-8 w-8 text-blue-600" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Failed</p>
+                  <p className="text-2xl font-bold text-red-600">
+                    {failedPayments}
+                  </p>
+                  <p className="text-xs text-gray-500">Need attention</p>
+                </div>
+                <TrendingUp className="h-8 w-8 text-red-600" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Filters */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Payment Filters</CardTitle>
+            <CardDescription>Search and filter payment records</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Search by client name..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Select
+                value={statusFilter}
+                onValueChange={(value: any) => setStatusFilter(value)}
+              >
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Filter by status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="failed">Failed</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={dateRange} onValueChange={setDateRange}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Date range" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Time</SelectItem>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="week">This Week</SelectItem>
+                  <SelectItem value="month">This Month</SelectItem>
+                  <SelectItem value="quarter">This Quarter</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Payments Table */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Payment Records ({filteredPayments.length})</CardTitle>
+            <CardDescription>
+              Complete history of all payment transactions
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Client</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Method</TableHead>
+                  <TableHead>Sessions</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Transaction ID</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredPayments.map((payment) => (
+                  <TableRow key={payment.id}>
+                    <TableCell className="font-medium">
+                      {clientMap[payment.client_id] || "Unknown Client"}
+                    </TableCell>
+                    <TableCell>
+                      {new Date(payment.paid_at).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="font-bold">
+                      ${payment.amount}
+                    </TableCell>
+                    <TableCell>{payment.method}</TableCell>
+                    <TableCell>{payment.session_count}</TableCell>
+                    <TableCell>
+                      <Badge className={getStatusColor(payment.status)}>
+                        {getStatusText(payment.status)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {payment.transaction_id}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex space-x-2">
+                        <Button size="sm" variant="outline">
+                          View
+                        </Button>
+                        {payment.status === "failed" && (
+                          <Button
+                            size="sm"
+                            className="bg-red-600 hover:bg-red-700"
+                          >
+                            Retry
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </main>
+    </div>
   );
 }

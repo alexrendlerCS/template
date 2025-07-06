@@ -544,36 +544,36 @@ export default function TrainerSettings() {
 
   return (
     <>
-      <header className="border-b bg-white px-6 py-4">
-        <div className="flex items-center space-x-4">
-          <SidebarTrigger />
-          <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-        </div>
-      </header>
+          <header className="border-b bg-white px-6 py-4">
+            <div className="flex items-center space-x-4">
+              <SidebarTrigger />
+              <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+            </div>
+          </header>
 
       <main className="p-6 max-w-4xl mx-auto">
-        <div className="space-y-8">
-          {/* Calendar Integration */}
-          <Suspense fallback={<div>Loading calendar settings...</div>}>
-            <GoogleCalendarSection />
-          </Suspense>
+            <div className="space-y-8">
+              {/* Calendar Integration */}
+              <Suspense fallback={<div>Loading calendar settings...</div>}>
+                <GoogleCalendarSection />
+              </Suspense>
 
           {/* Client Contracts */}
           <Suspense fallback={<div>Loading client contracts...</div>}>
             <ClientContractsSection />
           </Suspense>
 
-          {/* Notifications */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Bell className="h-5 w-5 text-red-600" />
-                <span>Notifications</span>
-              </CardTitle>
-              <CardDescription>
-                Manage how you receive notifications
-              </CardDescription>
-            </CardHeader>
+              {/* Notifications */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <Bell className="h-5 w-5 text-red-600" />
+                    <span>Notifications</span>
+                  </CardTitle>
+                  <CardDescription>
+                    Manage how you receive notifications
+                  </CardDescription>
+                </CardHeader>
             <CardContent className="py-12 flex flex-col items-center justify-center">
               <span className="text-gray-500 text-sm mb-2">
                 Notifications functionality
@@ -622,25 +622,25 @@ export default function TrainerSettings() {
                     </tr>
                   </tbody>
                 </table>
-              </div>
+                      </div>
               <AddSessionsModal
                 open={showAddSessions}
                 onOpenChange={setShowAddSessions}
-              />
-            </CardContent>
-          </Card>
+                      />
+                </CardContent>
+              </Card>
 
           {/* Bulk Message */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
                 <Mail className="h-5 w-5 text-red-600" />
                 <span>Bulk Message</span>
-              </CardTitle>
-              <CardDescription>
+                  </CardTitle>
+                  <CardDescription>
                 Send announcements or updates to multiple clients at once
-              </CardDescription>
-            </CardHeader>
+                  </CardDescription>
+                </CardHeader>
             <CardContent className="py-12 flex flex-col items-center justify-center">
               <span className="text-gray-500 text-sm mb-2">
                 Bulk messaging functionality
@@ -648,8 +648,8 @@ export default function TrainerSettings() {
               <span className="text-lg font-semibold text-gray-700">
                 Coming Soon
               </span>
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
 
           {/* Referral Program */}
           <Card>

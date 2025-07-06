@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { TrainerSidebar } from "@/components/trainer-sidebar";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import {
   Card,
   CardContent,
@@ -106,19 +105,14 @@ const mockConversation = [
 
 export default function TrainerMessagesPage() {
   return (
-    <SidebarProvider>
-      <div className="flex min-h-screen w-full">
-        <TrainerSidebar />
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h1 className="text-2xl font-bold mb-2">Messages Coming Soon</h1>
-            <p className="text-gray-600">
-              The trainer messaging feature is under development. Stay tuned!
-            </p>
-          </div>
-        </div>
+    <div className="flex-1 flex items-center justify-center">
+      <div className="text-center">
+        <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+        <h1 className="text-2xl font-bold mb-2">Messages Coming Soon</h1>
+        <p className="text-gray-600">
+          The trainer messaging feature is under development. Stay tuned!
+        </p>
       </div>
-    </SidebarProvider>
+    </div>
   );
 }

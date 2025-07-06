@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabaseClient";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { TrainerSidebar } from "@/components/trainer-sidebar";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import {
   Card,
   CardContent,
@@ -832,77 +831,74 @@ export default function TrainerAvailabilityPage() {
   }
 
   return (
-    <SidebarProvider>
-      <div className="flex min-h-screen w-full">
-        <TrainerSidebar />
-        <div className="flex-1 flex flex-col min-h-screen">
-          <header className="border-b bg-white px-6 py-4">
-            <div className="flex items-center space-x-4">
-              <SidebarTrigger />
-              <h1 className="text-2xl font-bold text-gray-900">
-                My Availability
-              </h1>
-            </div>
-          </header>
+    <>
+      <div className="flex-1 flex flex-col min-h-screen">
+        <header className="border-b bg-white px-6 py-4">
+          <div className="flex items-center space-x-4">
+            <SidebarTrigger />
+            <h1 className="text-2xl font-bold text-gray-900">
+              My Availability
+            </h1>
+          </div>
+        </header>
 
-          <main className="container max-w-7xl mx-auto p-6 space-y-8 flex-grow">
-            <section aria-label="Blocked time slots" className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-2xl font-semibold tracking-tight">
-                    Blocked Time
-                  </h2>
-                  <p className="text-sm text-muted-foreground">
-                    Mark specific dates as unavailable
-                  </p>
-                </div>
-                <Button
-                  onClick={() => setIsUnavailableDialogOpen(true)}
-                  className="bg-red-600 hover:bg-red-700"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Block Off Time
-                </Button>
+        <main className="container max-w-7xl mx-auto p-6 space-y-8 flex-grow">
+          <section aria-label="Blocked time slots" className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold tracking-tight">
+                  Blocked Time
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Mark specific dates as unavailable
+                </p>
               </div>
+              <Button
+                onClick={() => setIsUnavailableDialogOpen(true)}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Block Off Time
+              </Button>
+            </div>
 
-              <UnavailableSlots
-                slots={unavailableSlots}
-                onDelete={deleteUnavailableSlot}
-              />
+            <UnavailableSlots
+              slots={unavailableSlots}
+              onDelete={deleteUnavailableSlot}
+            />
 
-              <UnavailableSlotDialog
-                isOpen={isUnavailableDialogOpen}
-                onOpenChange={setIsUnavailableDialogOpen}
-                onAdd={addUnavailableSlot}
-              />
-            </section>
+            <UnavailableSlotDialog
+              isOpen={isUnavailableDialogOpen}
+              onOpenChange={setIsUnavailableDialogOpen}
+              onAdd={addUnavailableSlot}
+            />
+          </section>
 
-            <Separator className="my-8" />
+          <Separator className="my-8" />
 
-            <section aria-label="Weekly availability editor">
-              <WeeklyAvailabilityEditor
-                schedule={schedule}
-                onScheduleChange={handleScheduleChange}
-                onTimeRangeAdd={addTimeRange}
-                onTimeRangeRemove={removeTimeRange}
-                isSaving={isSaving}
-              />
-            </section>
+          <section aria-label="Weekly availability editor">
+            <WeeklyAvailabilityEditor
+              schedule={schedule}
+              onScheduleChange={handleScheduleChange}
+              onTimeRangeAdd={addTimeRange}
+              onTimeRangeRemove={removeTimeRange}
+              isSaving={isSaving}
+            />
+          </section>
 
-            <Separator className="my-8" />
+          <Separator className="my-8" />
 
-            <section
-              aria-label="Current availability summary"
-              className="bg-gray-50 rounded-lg p-6"
-            >
-              <AvailabilitySummary schedule={schedule} />
-            </section>
-          </main>
+          <section
+            aria-label="Current availability summary"
+            className="bg-gray-50 rounded-lg p-6"
+          >
+            <AvailabilitySummary schedule={schedule} />
+          </section>
+        </main>
 
-          <SaveFooter onSave={saveAvailability} isSaving={isSaving} />
-        </div>
-        <Toaster />
+        <SaveFooter onSave={saveAvailability} isSaving={isSaving} />
       </div>
-    </SidebarProvider>
+      <Toaster />
+    </>
   );
 }
