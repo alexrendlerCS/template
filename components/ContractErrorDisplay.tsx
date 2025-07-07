@@ -42,8 +42,6 @@ export function ContractErrorDisplay({
       return "role";
     } else if (errorMessage.includes("signature")) {
       return "signature";
-    } else if (errorMessage.includes("email")) {
-      return "email";
     } else if (
       errorMessage.includes("permission") ||
       errorMessage.includes("support")
@@ -62,8 +60,6 @@ export function ContractErrorDisplay({
         return <User className="h-5 w-5" />;
       case "signature":
         return <AlertCircle className="h-5 w-5" />;
-      case "email":
-        return <Mail className="h-5 w-5" />;
       case "system":
         return <AlertCircle className="h-5 w-5" />;
       default:
@@ -79,8 +75,6 @@ export function ContractErrorDisplay({
         return <Badge variant="outline">Account Type</Badge>;
       case "signature":
         return <Badge variant="destructive">Signature Issue</Badge>;
-      case "email":
-        return <Badge variant="outline">Email Issue</Badge>;
       case "system":
         return <Badge variant="destructive">System Error</Badge>;
       default:
@@ -107,12 +101,6 @@ export function ContractErrorDisplay({
           "There's an issue with your signature.",
           "Try signing again with your full name.",
           "Make sure you're signing on a touch-enabled device.",
-        ];
-      case "email":
-        return [
-          "There's an issue with your email address.",
-          "Check that your email is confirmed.",
-          "Make sure you're using the email you signed up with.",
         ];
       case "system":
         return [

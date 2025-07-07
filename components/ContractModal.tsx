@@ -70,19 +70,19 @@ export function ContractModal({
 
       console.log("User authenticated:", session.user.email);
 
-      // Check if user email is confirmed
-      if (!session.user.email_confirmed_at) {
-        throw new Error(
-          "Please confirm your email address before accepting the contract. Check your inbox for a confirmation email."
-        );
-      }
-
       // Check user role to ensure they're accessing the correct flow
       const { data: userData, error: userError } = await supabase
         .from("users")
         .select("role")
         .eq("id", session.user.id)
         .single();
+
+      console.log("Role validation check:", {
+        userId: session.user.id,
+        userData,
+        userError,
+        role: userData?.role,
+      });
 
       if (userError) {
         console.error("Failed to fetch user role:", userError);
