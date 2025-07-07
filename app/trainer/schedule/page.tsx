@@ -494,12 +494,22 @@ export default function TrainerSchedulePage() {
 
   // Function to create a new session
   const handleCreateSession = async () => {
+    console.debug("=== SESSION CREATION STARTED ===");
+    console.debug("Form data:", {
+      client: selectedClientForSession,
+      date: selectedDateForSession,
+      time: selectedTimeForSession,
+      type: selectedSessionType,
+      notes: sessionNotes,
+    });
+
     if (
       !selectedClientForSession ||
       !selectedDateForSession ||
       !selectedTimeForSession ||
       !selectedSessionType
     ) {
+      console.warn("❌ Missing required form data");
       return;
     }
 
@@ -731,6 +741,86 @@ export default function TrainerSchedulePage() {
 
       console.debug("✅ No conflicts found - proceeding with session creation");
 
+      // Check package availability BEFORE creating the session
+      console.debug("=== PACKAGE AVAILABILITY CHECK ===");
+      const { data: packages, error: packageError } = await supabase
+        .from("packages")
+        .select("*")
+        .eq("client_id", selectedClientForSession)
+        .eq("package_type", selectedSessionType)
+        .eq("status", "active")
+        .order("expiry_date", { ascending: true });
+
+      if (packageError) {
+        console.error("Error fetching packages:", packageError);
+        setErrorMessage(
+          "Error checking client's package availability. Please try again."
+        );
+        setShowErrorDialog(true);
+        setIsCreatingSession(false);
+        return;
+      }
+
+      // Log all packages for debugging
+      console.debug("All packages for client:", {
+        clientId: selectedClientForSession,
+        sessionType: selectedSessionType,
+        totalPackages: packages?.length || 0,
+        packages: packages?.map((p) => ({
+          id: p.id,
+          package_type: p.package_type,
+          sessions_included: p.sessions_included,
+          sessions_used: p.sessions_used,
+          status: p.status,
+          expiry_date: p.expiry_date,
+          available: (p.sessions_included || 0) > (p.sessions_used || 0),
+        })),
+      });
+
+      // Find the first package with available sessions
+      const packageToUpdate = packages?.find(
+        (pkg) => (pkg.sessions_included || 0) > (pkg.sessions_used || 0)
+      );
+
+      console.debug("Selected package to update:", packageToUpdate);
+
+      if (!packageToUpdate) {
+        // Provide detailed error message based on what we found
+        if (!packages || packages.length === 0) {
+          setErrorMessage(
+            `This client has no active packages for "${selectedSessionType}". Please ask them to purchase a package first.`
+          );
+        } else {
+          const expiredPackages = packages.filter(
+            (p) => p.expiry_date && new Date(p.expiry_date) < new Date()
+          );
+          const usedUpPackages = packages.filter(
+            (p) => (p.sessions_included || 0) <= (p.sessions_used || 0)
+          );
+
+          if (expiredPackages.length > 0) {
+            setErrorMessage(
+              `This client's "${selectedSessionType}" package has expired. Please ask them to renew their package.`
+            );
+          } else if (usedUpPackages.length > 0) {
+            setErrorMessage(
+              `This client has used all sessions in their "${selectedSessionType}" package. Please ask them to purchase more sessions.`
+            );
+          } else {
+            setErrorMessage(
+              `This client does not have any available sessions for "${selectedSessionType}". Please ask them to purchase or renew a package.`
+            );
+          }
+        }
+        setShowErrorDialog(true);
+        setIsCreatingSession(false);
+        return;
+      }
+
+      console.debug(
+        "✅ Package availability confirmed - proceeding with session creation"
+      );
+
       // Insert into sessions table
       const { data: sessionData, error: sessionError } = await supabase
         .from("sessions")
@@ -755,54 +845,6 @@ export default function TrainerSchedulePage() {
         setErrorMessage("Failed to create session. Please try again.");
         setShowErrorDialog(true);
         throw sessionError;
-      }
-
-      // Get package information BEFORE booking to track sessions
-      const { data: packages, error: packageError } = await supabase
-        .from("packages")
-        .select("*")
-        .eq("client_id", selectedClientForSession)
-        .eq("package_type", selectedSessionType)
-        .eq("status", "active")
-        .order("expiry_date", { ascending: true });
-
-      if (packageError) {
-        setErrorMessage(
-          "Error fetching packages. Session was created, but package usage was not updated."
-        );
-        setShowErrorDialog(true);
-        setIsCreatingSession(false);
-        return;
-      }
-      // Find the first package with available sessions
-      console.debug("Available packages for client:", {
-        clientId: selectedClientForSession,
-        sessionType: selectedSessionType,
-        packages: packages?.map((p) => ({
-          id: p.id,
-          package_type: p.package_type,
-          sessions_included: p.sessions_included,
-          sessions_used: p.sessions_used,
-          status: p.status,
-          available: (p.sessions_included || 0) > (p.sessions_used || 0),
-        })),
-      });
-
-      const packageToUpdate =
-        packages &&
-        packages.find(
-          (pkg) => (pkg.sessions_included || 0) > (pkg.sessions_used || 0)
-        );
-
-      console.debug("Selected package to update:", packageToUpdate);
-
-      if (!packageToUpdate) {
-        setErrorMessage(
-          "This client does not have any available sessions for this package type. Please ask them to purchase or renew a package."
-        );
-        setShowErrorDialog(true);
-        setIsCreatingSession(false);
-        return;
       }
 
       // Store session count before booking
@@ -949,8 +991,13 @@ export default function TrainerSchedulePage() {
 
       // Show success or error dialog
       if (calendarSuccess) {
+        console.debug("✅ Session created successfully with calendar events");
         setShowSuccessDialog(true);
       } else {
+        console.warn(
+          "⚠️ Session created but calendar events failed:",
+          calendarErrorMsg
+        );
         setErrorMessage(
           calendarErrorMsg ||
             "Session booked, but there was a problem adding to Google Calendar."
@@ -958,7 +1005,11 @@ export default function TrainerSchedulePage() {
         setShowErrorDialog(true);
       }
     } catch (error) {
-      console.error("Error creating session:", error);
+      console.error("❌ Error creating session:", error);
+      setErrorMessage(
+        "An unexpected error occurred while creating the session. Please try again."
+      );
+      setShowErrorDialog(true);
     } finally {
       setIsCreatingSession(false);
     }
