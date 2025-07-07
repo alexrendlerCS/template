@@ -11,6 +11,7 @@ import {
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { ContractTemplate } from "./ContractTemplate";
+import { ContractErrorDisplay } from "./ContractErrorDisplay";
 
 interface ContractModalProps {
   onAccept?: () => Promise<void>;
