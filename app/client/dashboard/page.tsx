@@ -628,7 +628,14 @@ export default function ClientDashboard() {
       <>
         <GoogleCalendarPopup
           open={showCalendarPopup}
-          onOpenChange={setShowCalendarPopup}
+          onOpenChange={(open) => {
+            console.log("Google Calendar popup onOpenChange:", {
+              open,
+              userStatus,
+            });
+            setShowCalendarPopup(open);
+            // Don't redirect when closing the calendar popup
+          }}
         />
 
         <GoogleCalendarSuccessDialog

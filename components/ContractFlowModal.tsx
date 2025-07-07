@@ -63,7 +63,8 @@ export function ContractFlowModal({
       location: "",
       signature: "",
     });
-    onOpenChange(false);
+    // Don't call onOpenChange(false) when contract is successfully completed
+    // The parent component will handle closing the modal after updating user status
   };
 
   return (
