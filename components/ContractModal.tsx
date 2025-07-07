@@ -318,7 +318,18 @@ export function ContractModal({
       </div>
 
       {error && (
-        <div className="text-red-600 text-sm mb-4 text-center">{error}</div>
+        <div className="mb-4">
+          <ContractErrorDisplay
+            error={error}
+            onRetry={() => {
+              setError(null);
+              handleAgree();
+            }}
+            onLogout={() => {
+              router.push("/login");
+            }}
+          />
+        </div>
       )}
 
       <div className="flex justify-center mt-4">
