@@ -24,8 +24,42 @@ export async function POST(request: Request) {
       process.env.SUPABASE_SERVICE_ROLE_KEY?.slice(0, 8)
     );
     console.log("SUPABASE URL:", process.env.NEXT_PUBLIC_SUPABASE_URL);
+    console.log(
+      "RESEND API KEY (first 8 chars):",
+      process.env.RESEND_API_KEY?.slice(0, 8)
+    );
+
+    // Validate environment variables
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.error("Missing SUPABASE_SERVICE_ROLE_KEY");
+      return NextResponse.json(
+        {
+          error:
+            "Server configuration error: Missing Supabase service role key",
+        },
+        { status: 500 }
+      );
+    }
+
+    if (!process.env.RESEND_API_KEY) {
+      console.error("Missing RESEND_API_KEY");
+      return NextResponse.json(
+        { error: "Server configuration error: Missing Resend API key" },
+        { status: 500 }
+      );
+    }
 
     const body = await request.json();
+    console.log("Request body received:", {
+      clientName: body.clientName,
+      email: body.email,
+      phone: body.phone,
+      startDate: body.startDate,
+      location: body.location,
+      signatureLength: body.signature?.length || 0,
+      signatureDate: body.signatureDate,
+      userId: body.userId,
+    });
 
     // Validate required fields
     const requiredFields: (keyof ContractPayload)[] = [
@@ -40,11 +74,67 @@ export async function POST(request: Request) {
 
     const missingFields = requiredFields.filter((field) => !body[field]);
     if (missingFields.length > 0) {
+      console.error("Missing required fields:", missingFields);
       return NextResponse.json(
         { error: `Missing required fields: ${missingFields.join(", ")}` },
         { status: 400 }
       );
     }
+
+    // Validate signature format
+    if (!body.signature || typeof body.signature !== "string") {
+      console.error("Invalid signature format");
+      return NextResponse.json(
+        { error: "Invalid signature format" },
+        { status: 400 }
+      );
+    }
+
+    // Check if signature is empty or too small
+    const signatureData = body.signature.replace(
+      /^data:image\/\w+;base64,/,
+      ""
+    );
+    if (signatureData.length < 100) {
+      console.error("Signature too small or empty");
+      return NextResponse.json(
+        { error: "Please provide a valid signature" },
+        { status: 400 }
+      );
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(body.email)) {
+      console.error("Invalid email format");
+      return NextResponse.json(
+        { error: "Please provide a valid email address" },
+        { status: 400 }
+      );
+    }
+
+    // Validate phone format (basic validation)
+    if (!body.phone || body.phone.length < 10) {
+      console.error("Invalid phone number");
+      return NextResponse.json(
+        { error: "Please provide a valid phone number" },
+        { status: 400 }
+      );
+    }
+
+    // Validate userId
+    if (!body.userId) {
+      console.error("Missing userId in request");
+      return NextResponse.json(
+        {
+          error:
+            "Account error: Missing user ID. Please log out and log back in.",
+        },
+        { status: 400 }
+      );
+    }
+
+    console.log("Starting PDF generation...");
 
     // Create PDF document
     const pdfDoc = await PDFDocument.create();
@@ -360,22 +450,31 @@ export async function POST(request: Request) {
     });
     currentY -= lineHeight;
 
-    // Remove the 'data:image/png;base64,' prefix if present
-    const signatureData = body.signature.replace(
-      /^data:image\/\w+;base64,/,
-      ""
-    );
-    const signatureImageBytes = Buffer.from(signatureData, "base64");
-    const signatureImage = await pdfDoc.embedPng(signatureImageBytes);
-    const signatureDims = signatureImage.scale(0.3);
+    console.log("Processing signature image...");
 
-    page.drawImage(signatureImage, {
-      x: margin,
-      y: currentY - signatureDims.height,
-      width: signatureDims.width,
-      height: signatureDims.height,
-    });
-    currentY -= signatureDims.height + lineHeight;
+    // Remove the 'data:image/png;base64,' prefix if present
+    const signatureImageBytes = Buffer.from(signatureData, "base64");
+
+    try {
+      const signatureImage = await pdfDoc.embedPng(signatureImageBytes);
+      const signatureDims = signatureImage.scale(0.3);
+
+      page.drawImage(signatureImage, {
+        x: margin,
+        y: currentY - signatureDims.height,
+        width: signatureDims.width,
+        height: signatureDims.height,
+      });
+      currentY -= signatureDims.height + lineHeight;
+    } catch (signatureError) {
+      console.error("Failed to embed signature image:", signatureError);
+      return NextResponse.json(
+        {
+          error: "Failed to process signature image. Please try signing again.",
+        },
+        { status: 400 }
+      );
+    }
 
     page.drawText(`Date: ${body.signatureDate}`, {
       x: margin,
@@ -384,78 +483,192 @@ export async function POST(request: Request) {
       font: helvetica,
     });
 
+    console.log("Saving PDF...");
+
     // Save the PDF
     const pdfBytes = await pdfDoc.save();
     const base64PDF = Buffer.from(pdfBytes).toString("base64");
 
+    console.log("PDF generated successfully, size:", pdfBytes.length, "bytes");
+
     // --- New: Upload PDF to Supabase Storage ---
     const userId = body.userId || body.user_id; // Adjust as needed
     if (!userId) {
-      return NextResponse.json({ error: "Missing userId" }, { status: 400 });
-    }
-    const fileName = `contract_${userId}_${Date.now()}.pdf`;
-    // Debug: Log upload attempt
-    console.log("Uploading to bucket:", "contracts", "as userId:", userId);
-    const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
-      .from("contracts")
-      .upload(fileName, Buffer.from(pdfBytes), {
-        contentType: "application/pdf",
-        upsert: true,
-      });
-    // Debug: Log upload error details
-    if (uploadError) {
-      console.error("Upload error details:", uploadError);
-      console.error("Failed to upload contract PDF:", uploadError);
+      console.error("Missing userId in request");
       return NextResponse.json(
-        { error: "Failed to upload contract PDF" },
+        {
+          error:
+            "Account error: Missing user ID. Please log out and log back in.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const fileName = `contract_${userId}_${Date.now()}.pdf`;
+    console.log(
+      "Uploading to bucket:",
+      "contracts",
+      "as userId:",
+      userId,
+      "filename:",
+      fileName
+    );
+
+    try {
+      const { data: uploadData, error: uploadError } =
+        await supabaseAdmin.storage
+          .from("contracts")
+          .upload(fileName, Buffer.from(pdfBytes), {
+            contentType: "application/pdf",
+            upsert: true,
+          });
+
+      if (uploadError) {
+        console.error("Upload error details:", uploadError);
+        console.error("Failed to upload contract PDF:", uploadError);
+
+        // Handle specific storage errors
+        if (uploadError.message?.includes("bucket")) {
+          return NextResponse.json(
+            {
+              error:
+                "Storage error: Contracts bucket not found. Please contact support.",
+            },
+            { status: 500 }
+          );
+        } else if (uploadError.message?.includes("permission")) {
+          return NextResponse.json(
+            {
+              error:
+                "Permission error: Unable to save contract. Please contact support.",
+            },
+            { status: 500 }
+          );
+        } else if (uploadError.message?.includes("quota")) {
+          return NextResponse.json(
+            { error: "Storage quota exceeded. Please contact support." },
+            { status: 500 }
+          );
+        } else {
+          return NextResponse.json(
+            { error: "Failed to upload contract PDF. Please try again." },
+            { status: 500 }
+          );
+        }
+      }
+
+      console.log("PDF uploaded successfully:", uploadData);
+    } catch (uploadException) {
+      console.error("Upload exception:", uploadException);
+      return NextResponse.json(
+        { error: "Failed to upload contract PDF. Please try again." },
         { status: 500 }
       );
     }
+
     // Get the public URL (for private, use createSignedUrl instead)
     const { data: urlData } = supabaseAdmin.storage
       .from("contracts")
       .getPublicUrl(fileName);
     const pdfUrl = urlData?.publicUrl;
+
+    console.log("PDF URL generated:", pdfUrl);
+
     // Insert into contracts table
-    const { error: insertError } = await supabaseAdmin
-      .from("contracts")
-      .insert({
-        id:
-          typeof crypto !== "undefined" && crypto.randomUUID
-            ? crypto.randomUUID()
-            : require("crypto").randomUUID(),
-        user_id: userId,
-        pdf_url: pdfUrl,
-        signed_at: new Date().toISOString(),
-        contract_version: 1,
-        created_at: new Date().toISOString(),
-      });
-    if (insertError) {
-      console.error("Failed to insert contract row:", insertError);
+    console.log("Inserting contract record into database...");
+    try {
+      const { error: insertError } = await supabaseAdmin
+        .from("contracts")
+        .insert({
+          id:
+            typeof crypto !== "undefined" && crypto.randomUUID
+              ? crypto.randomUUID()
+              : require("crypto").randomUUID(),
+          user_id: userId,
+          pdf_url: pdfUrl,
+          signed_at: new Date().toISOString(),
+          contract_version: 1,
+          created_at: new Date().toISOString(),
+        });
+
+      if (insertError) {
+        console.error("Failed to insert contract row:", insertError);
+
+        // Handle specific database errors
+        if (insertError.code === "23505") {
+          return NextResponse.json(
+            { error: "Contract already exists for this user." },
+            { status: 409 }
+          );
+        } else if (insertError.code === "23503") {
+          return NextResponse.json(
+            {
+              error:
+                "Account error: User profile not found. Please contact support.",
+            },
+            { status: 500 }
+          );
+        } else if (insertError.code === "42501") {
+          return NextResponse.json(
+            {
+              error:
+                "Permission error: Unable to save contract record. Please contact support.",
+            },
+            { status: 500 }
+          );
+        } else {
+          return NextResponse.json(
+            { error: "Failed to save contract record. Please try again." },
+            { status: 500 }
+          );
+        }
+      }
+
+      console.log("Contract record inserted successfully");
+    } catch (insertException) {
+      console.error("Insert exception:", insertException);
+      return NextResponse.json(
+        { error: "Failed to save contract record. Please try again." },
+        { status: 500 }
+      );
     }
 
     // --- Existing: Send email with Resend ---
-    await resend.emails.send({
-      from: "Coach Kilday <no-reply@coachkilday.com>",
-      to: [body.email],
-      subject: "Your Signed Personal Training Agreement",
-      html: `<p>Hi ${body.clientName},</p><p>Attached is your signed agreement. Thank you for choosing Coach Kilday!</p>`,
-      attachments: [
-        {
-          filename: "Signed_Training_Agreement.pdf",
-          content: base64PDF,
-        },
-      ],
-    });
+    console.log("Sending email with contract...");
+    try {
+      await resend.emails.send({
+        from: "Coach Kilday <no-reply@coachkilday.com>",
+        to: [body.email],
+        subject: "Your Signed Personal Training Agreement",
+        html: `<p>Hi ${body.clientName},</p><p>Attached is your signed agreement. Thank you for choosing Coach Kilday!</p>`,
+        attachments: [
+          {
+            filename: "Signed_Training_Agreement.pdf",
+            content: base64PDF,
+          },
+        ],
+      });
 
+      console.log("Email sent successfully");
+    } catch (emailError) {
+      console.error("Failed to send email:", emailError);
+      // Don't fail the entire process if email fails, just log it
+      // The contract is still generated and stored
+    }
+
+    console.log("Contract generation completed successfully");
     return NextResponse.json(
       { message: "Contract generated, stored, and sent successfully", pdfUrl },
       { status: 200 }
     );
   } catch (error) {
     console.error("Contract generation error:", error);
+    console.error(
+      "Error stack:",
+      error instanceof Error ? error.stack : "No stack trace"
+    );
     return NextResponse.json(
-      { error: "Failed to generate or send contract" },
+      { error: "Failed to generate or send contract. Please try again." },
       { status: 500 }
     );
   }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabaseClient";
 import {
   Card,
   CardContent,
@@ -23,7 +24,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-interface GoogleEvent {
+interface DatabaseSession {
   id: string;
   summary: string;
   description?: string;
@@ -39,6 +40,16 @@ interface GoogleEvent {
     displayName?: string;
     responseStatus?: string;
   }>;
+  _dbData?: {
+    client_id: string;
+    trainer_id: string;
+    type: string;
+    notes?: string;
+  };
+  users?: {
+    full_name: string;
+    email: string;
+  };
 }
 
 // Helper function to format event time
@@ -65,20 +76,6 @@ function formatEventDuration(startStr: string, endStr: string) {
   const hours = Math.floor(durationMins / 60);
   const mins = durationMins % 60;
   return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
-}
-
-// Helper function to get event status color
-function getEventStatusColor(status: string) {
-  switch (status.toLowerCase()) {
-    case "confirmed":
-      return "bg-green-100 text-green-800";
-    case "tentative":
-      return "bg-yellow-100 text-yellow-800";
-    case "cancelled":
-      return "bg-red-100 text-red-800";
-    default:
-      return "bg-gray-100 text-gray-800";
-  }
 }
 
 // Add color palette for trainers
@@ -129,16 +126,6 @@ const defaultColorScheme = {
   hover: "hover:bg-gray-100",
 };
 
-// Function to get consistent color for a trainer
-const getTrainerColors = (trainerId: string | undefined) => {
-  if (!trainerId) return defaultColorScheme;
-
-  // Use the last character of the UUID to select a color
-  const colorIndex =
-    parseInt(trainerId.slice(-1), 16) % trainerColorPalette.length;
-  return trainerColorPalette[colorIndex];
-};
-
 const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const months = [
   "January",
@@ -158,32 +145,98 @@ const months = [
 export default function ClientCalendarPage() {
   const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar");
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [events, setEvents] = useState<GoogleEvent[]>([]);
+  const [events, setEvents] = useState<DatabaseSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isGoogleConnected, setIsGoogleConnected] = useState(true);
 
   useEffect(() => {
     const fetchEvents = async () => {
       try {
         setLoading(true);
         setError(null);
-        const response = await fetch("/api/google/events");
 
-        if (!response.ok) {
-          if (response.status === 400) {
-            setIsGoogleConnected(false);
-            return;
-          }
-          throw new Error("Failed to fetch events");
+        // Get current user's session
+        const supabase = createClient();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!session?.user) {
+          setError("Please log in to view your sessions");
+          setLoading(false);
+          return;
         }
 
-        const data = await response.json();
-        setEvents(data);
-        setIsGoogleConnected(true);
+        // Fetch sessions from database for this client
+        const { data: sessionsData, error } = await supabase
+          .from("sessions")
+          .select(
+            `
+            id,
+            client_id,
+            trainer_id,
+            date,
+            start_time,
+            end_time,
+            type,
+            status,
+            notes,
+            session_notes,
+            created_at,
+            users!sessions_trainer_id_fkey (
+              full_name,
+              email
+            )
+          `
+          )
+          .eq("client_id", session.user.id)
+          .in("status", ["confirmed", "pending"])
+          .order("date", { ascending: true })
+          .order("start_time", { ascending: true });
+
+        if (error) {
+          console.error("Error fetching sessions:", error);
+          setError("Failed to load sessions");
+          setLoading(false);
+          return;
+        }
+
+        console.log("Fetched sessions from database:", sessionsData);
+
+        // Convert database sessions to the format expected by the UI
+        const convertedEvents =
+          sessionsData?.map((session: any) => ({
+            id: session.id,
+            summary: `${session.type} with ${session.users?.full_name || "Unknown Trainer"}`,
+            description: session.session_notes || session.notes || "",
+            start: {
+              dateTime: `${session.date}T${session.start_time}`,
+            },
+            end: {
+              dateTime: `${session.date}T${session.end_time}`,
+            },
+            status: session.status,
+            attendees: [
+              {
+                email: session.users?.email || "",
+                displayName: session.users?.full_name || "Unknown Trainer",
+                responseStatus: "accepted",
+              },
+            ],
+            // Add database fields for reference
+            _dbData: {
+              client_id: session.client_id,
+              trainer_id: session.trainer_id,
+              type: session.type,
+              notes: session.session_notes || session.notes,
+            },
+            users: session.users,
+          })) || [];
+
+        setEvents(convertedEvents);
       } catch (err) {
-        setError("Failed to load calendar events");
-        console.error("Error fetching events:", err);
+        setError("Failed to load sessions");
+        console.error("Error fetching sessions:", err);
       } finally {
         setLoading(false);
       }
@@ -252,7 +305,7 @@ export default function ClientCalendarPage() {
 
   const days = getDaysInMonth(currentDate);
 
-  const renderEvent = (event: GoogleEvent) => {
+  const renderEvent = (event: DatabaseSession) => {
     console.log("Rendering event:", event);
 
     // Default values
@@ -261,10 +314,16 @@ export default function ClientCalendarPage() {
     let trainerName = "Unknown Trainer";
 
     try {
-      // Extract session type and trainer name from the summary if it exists
-      const parts = event?.summary?.split(" with ") || [];
-      sessionType = parts[0]?.trim() || "Unknown Session";
-      trainerName = parts[1]?.trim() || "Unknown Trainer";
+      // Use database data if available, otherwise fall back to summary parsing
+      if (event._dbData) {
+        sessionType = event._dbData.type || "Unknown Session";
+        trainerName = event.users?.full_name || "Unknown Trainer";
+      } else {
+        // Fallback to parsing summary (for backward compatibility)
+        const parts = event?.summary?.split(" with ") || [];
+        sessionType = parts[0]?.trim() || "Unknown Session";
+        trainerName = parts[1]?.trim() || "Unknown Trainer";
+      }
 
       // Generate a consistent hash for the trainer name to use as color index
       const getHashCode = (str: string) => {
@@ -286,6 +345,7 @@ export default function ClientCalendarPage() {
         sessionType,
         trainerName,
         colors,
+        dbData: event._dbData,
       });
 
       return (
@@ -319,7 +379,7 @@ export default function ClientCalendarPage() {
               ${
                 event?.status?.toLowerCase() === "confirmed"
                   ? "bg-green-500"
-                  : event?.status?.toLowerCase() === "tentative"
+                  : event?.status?.toLowerCase() === "pending"
                     ? "bg-yellow-500"
                     : "bg-red-500"
               }`}
@@ -340,7 +400,28 @@ export default function ClientCalendarPage() {
     }
   };
 
-  if (!isGoogleConnected) {
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
+          <SidebarTrigger>
+            <Button variant="ghost" size="icon" className="md:hidden">
+              <Menu className="h-6 w-6" />
+              <span className="sr-only">Toggle sidebar</span>
+            </Button>
+          </SidebarTrigger>
+        </div>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="flex items-center space-x-2">
+            <Loader2 className="h-6 w-6 animate-spin" />
+            <span>Loading your sessions...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
@@ -354,16 +435,13 @@ export default function ClientCalendarPage() {
         <div className="p-8">
           <Card className="max-w-2xl mx-auto">
             <CardHeader>
-              <CardTitle>Connect Google Calendar</CardTitle>
-              <CardDescription>
-                To view your training sessions, please connect your Google
-                Calendar account.
-              </CardDescription>
+              <CardTitle>Error Loading Sessions</CardTitle>
+              <CardDescription>{error}</CardDescription>
             </CardHeader>
             <CardContent>
               <Link href="/client/dashboard">
                 <Button className="bg-red-600 hover:bg-red-700">
-                  Go to Dashboard to Connect
+                  Go to Dashboard
                 </Button>
               </Link>
             </CardContent>

@@ -116,24 +116,38 @@ export function ContractClientInfoForm({
 
     if (!formData.clientName.trim()) {
       newErrors.clientName = "Full name is required";
+    } else if (formData.clientName.trim().length < 2) {
+      newErrors.clientName =
+        "Please enter your full name (at least 2 characters)";
     }
 
     if (!formData.email.trim()) {
       newErrors.email = "Email is required";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = "Please enter a valid email address";
+      newErrors.email =
+        "Please enter a valid email address (e.g., john@example.com)";
     }
 
     if (!formData.phone.trim()) {
       newErrors.phone = "Phone number is required";
+    } else if (formData.phone.replace(/\D/g, "").length < 10) {
+      newErrors.phone =
+        "Please enter a valid phone number (at least 10 digits)";
     }
 
     if (!formData.location.trim()) {
       newErrors.location = "Training location is required";
+    } else if (formData.location.trim().length < 3) {
+      newErrors.location = "Please enter a valid training location";
     }
 
     if (signaturePadRef.current?.isEmpty()) {
       newErrors.signature = "Please sign to accept the contract";
+    } else if (signaturePadRef.current) {
+      const signatureData = signaturePadRef.current.toDataURL();
+      if (signatureData.length < 100) {
+        newErrors.signature = "Please provide a more complete signature";
+      }
     }
 
     setErrors(newErrors);
@@ -142,9 +156,47 @@ export function ContractClientInfoForm({
 
   const handleSubmit = () => {
     if (validateForm() && signaturePadRef.current) {
+      // Get signature data
+      const signatureData = signaturePadRef.current.toDataURL();
+
+      // Additional validation for mobile devices
+      if (signatureData.length < 100) {
+        setErrors((prev) => ({
+          ...prev,
+          signature: "Please provide a more complete signature",
+        }));
+        return;
+      }
+
+      // Check if signature is just a dot or very small
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imageData.data;
+          let pixelCount = 0;
+
+          // Count non-transparent pixels
+          for (let i = 3; i < data.length; i += 4) {
+            if (data[i] > 0) pixelCount++;
+          }
+
+          if (pixelCount < 50) {
+            setErrors((prev) => ({
+              ...prev,
+              signature: "Please provide a more complete signature",
+            }));
+            return;
+          }
+        }
+      }
+
+      console.log("Signature validation passed, length:", signatureData.length);
+
       onSubmit({
         ...formData,
-        signature: signaturePadRef.current.toDataURL(),
+        signature: signatureData,
       });
     }
   };
