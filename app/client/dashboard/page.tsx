@@ -274,6 +274,7 @@ export default function ClientDashboard() {
   const [totalSessionsUsed, setTotalSessionsUsed] = useState(0);
   const [earliestExpirationDate, setEarliestExpirationDate] =
     useState<Date | null>(null);
+  const [isCompletingContract, setIsCompletingContract] = useState(false);
   const supabase = createClient();
   const router = useRouter();
 
@@ -640,17 +641,21 @@ export default function ClientDashboard() {
           open={showContractModal}
           onOpenChange={(open) => {
             setShowContractModal(open);
-            // Only redirect to login if the contract wasn't accepted
-            if (!open && !userStatus.contractAccepted) {
+            // Only redirect to login if the contract wasn't accepted AND we're not in the process of completing it
+            if (
+              !open &&
+              !userStatus.contractAccepted &&
+              !isCompletingContract
+            ) {
               router.push("/login");
             }
           }}
           onComplete={async () => {
-            setUserStatus((prev) => ({ ...prev, contractAccepted: true }));
+            setIsCompletingContract(true);
+            // Refresh user status from database to ensure we have the latest data
+            await checkUserStatus();
             setShowContractModal(false);
-            if (!userStatus.googleConnected) {
-              setShowCalendarPopup(true);
-            }
+            setIsCompletingContract(false);
           }}
         />
       </>
