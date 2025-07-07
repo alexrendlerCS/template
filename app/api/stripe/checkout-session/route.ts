@@ -9,7 +9,8 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 export async function POST(req: Request) {
   try {
-    const { userId, packageType, sessionsIncluded } = await req.json();
+    const { userId, packageType, sessionsIncluded, promoCode } =
+      await req.json();
 
     console.log("🛒 Creating Stripe checkout session:", {
       userId,
@@ -196,6 +197,31 @@ export async function POST(req: Request) {
       nextMonthStart
     );
 
+    // Validate promo code if provided
+    let promotionCodeId: string | undefined = undefined;
+    if (promoCode) {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("discount_codes")
+        .select("stripe_promotion_code_id, code, expires_at, max_redemptions")
+        .eq("code", promoCode)
+        .maybeSingle();
+      if (error) {
+        return NextResponse.json(
+          { error: "Error validating promo code" },
+          { status: 400 }
+        );
+      }
+      if (!data || !data.stripe_promotion_code_id) {
+        return NextResponse.json(
+          { error: "Invalid promo code" },
+          { status: 400 }
+        );
+      }
+      // Optionally: check expiry and redemptions here if needed
+      promotionCodeId = data.stripe_promotion_code_id;
+    }
+
     const session = await stripe.checkout.sessions.create({
       line_items: [
         {
@@ -239,7 +265,11 @@ export async function POST(req: Request) {
         is_prorated: proratedSessions !== sessionsIncluded ? "true" : "false",
         package_type: packageType,
         expiry_date: nextMonthStart.toISOString(),
+        ...(promoCode ? { promo_code: promoCode } : {}),
       },
+      ...(promotionCodeId
+        ? { discounts: [{ promotion_code: promotionCodeId }] }
+        : {}),
     });
 
     console.log("✅ Checkout session created:", {

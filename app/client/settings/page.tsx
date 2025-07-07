@@ -29,18 +29,32 @@ import {
   FileText,
   Download,
   Eye,
+  Loader2,
 } from "lucide-react";
 import GoogleCalendarPopup from "@/components/GoogleCalendarPopup";
 import GoogleCalendarSuccessDialog from "@/components/GoogleCalendarSuccessDialog";
 import { createClient } from "@/lib/supabaseClient";
 import { saveAs } from "file-saver";
+import { useToast } from "@/components/ui/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 // Separate the Google Calendar section into its own client component
 function GoogleCalendarSection() {
   const [showGooglePopup, setShowGooglePopup] = useState(false);
   const [showGoogleSuccess, setShowGoogleSuccess] = useState(false);
+  const [showSyncDialog, setShowSyncDialog] = useState(false);
   const [isGoogleConnected, setIsGoogleConnected] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<any>(null);
   const supabase = createClient();
+  const { toast } = useToast();
 
   useEffect(() => {
     let mounted = true;
@@ -87,6 +101,79 @@ function GoogleCalendarSection() {
     setShowGoogleSuccess(true);
   }, []);
 
+  const handleSyncCalendar = async () => {
+    try {
+      console.log("[DEBUG] Starting client calendar sync process");
+      setIsSyncing(true);
+      setShowSyncDialog(false);
+
+      console.log(
+        "[DEBUG] Making API call to /api/google/calendar/sync/client"
+      );
+      const response = await fetch("/api/google/calendar/sync/client", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      console.log("[DEBUG] API response status:", response.status);
+      const result = await response.json();
+      console.log("[DEBUG] API response data:", result);
+
+      if (response.ok) {
+        console.log("[DEBUG] Sync successful, setting result:", result);
+        setSyncResult(result);
+        toast({
+          title: "Calendar Sync Complete",
+          description: result.message,
+        });
+      } else {
+        console.error(
+          "[ERROR] Sync failed with status:",
+          response.status,
+          "Error:",
+          result.error
+        );
+        setSyncResult({
+          success: false,
+          error: result.error || "Failed to sync calendar",
+          syncResults: {
+            total: 0,
+            successful: 0,
+            failed: 0,
+            errors: [result.error || "Unknown error occurred"],
+          },
+        });
+        toast({
+          title: "Sync Failed",
+          description: result.error || "Failed to sync calendar",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("[ERROR] Sync error:", error);
+      setSyncResult({
+        success: false,
+        error: "An unexpected error occurred",
+        syncResults: {
+          total: 0,
+          successful: 0,
+          failed: 0,
+          errors: [error instanceof Error ? error.message : "Unknown error"],
+        },
+      });
+      toast({
+        title: "Sync Failed",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      console.log("[DEBUG] Sync process completed, setting isSyncing to false");
+      setIsSyncing(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -113,12 +200,28 @@ function GoogleCalendarSection() {
           </div>
           <div className="flex items-center space-x-2">
             {isGoogleConnected ? (
-              <Badge
-                variant="outline"
-                className="text-green-600 border-green-600"
-              >
-                Connected
-              </Badge>
+              <>
+                <Badge
+                  variant="outline"
+                  className="text-gray-600 border-gray-600 cursor-pointer hover:bg-gray-50"
+                  onClick={() => setShowSyncDialog(true)}
+                >
+                  {isSyncing ? (
+                    <>
+                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                      Syncing...
+                    </>
+                  ) : (
+                    "Sync"
+                  )}
+                </Badge>
+                <Badge
+                  variant="outline"
+                  className="text-green-600 border-green-600"
+                >
+                  Connected
+                </Badge>
+              </>
             ) : (
               <>
                 <Badge
@@ -146,8 +249,190 @@ function GoogleCalendarSection() {
         <GoogleCalendarSuccessDialog
           open={showGoogleSuccess}
           onOpenChange={setShowGoogleSuccess}
-          calendarName="Training Sessions"
+          calendarName="My Training Sessions"
         />
+
+        {/* Sync Confirmation Dialog */}
+        <Dialog open={showSyncDialog} onOpenChange={setShowSyncDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Sync Calendar</DialogTitle>
+              <DialogDescription>
+                This will create a new Google Calendar and sync all your
+                existing training sessions to it.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <div className="flex items-start space-x-3">
+                  <div className="flex-shrink-0">
+                    <svg
+                      className="h-5 w-5 text-yellow-400"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-sm font-medium text-yellow-800">
+                      Important Warning
+                    </h3>
+                    <div className="mt-2 text-sm text-yellow-700">
+                      <ul className="list-disc list-inside space-y-1">
+                        <li>
+                          A new calendar called "My Training Sessions" will be
+                          created
+                        </li>
+                        <li>
+                          All your existing booked sessions will be synced to
+                          this new calendar
+                        </li>
+                        <li>
+                          The old calendar will no longer be used for new
+                          sessions
+                        </li>
+                        <li>This action cannot be undone</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowSyncDialog(false)}
+                disabled={isSyncing}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSyncCalendar}
+                disabled={isSyncing}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {isSyncing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Syncing...
+                  </>
+                ) : (
+                  "Create New Calendar & Sync"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Sync Results Dialog */}
+        {syncResult && (
+          <Dialog open={!!syncResult} onOpenChange={() => setSyncResult(null)}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>
+                  {syncResult.success ? "Sync Results" : "Sync Failed"}
+                </DialogTitle>
+                <DialogDescription>
+                  {syncResult.success
+                    ? "Calendar sync has been completed"
+                    : "There was an error during the sync process"}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                {syncResult.success ? (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div className="flex items-center space-x-2">
+                      <svg
+                        className="h-5 w-5 text-green-400"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                      <span className="text-sm font-medium text-green-800">
+                        {syncResult.message}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div className="flex items-center space-x-2">
+                      <svg
+                        className="h-5 w-5 text-red-400"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                      <span className="text-sm font-medium text-red-800">
+                        {syncResult.error}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {syncResult.syncResults && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Total sessions:</span>
+                      <span className="font-medium">
+                        {syncResult.syncResults?.total || 0}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Successfully synced:</span>
+                      <span className="font-medium text-green-600">
+                        {syncResult.syncResults?.successful || 0}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Failed to sync:</span>
+                      <span className="font-medium text-red-600">
+                        {syncResult.syncResults?.failed || 0}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {syncResult.syncResults?.errors &&
+                  syncResult.syncResults.errors.length > 0 && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                      <h4 className="text-sm font-medium text-red-800 mb-2">
+                        Errors:
+                      </h4>
+                      <div className="text-xs text-red-700 space-y-1 max-h-32 overflow-y-auto">
+                        {syncResult.syncResults.errors.map(
+                          (error: string, index: number) => (
+                            <div key={index} className="p-2 bg-red-100 rounded">
+                              {error}
+                            </div>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  )}
+              </div>
+              <DialogFooter>
+                <Button onClick={() => setSyncResult(null)}>
+                  {syncResult.success ? "Close" : "Try Again"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
       </CardContent>
     </Card>
   );

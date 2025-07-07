@@ -34,6 +34,8 @@ function ClientCheckoutContent() {
   const [hasShownMessage, setHasShownMessage] = useState(false);
   const { user, setUser } = useUser();
   const supabase = createClient();
+  const [promoCode, setPromoCode] = useState("");
+  const [promoError, setPromoError] = useState("");
 
   // Read query params for clientId, packageType, sessionsIncluded
   const clientId = searchParams.get("clientId");
@@ -99,6 +101,7 @@ function ClientCheckoutContent() {
 
   const handleCheckout = async () => {
     try {
+      setPromoError("");
       if (!user?.id) {
         router.push("/login");
         return;
@@ -111,10 +114,14 @@ function ClientCheckoutContent() {
           userId: user.id,
           packageType,
           sessionsIncluded,
+          promoCode: promoCode.trim() || undefined,
         }),
       });
       if (!response.ok) {
-        throw new Error("Failed to create checkout session");
+        const data = await response.json();
+        setPromoError(data.error || "Failed to create checkout session");
+        setIsLoading(false);
+        return;
       }
       const { url } = await response.json();
       if (url) {
@@ -123,8 +130,7 @@ function ClientCheckoutContent() {
         throw new Error("No checkout URL received");
       }
     } catch (error) {
-      router.push("/login");
-    } finally {
+      setPromoError("Failed to create checkout session");
       setIsLoading(false);
     }
   };
@@ -267,6 +273,29 @@ function ClientCheckoutContent() {
                       <li>• {packageType}</li>
                       <li>• Book anytime after purchase</li>
                     </ul>
+                    <div className="mt-4">
+                      <label
+                        htmlFor="promo-code"
+                        className="block text-sm font-medium text-gray-700 mb-1"
+                      >
+                        Promo Code (optional)
+                      </label>
+                      <input
+                        id="promo-code"
+                        type="text"
+                        value={promoCode}
+                        onChange={(e) => setPromoCode(e.target.value)}
+                        className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500"
+                        placeholder="Enter promo code"
+                        disabled={isLoading}
+                        autoComplete="off"
+                      />
+                      {promoError && (
+                        <div className="text-red-600 text-sm mt-1">
+                          {promoError}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </CardContent>
                 <CardFooter>

@@ -66,6 +66,23 @@ interface DatabaseSession {
   };
 }
 
+interface PackageInfo {
+  client_id: string;
+  client_name: string;
+  package_type: string;
+  sessions_included: number;
+  sessions_used: number;
+  remaining: number;
+}
+
+interface PackageSummary {
+  [packageType: string]: {
+    total_remaining: number;
+    total_included: number;
+    total_used: number;
+  };
+}
+
 // Add color palette for clients
 const clientColors = [
   { bg: "bg-red-50", border: "border-red-100", text: "text-red-900" },
@@ -171,6 +188,9 @@ export default function TrainerSchedulePage() {
     packageType: string;
     clientName: string;
   } | null>(null);
+  const [packageInfo, setPackageInfo] = useState<PackageInfo[]>([]);
+  const [packageSummary, setPackageSummary] = useState<PackageSummary>({});
+  const [uniqueClients, setUniqueClients] = useState<string[]>([]);
   const supabase = createClient();
 
   // Handle client filter from URL query parameter
@@ -183,16 +203,9 @@ export default function TrainerSchedulePage() {
     }
   }, []);
 
-  // Function to get unique clients from events
+  // Function to get unique clients from database sessions
   const getUniqueClients = () => {
-    const clients = new Set<string>();
-    events.forEach((event) => {
-      const clientName = getClientName(event);
-      if (clientName && clientName !== "Client") {
-        clients.add(clientName);
-      }
-    });
-    return Array.from(clients).sort();
+    return uniqueClients;
   };
 
   // Function to filter events by selected client
@@ -396,6 +409,23 @@ export default function TrainerSchedulePage() {
         })) || [];
 
       setEvents(convertedEvents);
+
+      // Extract unique client names from database sessions
+      const clientNames = new Set<string>();
+      sessionsData?.forEach((session: any) => {
+        const clientName = session.users?.full_name;
+        if (clientName && clientName !== "Unknown Client") {
+          clientNames.add(clientName);
+        }
+      });
+
+      const uniqueClientNames = Array.from(clientNames).sort();
+      console.log(
+        "👥 Extracted unique clients from sessions:",
+        uniqueClientNames
+      );
+      setUniqueClients(uniqueClientNames);
+
       setIsGoogleConnected(true); // Keep this for UI consistency
     } catch (err) {
       setError("Failed to load sessions");
@@ -404,17 +434,6 @@ export default function TrainerSchedulePage() {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    fetchEvents();
-    fetchTrainerAvailability();
-    fetchClients();
-  }, [currentDate]);
-
-  // Generate time slots when date is selected
-  useEffect(() => {
-    generateTimeSlotsForDate(selectedDateForSession);
-  }, [selectedDateForSession, trainerAvailability]);
 
   // Function to fetch clients
   const fetchClients = async () => {
@@ -435,6 +454,172 @@ export default function TrainerSchedulePage() {
       console.error("Error fetching clients:", error);
     }
   };
+
+  // Function to fetch package information for all clients
+  const fetchPackageInfo = async () => {
+    console.log("🚀 fetchPackageInfo called!");
+    try {
+      console.log("🔄 Starting package info fetch...");
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.user) {
+        console.log("❌ No session found, skipping package fetch");
+        return;
+      }
+
+      console.log("👤 Fetching packages for trainer:", session.user.id);
+
+      // Fetch all packages with client information
+      const { data: packages, error } = await supabase
+        .from("packages")
+        .select(
+          `
+          *,
+          users!packages_client_id_fkey (
+            full_name,
+            email
+          )
+        `
+        )
+        .eq("status", "active")
+        .order("purchase_date", { ascending: false });
+
+      if (error) {
+        console.error("❌ Error fetching packages:", error);
+        return;
+      }
+
+      console.log("📦 Raw packages data:", {
+        totalPackages: packages?.length || 0,
+        packages: packages?.map((pkg) => ({
+          id: pkg.id,
+          client_id: pkg.client_id,
+          client_name: pkg.users?.full_name,
+          package_type: pkg.package_type,
+          sessions_included: pkg.sessions_included,
+          sessions_used: pkg.sessions_used,
+          status: pkg.status,
+          remaining: (pkg.sessions_included || 0) - (pkg.sessions_used || 0),
+        })),
+      });
+
+      // Process package data
+      const processedPackages: PackageInfo[] =
+        packages?.map((pkg) => ({
+          client_id: pkg.client_id,
+          client_name: pkg.users?.full_name || "Unknown Client",
+          package_type: pkg.package_type,
+          sessions_included: pkg.sessions_included || 0,
+          sessions_used: pkg.sessions_used || 0,
+          remaining: (pkg.sessions_included || 0) - (pkg.sessions_used || 0),
+        })) || [];
+
+      console.log("🔧 Processed packages:", {
+        totalProcessed: processedPackages.length,
+        packages: processedPackages,
+      });
+
+      console.log("🔄 Setting packageInfo state with:", processedPackages);
+      setPackageInfo(processedPackages);
+
+      // Calculate summary for all clients
+      const summary: PackageSummary = {};
+      processedPackages.forEach((pkg) => {
+        if (!summary[pkg.package_type]) {
+          summary[pkg.package_type] = {
+            total_remaining: 0,
+            total_included: 0,
+            total_used: 0,
+          };
+        }
+        summary[pkg.package_type].total_remaining += pkg.remaining;
+        summary[pkg.package_type].total_included += pkg.sessions_included;
+        summary[pkg.package_type].total_used += pkg.sessions_used;
+      });
+
+      console.log("📊 Package summary for all clients:", summary);
+      console.log("🔄 Setting packageSummary state with:", summary);
+      setPackageSummary(summary);
+
+      // Log breakdown by client
+      const clientBreakdown = processedPackages.reduce(
+        (acc, pkg) => {
+          if (!acc[pkg.client_name]) {
+            acc[pkg.client_name] = {};
+          }
+          if (!acc[pkg.client_name][pkg.package_type]) {
+            acc[pkg.client_name][pkg.package_type] = {
+              remaining: 0,
+              included: 0,
+              used: 0,
+            };
+          }
+          acc[pkg.client_name][pkg.package_type].remaining += pkg.remaining;
+          acc[pkg.client_name][pkg.package_type].included +=
+            pkg.sessions_included;
+          acc[pkg.client_name][pkg.package_type].used += pkg.sessions_used;
+          return acc;
+        },
+        {} as Record<
+          string,
+          Record<string, { remaining: number; included: number; used: number }>
+        >
+      );
+
+      console.log("👥 Package breakdown by client:", clientBreakdown);
+    } catch (error) {
+      console.error("❌ Error fetching package info:", error);
+    }
+  };
+
+  // Initial load
+  useEffect(() => {
+    console.log("🏁 Initial useEffect triggered");
+    console.log(
+      "🔍 fetchPackageInfo function exists:",
+      typeof fetchPackageInfo
+    );
+    fetchTrainerAvailability();
+    fetchEvents();
+    fetchClients();
+    console.log("📦 About to call fetchPackageInfo...");
+    fetchPackageInfo();
+    console.log("✅ Initial useEffect completed");
+  }, []);
+
+  // Refetch package info when events are updated (new sessions created)
+  useEffect(() => {
+    if (events.length > 0) {
+      fetchPackageInfo();
+    }
+  }, [events]);
+
+  // Log when selected client changes
+  useEffect(() => {
+    console.log("🔄 Selected client changed:", {
+      selectedClient,
+      timestamp: new Date().toISOString(),
+    });
+  }, [selectedClient]);
+
+  // Log when package state changes
+  useEffect(() => {
+    console.log("📦 packageInfo state changed:", {
+      length: packageInfo.length,
+      packages: packageInfo,
+    });
+  }, [packageInfo]);
+
+  useEffect(() => {
+    console.log("📊 packageSummary state changed:", packageSummary);
+  }, [packageSummary]);
+
+  // Generate time slots when date is selected
+  useEffect(() => {
+    generateTimeSlotsForDate(selectedDateForSession);
+  }, [selectedDateForSession, trainerAvailability]);
 
   // Function to generate time slots based on trainer availability for a specific date
   const generateTimeSlotsForDate = (date: string) => {
@@ -973,6 +1158,9 @@ export default function TrainerSchedulePage() {
       // Refresh events
       fetchEvents();
 
+      // Refresh package information to update session counts
+      fetchPackageInfo();
+
       // Get client name and package type for tracking info
       const clientForTracking = clients.find(
         (c) => c.id === selectedClientForSession
@@ -1377,6 +1565,189 @@ export default function TrainerSchedulePage() {
     );
   };
 
+  // Function to get package summary for selected client
+  const getSelectedClientPackageSummary = (): PackageSummary => {
+    console.log(
+      "🎯 Getting package summary for selected client:",
+      selectedClient
+    );
+    console.log("📋 Available package info:", packageInfo);
+
+    if (selectedClient === "all") {
+      console.log("👥 Returning summary for all clients:", packageSummary);
+      return packageSummary;
+    }
+
+    // Filter packages for selected client
+    const clientPackages = packageInfo.filter(
+      (pkg) => pkg.client_name === selectedClient
+    );
+
+    console.log("🔍 Filtered packages for client:", {
+      selectedClient,
+      filteredPackages: clientPackages,
+      totalFiltered: clientPackages.length,
+    });
+
+    const summary: PackageSummary = {};
+    clientPackages.forEach((pkg) => {
+      if (!summary[pkg.package_type]) {
+        summary[pkg.package_type] = {
+          total_remaining: 0,
+          total_included: 0,
+          total_used: 0,
+        };
+      }
+      summary[pkg.package_type].total_remaining += pkg.remaining;
+      summary[pkg.package_type].total_included += pkg.sessions_included;
+      summary[pkg.package_type].total_used += pkg.sessions_used;
+    });
+
+    console.log("📊 Calculated summary for selected client:", {
+      client: selectedClient,
+      summary: summary,
+    });
+
+    return summary;
+  };
+
+  // Component to render package summary
+  const renderPackageSummary = () => {
+    const summary = getSelectedClientPackageSummary();
+    const packageTypes = Object.keys(summary);
+
+    console.log("🎨 Rendering package summary:", {
+      selectedClient,
+      summary,
+      packageTypes,
+      hasPackages: packageTypes.length > 0,
+    });
+
+    if (packageTypes.length === 0) {
+      console.log("⚠️ No packages found for display");
+      return (
+        <div className="flex items-center space-x-2 text-sm text-gray-500">
+          <span>No active packages</span>
+        </div>
+      );
+    }
+
+    console.log("✅ Rendering package summary with data:", {
+      packageTypes,
+      summary,
+    });
+
+    return (
+      <div className="flex items-center space-x-3">
+        <span className="text-sm font-medium text-gray-700">
+          Sessions Remaining:
+        </span>
+        <div className="flex items-center space-x-2">
+          {packageTypes.map((packageType) => {
+            const data = summary[packageType];
+            const shortName = packageType.split(" ")[0]; // "In-Person" -> "In-Person"
+            console.log(`📊 Rendering ${packageType}:`, {
+              shortName,
+              remaining: data.total_remaining,
+              included: data.total_included,
+              used: data.total_used,
+            });
+            return (
+              <div
+                key={packageType}
+                className="flex items-center space-x-1 px-2 py-1 bg-gray-100 rounded-md"
+              >
+                <span className="text-xs font-medium text-gray-600">
+                  {shortName}:
+                </span>
+                <span className="text-xs font-bold text-gray-900">
+                  {data.total_remaining}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  // Function to get selected client's package info for selected session type
+  const getSelectedClientPackageInfo = () => {
+    if (!selectedClientForSession || !selectedSessionType) {
+      return null;
+    }
+
+    // Find the client's name from the clients array
+    const client = clients.find((c) => c.id === selectedClientForSession);
+    if (!client) {
+      return null;
+    }
+
+    // Find packages for this specific client and session type
+    const clientPackages = packageInfo.filter(
+      (pkg) =>
+        pkg.client_id === selectedClientForSession &&
+        pkg.package_type === selectedSessionType
+    );
+
+    if (clientPackages.length === 0) {
+      return {
+        clientName: client.full_name,
+        sessionType: selectedSessionType,
+        remaining: 0,
+        included: 0,
+        used: 0,
+        hasPackage: false,
+        canBookSession: false,
+      };
+    }
+
+    // Sum up all packages for this client and session type
+    const totalRemaining = clientPackages.reduce(
+      (sum, pkg) => sum + pkg.remaining,
+      0
+    );
+    const totalIncluded = clientPackages.reduce(
+      (sum, pkg) => sum + pkg.sessions_included,
+      0
+    );
+    const totalUsed = clientPackages.reduce(
+      (sum, pkg) => sum + pkg.sessions_used,
+      0
+    );
+
+    return {
+      clientName: client.full_name,
+      sessionType: selectedSessionType,
+      remaining: totalRemaining,
+      included: totalIncluded,
+      used: totalUsed,
+      hasPackage: true,
+      canBookSession: totalRemaining > 0,
+    };
+  };
+
+  // Function to check if session creation should be disabled
+  const isSessionCreationDisabled = () => {
+    if (
+      !selectedClientForSession ||
+      !selectedDateForSession ||
+      !selectedTimeForSession ||
+      !selectedSessionType ||
+      availableTimeSlots.length === 0
+    ) {
+      return true;
+    }
+
+    const packageInfo = getSelectedClientPackageInfo();
+    if (!packageInfo) {
+      return true;
+    }
+
+    // Disable if no package exists or no sessions remaining
+    return !packageInfo.hasPackage || !packageInfo.canBookSession;
+  };
+
   if (!isGoogleConnected) {
     return (
       <div className="min-h-screen bg-gray-50 p-8">
@@ -1403,6 +1774,8 @@ export default function TrainerSchedulePage() {
                 <div className="w-1 h-8 bg-gradient-to-b from-red-500 to-red-600 rounded-full"></div>
                 <h1 className="text-3xl font-bold text-gray-900">Schedule</h1>
               </div>
+              {/* Package Summary Display */}
+              {renderPackageSummary()}
             </div>
             <div className="flex items-center space-x-4">
               {/* Client Filter */}
@@ -1534,6 +1907,67 @@ export default function TrainerSchedulePage() {
               </Select>
             </div>
 
+            {/* Package Information */}
+            {(() => {
+              const packageInfo = getSelectedClientPackageInfo();
+              if (!packageInfo) return null;
+
+              // Determine if we should show red background
+              const showRedBackground =
+                !packageInfo.hasPackage || !packageInfo.canBookSession;
+              const bgColor = showRedBackground ? "bg-red-50" : "bg-gray-50";
+              const borderColor = showRedBackground
+                ? "border-red-200"
+                : "border-gray-200";
+
+              return (
+                <div className="space-y-2">
+                  <div
+                    className={`p-3 ${bgColor} rounded-lg border ${borderColor}`}
+                  >
+                    <div className="text-sm font-medium text-gray-900 mb-1">
+                      Package Status for {packageInfo.clientName}
+                    </div>
+                    {packageInfo.hasPackage ? (
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Session Type:</span>
+                          <span className="font-medium">
+                            {packageInfo.sessionType}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">
+                            Sessions Remaining:
+                          </span>
+                          <span
+                            className={`font-bold ${packageInfo.remaining > 0 ? "text-green-600" : "text-red-600"}`}
+                          >
+                            {packageInfo.remaining}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Sessions Used:</span>
+                          <span className="font-medium">
+                            {packageInfo.used} / {packageInfo.included}
+                          </span>
+                        </div>
+                        {packageInfo.remaining === 0 && (
+                          <div className="text-xs text-red-600 font-medium mt-1">
+                            ⚠️ No sessions remaining for this package type
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-red-600 font-medium">
+                        ⚠️ No active package found for {packageInfo.sessionType}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Date Selection */}
             <div className="space-y-2">
               <Label htmlFor="date">Date</Label>
@@ -1601,14 +2035,7 @@ export default function TrainerSchedulePage() {
             <Button
               className="bg-red-600 hover:bg-red-700"
               onClick={handleCreateSession}
-              disabled={
-                isCreatingSession ||
-                !selectedClientForSession ||
-                !selectedDateForSession ||
-                !selectedTimeForSession ||
-                !selectedSessionType ||
-                availableTimeSlots.length === 0
-              }
+              disabled={isCreatingSession || isSessionCreationDisabled()}
             >
               {isCreatingSession ? (
                 <>

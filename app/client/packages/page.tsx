@@ -19,6 +19,7 @@ import {
   CheckCircle,
   Loader2,
   PlusCircle,
+  Search,
 } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { createClient } from "@/lib/supabaseClient";
@@ -32,6 +33,7 @@ import {
 } from "@/components/ui/dialog";
 import CountUp from "react-countup";
 import { useRef } from "react";
+import { useCallback } from "react";
 
 interface Package {
   id: string;
@@ -239,6 +241,19 @@ function PackagesContent() {
     monthlySessionCount: 1,
     priceId: "single-session",
   };
+  // Promo code state per package
+  const [promoCodes, setPromoCodes] = useState<{ [pkgId: string]: string }>({});
+  const [promoErrors, setPromoErrors] = useState<{ [pkgId: string]: string }>(
+    {}
+  );
+  const [discountedPrices, setDiscountedPrices] = useState<{
+    [pkgId: string]: number | null;
+  }>({});
+  const [validatingPromo, setValidatingPromo] = useState<string | null>(null);
+
+  // User-friendly error message for invalid promo codes
+  const FRIENDLY_PROMO_ERROR =
+    "Sorry, that promo code isn't valid. Please check and try again.";
 
   // Function to fetch user's package information
   const fetchPackageInformation = async () => {
@@ -514,6 +529,62 @@ function PackagesContent() {
     initializeUser();
   }, []);
 
+  // Validate promo code and fetch discount
+  const validatePromoCode = useCallback(
+    async (pkg: Package, section: PackageSection) => {
+      const code = promoCodes[pkg.id]?.trim();
+      if (!code) {
+        setPromoErrors((prev) => ({ ...prev, [pkg.id]: "" }));
+        setDiscountedPrices((prev) => ({ ...prev, [pkg.id]: null }));
+        return;
+      }
+      setValidatingPromo(pkg.id);
+      setPromoErrors((prev) => ({ ...prev, [pkg.id]: "" }));
+      try {
+        // Call a new API endpoint to validate and calculate discount
+        const res = await fetch("/api/discount-codes/validate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            code,
+            packageType: section.title.endsWith("Training")
+              ? section.title
+              : `${section.title} Training`,
+            baseAmount: pkg.monthlyPrice,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.valid) {
+          let friendlyError = FRIENDLY_PROMO_ERROR;
+          if (data.error && data.error.toLowerCase().includes("expired")) {
+            friendlyError =
+              "This promo code has expired. Please try another one.";
+          } else if (
+            data.error &&
+            data.error.toLowerCase().includes("server")
+          ) {
+            friendlyError =
+              "There was a problem validating your code. Please try again later.";
+          }
+          setPromoErrors((prev) => ({ ...prev, [pkg.id]: friendlyError }));
+          setDiscountedPrices((prev) => ({ ...prev, [pkg.id]: null }));
+        } else {
+          setPromoErrors((prev) => ({ ...prev, [pkg.id]: "" }));
+          setDiscountedPrices((prev) => ({
+            ...prev,
+            [pkg.id]: data.discountedAmount,
+          }));
+        }
+      } catch (e) {
+        setPromoErrors((prev) => ({ ...prev, [pkg.id]: FRIENDLY_PROMO_ERROR }));
+        setDiscountedPrices((prev) => ({ ...prev, [pkg.id]: null }));
+      } finally {
+        setValidatingPromo(null);
+      }
+    },
+    [promoCodes]
+  );
+
   const handleCheckout = async (pkg: Package, section: PackageSection) => {
     try {
       if (!user?.id) {
@@ -539,6 +610,7 @@ function PackagesContent() {
           "Virtual Training",
           "Partner Training",
         ],
+        promoCode: promoCodes[pkg.id],
       });
 
       const response = await fetch("/api/stripe/checkout-session", {
@@ -550,6 +622,7 @@ function PackagesContent() {
           userId: user.id,
           packageType: packageType,
           sessionsIncluded: pkg.monthlySessionCount,
+          promoCode: promoCodes[pkg.id]?.trim() || undefined,
         }),
       });
 
@@ -864,7 +937,18 @@ function PackagesContent() {
                     <CardContent className="flex-grow pb-2 sm:pb-4">
                       <div className="space-y-2 sm:space-y-4">
                         <div className="text-2xl sm:text-4xl font-bold text-gray-900">
-                          ${pkg.monthlyPrice}
+                          {discountedPrices[pkg.id] != null ? (
+                            <>
+                              <span className="line-through text-gray-400 mr-2">
+                                ${pkg.monthlyPrice}
+                              </span>
+                              <span className="text-green-700">
+                                ${discountedPrices[pkg.id]}
+                              </span>
+                            </>
+                          ) : (
+                            <>${pkg.monthlyPrice}</>
+                          )}
                           <span className="text-xs sm:text-base font-normal text-gray-500">
                             /month
                           </span>
@@ -876,6 +960,56 @@ function PackagesContent() {
                           </li>
                           <li>• ${pkg.hourlyRate} per hour</li>
                         </ul>
+                        <div className="mt-2 flex items-center gap-2">
+                          <label
+                            htmlFor={`promo-code-${pkg.id}`}
+                            className="block text-xs font-medium text-gray-700 mb-1"
+                          >
+                            Promo Code (optional)
+                          </label>
+                        </div>
+                        <div className="relative flex items-center">
+                          <input
+                            id={`promo-code-${pkg.id}`}
+                            type="text"
+                            value={promoCodes[pkg.id] || ""}
+                            onChange={(e) => {
+                              setPromoCodes((prev) => ({
+                                ...prev,
+                                [pkg.id]: e.target.value,
+                              }));
+                            }}
+                            className="w-full border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-red-500 pr-10"
+                            placeholder="Enter promo code"
+                            disabled={
+                              isLoading === pkg.id || validatingPromo === pkg.id
+                            }
+                            autoComplete="off"
+                          />
+                          <button
+                            type="button"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-red-600 focus:outline-none"
+                            onClick={() => validatePromoCode(pkg, section)}
+                            disabled={
+                              isLoading === pkg.id ||
+                              validatingPromo === pkg.id ||
+                              !promoCodes[pkg.id]?.trim()
+                            }
+                          >
+                            {validatingPromo === pkg.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : discountedPrices[pkg.id] != null ? (
+                              <CheckCircle className="h-4 w-4 text-green-600" />
+                            ) : (
+                              <Search className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
+                        {promoErrors[pkg.id] && (
+                          <div className="text-red-600 text-xs mt-1">
+                            {promoErrors[pkg.id]}
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                     <CardFooter>

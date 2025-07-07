@@ -53,6 +53,16 @@ interface Client {
   google_account_connected: boolean;
   contract_accepted: boolean;
   created_at: string;
+  packages?: PackageInfo[];
+}
+
+interface PackageInfo {
+  client_id: string;
+  client_name: string;
+  package_type: string;
+  sessions_included: number;
+  sessions_used: number;
+  remaining: number;
 }
 
 const mockClients = [
@@ -142,6 +152,50 @@ export default function TrainerClientsPage() {
   const [newClientsThisMonth, setNewClientsThisMonth] = useState<number>(0);
   const sessionsDataRef = useRef<any[]>([]);
 
+  // Fetch package information for clients
+  const fetchPackageInfo = async (clientIds: string[]) => {
+    try {
+      console.log(
+        "[DEBUG] fetchPackageInfo called with client IDs:",
+        clientIds
+      );
+
+      const { data: packageData, error: packageError } = await supabase
+        .from("packages")
+        .select(
+          `
+          client_id,
+          package_type,
+          sessions_included,
+          sessions_used
+        `
+        )
+        .in("client_id", clientIds);
+
+      if (packageError) {
+        console.error("Error fetching package info:", packageError);
+        return [];
+      }
+
+      console.log("[DEBUG] Raw package data from database:", packageData);
+
+      // Calculate remaining sessions for each package
+      const packagesWithRemaining = (packageData || []).map((pkg) => ({
+        ...pkg,
+        remaining: Math.max(0, pkg.sessions_included - pkg.sessions_used),
+      }));
+
+      console.log(
+        "[DEBUG] Packages with remaining sessions calculated:",
+        packagesWithRemaining
+      );
+      return packagesWithRemaining;
+    } catch (error) {
+      console.error("Error in fetchPackageInfo:", error);
+      return [];
+    }
+  };
+
   // Fetch clients data
   const fetchClients = useCallback(async () => {
     try {
@@ -199,7 +253,30 @@ export default function TrainerClientsPage() {
         })
       );
 
-      setClients(processedClients);
+      // Fetch package information for all clients
+      const clientIds = processedClients.map((client) => client.id);
+      console.log("[DEBUG] Fetching packages for client IDs:", clientIds);
+      const packageData = await fetchPackageInfo(clientIds);
+      console.log("[DEBUG] Package data fetched:", packageData);
+
+      // Group packages by client_id
+      const packagesByClient: Record<string, PackageInfo[]> = {};
+      packageData.forEach((pkg) => {
+        if (!packagesByClient[pkg.client_id]) {
+          packagesByClient[pkg.client_id] = [];
+        }
+        packagesByClient[pkg.client_id].push(pkg);
+      });
+      console.log("[DEBUG] Packages grouped by client:", packagesByClient);
+
+      // Add packages to each client
+      const clientsWithPackages = processedClients.map((client) => ({
+        ...client,
+        packages: packagesByClient[client.id] || [],
+      }));
+      console.log("[DEBUG] Clients with packages:", clientsWithPackages);
+
+      setClients(clientsWithPackages);
 
       // New Clients This Month
       const now = new Date();
@@ -300,6 +377,40 @@ export default function TrainerClientsPage() {
     } else {
       return "Inactive";
     }
+  };
+
+  // Helper function to render package information
+  const renderPackageInfo = (client: Client) => {
+    if (!client.packages || client.packages.length === 0) {
+      return (
+        <div className="text-sm text-gray-500 mt-1">No active packages</div>
+      );
+    }
+
+    return (
+      <div className="flex flex-wrap gap-2 mt-2">
+        {client.packages.map((pkg, index) => (
+          <div
+            key={`${pkg.package_type}-${index}`}
+            className="flex items-center space-x-1 bg-gray-100 px-2 py-1 rounded-md text-xs"
+          >
+            <span className="font-medium text-gray-700">
+              {pkg.package_type}:
+            </span>
+            <span
+              className={`font-bold ${
+                pkg.remaining > 0 ? "text-green-600" : "text-red-600"
+              }`}
+            >
+              {pkg.remaining} remaining
+            </span>
+            <span className="text-gray-500">
+              ({pkg.sessions_used}/{pkg.sessions_included})
+            </span>
+          </div>
+        ))}
+      </div>
+    );
   };
 
   return (
@@ -560,6 +671,7 @@ export default function TrainerClientsPage() {
                             {new Date(client.created_at).toLocaleDateString()}
                           </span>
                         </div>
+                        {renderPackageInfo(client)}
                       </div>
                     </div>
                     <div className="flex items-center space-x-6">
