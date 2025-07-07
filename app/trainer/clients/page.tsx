@@ -58,7 +58,7 @@ interface Client {
 
 interface PackageInfo {
   client_id: string;
-  client_name: string;
+  client_name?: string;
   package_type: string;
   sessions_included: number;
   sessions_used: number;

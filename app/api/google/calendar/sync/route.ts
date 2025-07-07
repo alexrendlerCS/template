@@ -2,6 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { google } from "googleapis";
 
+// Add type for sessions
+type Session = {
+  id: string;
+  client_id: string;
+  trainer_id: string;
+  date: string;
+  start_time: string;
+  end_time?: string;
+  duration_minutes?: number;
+  type: string;
+  notes?: string;
+  users?:
+    | { full_name?: string; email?: string }
+    | { full_name?: string; email?: string }[];
+};
+
 export async function POST(request: NextRequest) {
   try {
     console.log("[DEBUG] Calendar sync API called");
@@ -130,7 +146,9 @@ export async function POST(request: NextRequest) {
         end_time: s.end_time,
         duration_minutes: s.duration_minutes,
         type: s.type,
-        client: s.users?.full_name,
+        client: Array.isArray(s.users)
+          ? (s.users[0] as { full_name?: string })?.full_name
+          : (s.users as { full_name?: string })?.full_name,
       }))
     );
 
@@ -142,13 +160,15 @@ export async function POST(request: NextRequest) {
       errors: [] as string[],
     };
 
-    for (const session of sessions || []) {
+    for (const session of (sessions as Session[]) || []) {
       try {
         console.log(
           "[DEBUG] Processing session:",
           session.id,
           "for client:",
-          session.users?.full_name
+          Array.isArray(session.users)
+            ? (session.users[0] as { full_name?: string })?.full_name
+            : (session.users as { full_name?: string })?.full_name
         );
         // Combine date and start_time to get start DateTime
         const sessionDate = new Date(session.date + "T" + session.start_time);
@@ -172,10 +192,20 @@ export async function POST(request: NextRequest) {
         }
 
         const event = {
-          summary: `${session.type} - ${session.users?.full_name || "Unknown Client"}`,
+          summary: `${session.type} - ${
+            Array.isArray(session.users)
+              ? (session.users[0] as { full_name?: string })?.full_name
+              : (session.users as { full_name?: string })?.full_name ||
+                "Unknown Client"
+          }`,
           description:
             session.notes ||
-            `Training session with ${session.users?.full_name || "client"}`,
+            `Training session with ${
+              Array.isArray(session.users)
+                ? (session.users[0] as { full_name?: string })?.full_name
+                : (session.users as { full_name?: string })?.full_name ||
+                  "client"
+            }`,
           start: {
             dateTime: sessionDate.toISOString(),
             timeZone: "UTC",
@@ -184,14 +214,22 @@ export async function POST(request: NextRequest) {
             dateTime: endDate.toISOString(),
             timeZone: "UTC",
           },
-          attendees: session.users?.email
-            ? [
-                {
-                  email: session.users.email,
-                  displayName: session.users.full_name,
-                },
-              ]
-            : undefined,
+          attendees:
+            Array.isArray(session.users) && session.users[0]?.email
+              ? [
+                  {
+                    email: session.users[0].email,
+                    displayName: session.users[0].full_name,
+                  },
+                ]
+              : !Array.isArray(session.users) && session.users?.email
+                ? [
+                    {
+                      email: session.users.email,
+                      displayName: session.users.full_name,
+                    },
+                  ]
+                : undefined,
         };
 
         console.log(

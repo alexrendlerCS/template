@@ -46,6 +46,18 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 
+type DiscountCodeType = {
+  id: string;
+  code: string;
+  percent_off: number | null;
+  amount_off: number | null;
+  currency: string | null;
+  max_redemptions: number | null;
+  expires_at: string | null;
+  created_at: string;
+  stripe_promotion_code_id: string;
+};
+
 // Separate the Google Calendar section into its own client component
 function GoogleCalendarSection() {
   const [showGooglePopup, setShowGooglePopup] = useState(false);
@@ -808,7 +820,13 @@ function AddSessionsModal({
   );
 }
 
-function CreatePromoCodeModal({ open, onOpenChange }) {
+function CreatePromoCodeModal({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const [code, setCode] = useState("");
   const [discountType, setDiscountType] = useState("percent");
   const [value, setValue] = useState("");
@@ -827,6 +845,11 @@ function CreatePromoCodeModal({ open, onOpenChange }) {
     setError("");
     try {
       const user = (await supabase.auth.getUser()).data.user;
+      if (!user) {
+        setError("User not found");
+        setSubmitting(false);
+        return;
+      }
       const res = await fetch("/api/discount-codes/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -982,8 +1005,8 @@ function CreatePromoCodeModal({ open, onOpenChange }) {
   );
 }
 
-function PromoCodesTable({ trainerId }) {
-  const [codes, setCodes] = useState([]);
+function PromoCodesTable({ trainerId }: { trainerId: string }) {
+  const [codes, setCodes] = useState<DiscountCodeType[]>([]);
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
   const { toast } = useToast();
@@ -1004,7 +1027,7 @@ function PromoCodesTable({ trainerId }) {
       });
   }, [trainerId, supabase]);
 
-  const copyToClipboard = (code) => {
+  const copyToClipboard = (code: string) => {
     navigator.clipboard.writeText(code);
     toast({
       title: "Copied!",
@@ -1056,7 +1079,7 @@ function PromoCodesTable({ trainerId }) {
                 <td className="px-4 py-2">
                   {c.percent_off
                     ? `${c.percent_off}%`
-                    : `$${(c.amount_off / 100).toFixed(2)}`}
+                    : (typeof c.amount_off === 'number' ? `$${(c.amount_off / 100).toFixed(2)}` : "")}
                 </td>
                 <td className="px-4 py-2">{c.max_redemptions || "-"}</td>
                 <td className="px-4 py-2">
