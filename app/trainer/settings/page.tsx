@@ -610,7 +610,7 @@ function AddSessionsModal({
 }) {
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [sessionType, setSessionType] = useState<string>("");
-  const [numSessions, setNumSessions] = useState<number>(1);
+  const [numSessions, setNumSessions] = useState<string>("1");
   const [clients, setClients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -637,6 +637,16 @@ function AddSessionsModal({
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
+      // Convert numSessions to number
+      const numSessionsNum = parseInt(numSessions);
+
+      console.log("AddSessionsModal - Debug info:", {
+        selectedUserId,
+        sessionType,
+        numSessions: numSessionsNum,
+        clientName: clients.find((c) => c.id === selectedUserId)?.full_name,
+      });
+
       // Check for existing package
       const { data: existing, error: pkgError } = await supabase
         .from("packages")
@@ -651,27 +661,37 @@ function AddSessionsModal({
         const { error: updateError } = await supabase
           .from("packages")
           .update({
-            sessions_included: existing.sessions_included + numSessions,
-            original_sessions: (existing.original_sessions || 0) + numSessions,
+            sessions_included: existing.sessions_included + numSessionsNum,
+            original_sessions:
+              (existing.original_sessions || 0) + numSessionsNum,
           })
           .eq("id", existing.id);
         if (updateError) throw updateError;
         setSuccessMessage(
-          `Added ${numSessions} session(s) to ${clients.find((c) => c.id === selectedUserId)?.full_name || "user"}.`
+          `Added ${numSessionsNum} session(s) to ${clients.find((c) => c.id === selectedUserId)?.full_name || "user"}.`
         );
       } else {
         // Create new package
+        console.log("Creating new package with data:", {
+          client_id: selectedUserId,
+          package_type: sessionType,
+          sessions_included: numSessionsNum,
+          original_sessions: numSessionsNum,
+          status: "active",
+          purchase_date: new Date().toISOString().split("T")[0],
+        });
+
         const { error: createError } = await supabase.from("packages").insert({
           client_id: selectedUserId,
           package_type: sessionType,
-          sessions_included: numSessions,
-          original_sessions: numSessions,
+          sessions_included: numSessionsNum,
+          original_sessions: numSessionsNum,
           status: "active",
           purchase_date: new Date().toISOString().split("T")[0],
         });
         if (createError) throw createError;
         setSuccessMessage(
-          `Created new package and added ${numSessions} session(s) to ${clients.find((c) => c.id === selectedUserId)?.full_name || "user"}.`
+          `Created new package and added ${numSessionsNum} session(s) to ${clients.find((c) => c.id === selectedUserId)?.full_name || "user"}.`
         );
       }
       setShowSuccess(true);
@@ -723,9 +743,10 @@ function AddSessionsModal({
               value={sessionType}
               onChange={(e) => setSessionType(e.target.value)}
             >
-              <option>In-Person Training</option>
-              <option>Virtual Training</option>
-              <option>Partner Training</option>
+              <option value="">Select session type...</option>
+              <option value="In-Person Training">In-Person Training</option>
+              <option value="Virtual Training">Virtual Training</option>
+              <option value="Partner Training">Partner Training</option>
             </select>
           </div>
           <div>
@@ -734,14 +755,20 @@ function AddSessionsModal({
               type="number"
               min={1}
               value={numSessions}
-              onChange={(e) => setNumSessions(Number(e.target.value))}
+              onChange={(e) => setNumSessions(e.target.value)}
             />
           </div>
         </div>
         <DialogFooter>
           <Button
             className="w-full bg-red-600 hover:bg-red-700"
-            disabled={submitting || !selectedUserId || numSessions < 1}
+            disabled={
+              submitting ||
+              !selectedUserId ||
+              !sessionType ||
+              !numSessions ||
+              parseInt(numSessions) < 1
+            }
             onClick={() => setShowConfirm(true)}
           >
             {submitting ? "Adding..." : "Add Sessions"}
@@ -801,6 +828,304 @@ function AddSessionsModal({
             </div>
             <DialogTitle className="text-xl font-semibold text-green-800 text-center">
               Sessions Added Successfully!
+            </DialogTitle>
+            <DialogDescription className="text-gray-600 mt-2 text-center">
+              {successMessage}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-6">
+            <Button
+              className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
+              onClick={() => setShowSuccess(false)}
+            >
+              Great! Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Dialog>
+  );
+}
+
+function CustomPaymentModal({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const [amount, setAmount] = useState<string>("");
+  const [sessionCount, setSessionCount] = useState<string>("1");
+  const [packageType, setPackageType] = useState<string>("");
+  const [paymentMethod, setPaymentMethod] = useState<string>("check");
+  const [clients, setClients] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  const supabase = createClient();
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (open) {
+      setLoading(true);
+      supabase
+        .from("users")
+        .select("id, full_name, email")
+        .eq("role", "client")
+        .then(({ data, error }) => {
+          if (!error && data) setClients(data);
+          setLoading(false);
+        });
+    }
+  }, [open, supabase]);
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    try {
+      console.log("CustomPaymentModal - Debug info:", {
+        selectedUserId,
+        amount,
+        sessionCount,
+        packageType,
+        paymentMethod,
+        clientName: clients.find((c) => c.id === selectedUserId)?.full_name,
+      });
+
+      // Convert amount to number (for numeric column in DB)
+      const numericAmount = parseFloat(amount);
+      // Convert sessionCount to number
+      const sessionCountNum = parseInt(sessionCount);
+
+      // Get current trainer ID
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error("User not authenticated");
+      }
+
+      // Generate a unique transaction ID for manual payments
+      const transactionId = `manual_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      // Map payment method to allowed DB values
+      const dbMethod = paymentMethod === "stripe" ? "stripe" : "in_person";
+
+      // Create the payment record
+      console.log("Attempting to insert payment with data:", {
+        client_id: selectedUserId,
+        trainer_id: user.id,
+        amount: numericAmount,
+        session_count: sessionCountNum,
+        method: dbMethod,
+        status: "completed",
+        transaction_id: transactionId,
+        paid_at: new Date().toISOString(),
+        package_type: packageType,
+        package_id: null,
+      });
+
+      const { data: paymentData, error: paymentError } = await supabase
+        .from("payments")
+        .insert({
+          client_id: selectedUserId,
+          trainer_id: user.id,
+          amount: numericAmount,
+          session_count: sessionCountNum,
+          method: dbMethod,
+          status: "completed",
+          transaction_id: transactionId,
+          paid_at: new Date().toISOString(),
+          package_type: packageType,
+          package_id: null, // Will be created by the system
+        })
+        .select()
+        .single();
+
+      if (paymentError) {
+        console.error("Payment insert error:", paymentError);
+        throw paymentError;
+      }
+
+      console.log("Payment created successfully:", paymentData);
+
+      // Create a package for the client
+      const { error: packageError } = await supabase.from("packages").insert({
+        client_id: selectedUserId,
+        package_type: packageType,
+        sessions_included: sessionCountNum,
+        original_sessions: sessionCountNum,
+        status: "active",
+        purchase_date: new Date().toISOString().split("T")[0],
+      });
+
+      if (packageError) throw packageError;
+
+      setSuccessMessage(
+        `Successfully recorded payment of $${amount} for ${sessionCountNum} session(s) from ${clients.find((c) => c.id === selectedUserId)?.full_name || "user"}.`
+      );
+      setShowSuccess(true);
+      onOpenChange(false);
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "An unknown error occurred";
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+      setShowConfirm(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Record Custom Payment</DialogTitle>
+          <DialogDescription>
+            Record a payment made via check, Zelle, or other methods.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div>
+            <Label>Client</Label>
+            <select
+              className="w-full border rounded p-2 mt-1"
+              value={selectedUserId}
+              onChange={(e) => setSelectedUserId(e.target.value)}
+              disabled={loading}
+            >
+              <option value="">Select a client...</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.full_name} ({c.email})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label>Package Type</Label>
+            <select
+              className="w-full border rounded p-2 mt-1"
+              value={packageType}
+              onChange={(e) => setPackageType(e.target.value)}
+            >
+              <option value="">Select package type...</option>
+              <option value="In-Person Training">In-Person Training</option>
+              <option value="Virtual Training">Virtual Training</option>
+              <option value="Partner Training">Partner Training</option>
+            </select>
+          </div>
+          <div>
+            <Label>Amount ($)</Label>
+            <Input
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="0.00"
+            />
+          </div>
+          <div>
+            <Label>Number of Sessions</Label>
+            <Input
+              type="number"
+              min={1}
+              value={sessionCount}
+              onChange={(e) => setSessionCount(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label>Payment Method</Label>
+            <select
+              className="w-full border rounded p-2 mt-1"
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value)}
+            >
+              <option value="check">Check</option>
+              <option value="zelle">Zelle</option>
+              <option value="cash">Cash</option>
+              <option value="bank_transfer">Bank Transfer</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button
+            className="w-full bg-red-600 hover:bg-red-700"
+            disabled={
+              submitting ||
+              !selectedUserId ||
+              !packageType ||
+              !amount ||
+              !sessionCount ||
+              parseInt(sessionCount) < 1
+            }
+            onClick={() => setShowConfirm(true)}
+          >
+            {submitting ? "Recording..." : "Record Payment"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+      {/* Confirmation Dialog */}
+      <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Payment Recording</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to record a payment of{" "}
+              <span className="font-bold text-blue-700">
+                ${amount} for {sessionCount} session(s)
+              </span>{" "}
+              from{" "}
+              <span className="font-bold">
+                {clients.find((c) => c.id === selectedUserId)?.full_name ||
+                  "this client"}
+              </span>
+              ? This will create a package and payment record.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowConfirm(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="w-full bg-red-600 hover:bg-red-700 text-white"
+              onClick={handleSubmit}
+              disabled={submitting}
+            >
+              {submitting ? "Recording..." : "Confirm"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Success Dialog */}
+      <Dialog open={showSuccess} onOpenChange={setShowSuccess}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader className="text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100 mb-4">
+              <svg
+                className="h-6 w-6 text-green-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            </div>
+            <DialogTitle className="text-xl font-semibold text-green-800 text-center">
+              Payment Recorded Successfully!
             </DialogTitle>
             <DialogDescription className="text-gray-600 mt-2 text-center">
               {successMessage}
@@ -1079,7 +1404,9 @@ function PromoCodesTable({ trainerId }: { trainerId: string }) {
                 <td className="px-4 py-2">
                   {c.percent_off
                     ? `${c.percent_off}%`
-                    : (typeof c.amount_off === 'number' ? `$${(c.amount_off / 100).toFixed(2)}` : "")}
+                    : typeof c.amount_off === "number"
+                      ? `$${(c.amount_off / 100).toFixed(2)}`
+                      : ""}
                 </td>
                 <td className="px-4 py-2">{c.max_redemptions || "-"}</td>
                 <td className="px-4 py-2">
@@ -1120,6 +1447,7 @@ export default function TrainerSettings() {
   });
   const [showAddSessions, setShowAddSessions] = useState(false);
   const [showCreatePromo, setShowCreatePromo] = useState(false);
+  const [showCustomPayment, setShowCustomPayment] = useState(false);
   const [trainerId, setTrainerId] = useState("");
 
   useEffect(() => {
@@ -1180,13 +1508,27 @@ export default function TrainerSettings() {
                 <span>Promo Codes & Discounts</span>
               </CardTitle>
               <CardDescription>
-                Create and manage promotional codes for your clients
+                Create promotional codes and record custom payments for your
+                clients
               </CardDescription>
             </CardHeader>
             <CardContent className="py-8">
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <tbody className="bg-white divide-y divide-gray-200">
+                    <tr>
+                      <td className="px-4 py-3 text-base font-medium text-gray-800">
+                        Record Custom Payment
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Button
+                          className="bg-red-600 hover:bg-red-700 text-white"
+                          onClick={() => setShowCustomPayment(true)}
+                        >
+                          Record Payment
+                        </Button>
+                      </td>
+                    </tr>
                     <tr>
                       <td className="px-4 py-3 text-base font-medium text-gray-800">
                         Add Free Sessions to a user's account
@@ -1216,6 +1558,10 @@ export default function TrainerSettings() {
                   </tbody>
                 </table>
               </div>
+              <CustomPaymentModal
+                open={showCustomPayment}
+                onOpenChange={setShowCustomPayment}
+              />
               <AddSessionsModal
                 open={showAddSessions}
                 onOpenChange={setShowAddSessions}

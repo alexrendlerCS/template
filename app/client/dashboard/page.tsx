@@ -19,12 +19,14 @@ import {
   CheckCircle,
   AlertCircle,
   Menu,
+  CalendarDays,
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { DashboardWrapper } from "./DashboardWrapper";
 import { useEffect, useState, Suspense } from "react";
 import { ContractFlowModal } from "@/components/ContractFlowModal";
+// import { RescheduleModal } from "@/components/RescheduleModal";
 import { createClient } from "@/lib/supabaseClient";
 import { useRouter, useSearchParams } from "next/navigation";
 import GoogleCalendarPopup from "@/components/GoogleCalendarPopup";
@@ -37,8 +39,11 @@ interface Session {
   id: string; // Updated to string since Supabase IDs are UUIDs
   date: string;
   start_time: string;
+  end_time: string;
   type: string;
   trainer_id: string;
+  status: string;
+  reschedule_status?: string;
   users: {
     full_name: string;
   };
@@ -259,6 +264,9 @@ export default function ClientDashboard() {
   const [showCalendarPopup, setShowCalendarPopup] = useState(false);
   const [showContractModal, setShowContractModal] = useState(false);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  // const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  // const [selectedSessionForReschedule, setSelectedSessionForReschedule] =
+  //   useState<Session | null>(null);
   const [calendarName, setCalendarName] = useState("");
   const [loading, setLoading] = useState(true);
   const [userStatus, setUserStatus] = useState<UserStatus>({
@@ -289,7 +297,10 @@ export default function ClientDashboard() {
           id,
           date,
           start_time,
+          end_time,
           type,
+          status,
+          reschedule_status,
           trainer_id,
           users!sessions_trainer_id_fkey (
             full_name
@@ -320,7 +331,10 @@ export default function ClientDashboard() {
             id: rawSession.id,
             date: rawSession.date,
             start_time: rawSession.start_time,
+            end_time: rawSession.end_time,
             type: rawSession.type,
+            status: rawSession.status,
+            reschedule_status: rawSession.reschedule_status,
             trainer_id: rawSession.trainer_id,
             users: {
               full_name: trainerName,
@@ -665,6 +679,27 @@ export default function ClientDashboard() {
             setIsCompletingContract(false);
           }}
         />
+
+        {/* Temporarily disabled reschedule modal
+        {selectedSessionForReschedule && (
+          <RescheduleModal
+            open={showRescheduleModal}
+            onOpenChange={setShowRescheduleModal}
+            session={selectedSessionForReschedule}
+            onSuccess={async () => {
+              // Refresh upcoming sessions after successful reschedule request
+              if (userStatus.contractAccepted) {
+                const {
+                  data: { session },
+                } = await supabase.auth.getSession();
+                if (session?.user) {
+                  fetchUpcomingSessions(session.user.id);
+                }
+              }
+            }}
+          />
+        )}
+        */}
       </>
     );
   };
@@ -847,13 +882,46 @@ export default function ClientDashboard() {
                           <div className="flex items-center space-x-2">
                             <Badge
                               variant="default"
-                              className="bg-green-100 text-green-800"
+                              className={
+                                session.status === "confirmed"
+                                  ? "bg-green-100 text-green-800"
+                                  : session.status === "pending"
+                                    ? "bg-yellow-100 text-yellow-800"
+                                    : "bg-gray-100 text-gray-800"
+                              }
                             >
-                              Confirmed
+                              {session.status === "confirmed"
+                                ? "Confirmed"
+                                : session.status === "pending"
+                                  ? "Pending"
+                                  : session.status}
                             </Badge>
-                            <Button size="sm" variant="outline">
-                              Reschedule
-                            </Button>
+                            {session.status === "confirmed" &&
+                              (() => {
+                                // Check if session is within 24 hours
+                                // Temporarily disabled reschedule functionality
+                                return (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={true}
+                                    className="flex items-center gap-1 opacity-50 cursor-not-allowed"
+                                  >
+                                    <CalendarDays className="h-3 w-3" />
+                                    Reschedule (Coming Soon)
+                                  </Button>
+                                );
+                              })()}
+                            {/* Temporarily disabled reschedule status badge
+                            {session.reschedule_status === "pending" && (
+                              <Badge
+                                variant="outline"
+                                className="text-orange-600 border-orange-600"
+                              >
+                                Reschedule Pending
+                              </Badge>
+                            )}
+                            */}
                           </div>
                         </div>
                       ))
