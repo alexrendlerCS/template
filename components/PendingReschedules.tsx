@@ -104,7 +104,12 @@ export function PendingReschedules() {
         return;
       }
 
-      setPendingReschedules(data || []);
+      setPendingReschedules(
+        (data || []).map((item: any) => ({
+          ...item,
+          users: Array.isArray(item.users) ? item.users[0] : item.users,
+        }))
+      );
     } catch (error) {
       console.error("Error fetching pending reschedules:", error);
     } finally {
