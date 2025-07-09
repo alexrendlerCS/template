@@ -34,9 +34,19 @@ import {
   Users,
   User,
   Clock,
+  Edit,
+  Move,
 } from "lucide-react";
 import { GoogleCalendarBanner } from "@/components/GoogleCalendarBanner";
 import { createClient } from "@/lib/supabaseClient";
+import {
+  DndContext,
+  closestCenter,
+  useDraggable,
+  useDroppable,
+  DragOverlay,
+} from "@dnd-kit/core";
+import { useToast } from "@/components/ui/use-toast";
 
 interface DatabaseSession {
   id: string;
@@ -59,6 +69,7 @@ interface DatabaseSession {
     trainer_id: string;
     type: string;
     notes?: string;
+    duration_minutes?: number;
   };
   users?: {
     full_name: string;
@@ -192,6 +203,36 @@ export default function TrainerSchedulePage() {
   const [packageSummary, setPackageSummary] = useState<PackageSummary>({});
   const [uniqueClients, setUniqueClients] = useState<string[]>([]);
   const supabase = createClient();
+  const [activeDragSession, setActiveDragSession] =
+    useState<DatabaseSession | null>(null);
+  const [draggedSessionId, setDraggedSessionId] = useState<string | null>(null);
+  const [dragOverDate, setDragOverDate] = useState<string | null>(null);
+  const [showRescheduleDialog, setShowRescheduleDialog] = useState(false);
+  const [rescheduleTarget, setRescheduleTarget] = useState<{
+    session: DatabaseSession;
+    newDateStr: string;
+    newTime?: string;
+  } | null>(null);
+  const { toast } = useToast();
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isSyncingCalendar, setIsSyncingCalendar] = useState(false);
+  const [feedbackDialog, setFeedbackDialog] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+  }>({ open: false, title: "", message: "" });
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [showEditSessionDialog, setShowEditSessionDialog] = useState(false);
+  const [editingSession, setEditingSession] = useState<DatabaseSession | null>(
+    null
+  );
+  const [editSessionData, setEditSessionData] = useState({
+    date: "",
+    startTime: "",
+    endTime: "",
+    sessionType: "",
+  });
+  const [isUpdatingSession, setIsUpdatingSession] = useState(false);
 
   // Handle client filter from URL query parameter
   useEffect(() => {
@@ -417,6 +458,7 @@ export default function TrainerSchedulePage() {
             trainer_id: session.trainer_id,
             type: session.type,
             notes: session.session_notes || session.notes,
+            duration_minutes: session._dbData?.duration_minutes,
           },
         })) || [];
 
@@ -1384,10 +1426,20 @@ export default function TrainerSchedulePage() {
     const clientEmail = event.users?.email || event.attendees?.[0]?.email;
     const clientColor = getClientColor(clientEmail, clientName);
 
+    const handleSessionClick = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (isEditMode) {
+        openEditSessionDialog(event);
+      }
+    };
+
     return (
       <div
         key={event.id}
-        className={`rounded-md p-2 ${clientColor.bg} ${clientColor.border} border shadow-sm hover:shadow-md transition-all duration-200 transform hover:scale-[1.02] cursor-pointer`}
+        className={`rounded-md p-2 ${clientColor.bg} ${clientColor.border} border shadow-sm hover:shadow-md transition-all duration-200 transform hover:scale-[1.02] ${
+          isEditMode ? "cursor-pointer" : "cursor-grab"
+        }`}
+        onClick={handleSessionClick}
       >
         <div
           className={`text-xs font-bold ${clientColor.text} mb-1 leading-tight`}
@@ -1417,107 +1469,330 @@ export default function TrainerSchedulePage() {
     );
   };
 
+  const handleDragStart = (event: any) => {
+    const session = events.find((s) => s.id === event.active.id);
+    setActiveDragSession(session || null);
+    setDraggedSessionId(event.active.id);
+  };
+  const handleDragEnd = (event: any) => {
+    setActiveDragSession(null);
+    setDraggedSessionId(null);
+    setDragOverDate(null);
+    if (!event.over || !event.active) return;
+    const session = events.find((s) => s.id === event.active.id);
+    if (!session) return;
+    // Debug: log drop target ID
+    console.log("DnD drop target ID:", event.over.id);
+    // Parse new date and time from drop target id using '|', decode time
+    const [newDateStr, encodedTime] = event.over.id.split("|");
+    console.log("Parsed newDateStr:", newDateStr, "encodedTime:", encodedTime);
+    const newTime = decodeURIComponent(encodedTime);
+    console.log("Decoded newTime:", newTime);
+    // Parse old date and time
+    const oldDate = session.start.dateTime.split("T")[0];
+    const oldTime = formatEventTime(session.start.dateTime);
+    // If dropped on the same slot, do nothing
+    if (oldDate === newDateStr && oldTime === newTime) {
+      return;
+    }
+    // Open confirmation dialog
+    setRescheduleTarget({ session, newDateStr, newTime });
+    setShowRescheduleDialog(true);
+  };
+  const handleDragOver = (event: any) => {
+    if (event.over) {
+      setDragOverDate(event.over.id);
+    } else {
+      setDragOverDate(null);
+    }
+  };
+
+  const openEditSessionDialog = (session: DatabaseSession) => {
+    const sessionDate = session.start.dateTime.split("T")[0];
+    const startTime = session.start.dateTime.split("T")[1].slice(0, 5); // HH:MM format
+    const sessionTypeValue = session._dbData?.type || "Training";
+
+    // Calculate end time as 1 hour after start time
+    const calculateEndTime = (startTimeStr: string) => {
+      const [hours, minutes] = startTimeStr.split(":").map(Number);
+      const startDate = new Date(2000, 0, 1, hours, minutes);
+      startDate.setHours(startDate.getHours() + 1);
+      return `${String(startDate.getHours()).padStart(2, "0")}:${String(startDate.getMinutes()).padStart(2, "0")}`;
+    };
+
+    const endTime = calculateEndTime(startTime);
+
+    setEditingSession(session);
+    setEditSessionData({
+      date: sessionDate,
+      startTime: startTime,
+      endTime: endTime,
+      sessionType: sessionTypeValue,
+    });
+    setShowEditSessionDialog(true);
+  };
+
+  const handleUpdateSession = async () => {
+    if (!editingSession) return;
+
+    setIsUpdatingSession(true);
+    try {
+      // Validate inputs
+      if (
+        !editSessionData.date ||
+        !editSessionData.startTime ||
+        !editSessionData.endTime ||
+        !editSessionData.sessionType
+      ) {
+        setFeedbackDialog({
+          open: true,
+          title: "Validation Error",
+          message: "Please fill in all required fields.",
+        });
+        return;
+      }
+
+      // Check for overlaps
+      if (
+        isOverlap(
+          events,
+          editSessionData.date,
+          editSessionData.startTime,
+          editSessionData.endTime,
+          editingSession.id,
+          String(editingSession._dbData?.trainer_id || "")
+        )
+      ) {
+        setFeedbackDialog({
+          open: true,
+          title: "Error",
+          message:
+            "There is already a session at this day and time. Please choose a different time.",
+        });
+        return;
+      }
+
+      // Update session via API
+      const response = await fetch(`/api/sessions/${editingSession.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: editSessionData.date,
+          start_time: editSessionData.startTime,
+          end_time: editSessionData.endTime,
+          type: editSessionData.sessionType,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setFeedbackDialog({
+          open: true,
+          title: "Error",
+          message: data.error || "Failed to update session",
+        });
+        return;
+      }
+
+      // Sync Google Calendar events
+      try {
+        await syncGoogleCalendarEvents(
+          editingSession,
+          editSessionData.date,
+          editSessionData.startTime,
+          editSessionData.endTime
+        );
+        setFeedbackDialog({
+          open: true,
+          title: "Session Updated",
+          message: `Session updated successfully. Google Calendar events have been synchronized.`,
+        });
+      } catch (syncError) {
+        console.error("[Calendar Sync Error]:", syncError);
+        setFeedbackDialog({
+          open: true,
+          title: "Session Updated",
+          message: `Session updated successfully. Note: Google Calendar sync failed.`,
+        });
+      }
+
+      setShowEditSessionDialog(false);
+      setEditingSession(null);
+
+      // Refresh events
+      await fetchEvents();
+    } catch (error) {
+      console.error("Error updating session:", error);
+      setFeedbackDialog({
+        open: true,
+        title: "Error",
+        message: "Failed to update session. Please try again.",
+      });
+    } finally {
+      setIsUpdatingSession(false);
+    }
+  };
+
+  // Update renderWeekView to use DroppableTimeSlot for each cell
   const renderWeekView = () => {
     const weekDates = getWeekDates(currentDate);
     const startDate = weekDates[0];
     const endDate = weekDates[6];
 
     return (
-      <div className="flex flex-col h-full">
-        <div className="flex items-center justify-between mb-4 px-2 sm:px-4">
-          <div className="flex items-center gap-3">
-            <div className="w-1 h-8 bg-gradient-to-b from-red-500 to-red-600 rounded-full"></div>
-            <h2 className="text-lg sm:text-xl font-bold text-gray-900">
-              Week of{" "}
-              {startDate.toLocaleDateString("en-US", {
-                month: "long",
-                day: "numeric",
-              })}{" "}
-              -{" "}
-              {endDate.toLocaleDateString("en-US", {
-                month: "long",
-                day: "numeric",
-                year: "numeric",
-              })}
-            </h2>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigateWeek("prev")}
-              className="hover:bg-gray-50 border-gray-300"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigateWeek("next")}
-              className="hover:bg-gray-50 border-gray-300"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-x-auto">
-          <div className="grid grid-cols-[80px_repeat(7,1fr)] gap-0 bg-white rounded-xl shadow-lg overflow-hidden min-w-[700px] h-[calc(100vh-12rem)] border border-gray-200 divide-x divide-gray-300">
-            {/* Time column */}
-            <div className="bg-gradient-to-b from-gray-50 to-gray-100">
-              <div className="h-10 sm:h-12 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100" />
-              {timeSlots.map((time) => (
-                <div
-                  key={time}
-                  className="h-16 sm:h-20 bg-gradient-to-r from-gray-50 to-gray-100 p-1 sm:p-2 text-xs sm:text-sm font-medium text-gray-600 flex items-center justify-end pr-2 sm:pr-4 border-b border-gray-100"
-                >
-                  {time}
+      <DndContext
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragOver={handleDragOver}
+      >
+        <div className="flex flex-col h-full">
+          <div className="flex items-center justify-between mb-4 px-2 sm:px-4">
+            <div className="flex items-center gap-3">
+              <div className="w-1 h-8 bg-gradient-to-b from-red-500 to-red-600 rounded-full"></div>
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900">
+                Week of{" "}
+                {startDate.toLocaleDateString("en-US", {
+                  month: "long",
+                  day: "numeric",
+                })}{" "}
+                -{" "}
+                {endDate.toLocaleDateString("en-US", {
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+              </h2>
+            </div>
+            <div className="flex items-center gap-2">
+              {/* Edit Mode Toggle */}
+              <div className="flex items-center gap-2 mr-4 border-r border-gray-300 pr-4">
+                <span className="text-sm font-medium text-gray-700">Mode:</span>
+                <div className="flex bg-gray-100 rounded-lg p-1">
+                  <button
+                    onClick={() => setIsEditMode(false)}
+                    className={`flex items-center gap-1 px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                      !isEditMode
+                        ? "bg-red-600 text-white shadow-sm"
+                        : "text-gray-600 hover:text-gray-900"
+                    }`}
+                  >
+                    <Move className="h-3 w-3" />
+                    Drag
+                  </button>
+                  <button
+                    onClick={() => setIsEditMode(true)}
+                    className={`flex items-center gap-1 px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                      isEditMode
+                        ? "bg-red-600 text-white shadow-sm"
+                        : "text-gray-600 hover:text-gray-900"
+                    }`}
+                  >
+                    <Edit className="h-3 w-3" />
+                    Edit
+                  </button>
                 </div>
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigateWeek("prev")}
+                className="hover:bg-gray-50 border-gray-300"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigateWeek("next")}
+                className="hover:bg-gray-50 border-gray-300"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-x-auto">
+            <div className="grid grid-cols-[80px_repeat(7,1fr)] gap-0 bg-white rounded-xl shadow-lg overflow-hidden min-w-[700px] h-[calc(100vh-12rem)] border border-gray-200 divide-x divide-gray-300">
+              {/* Time column */}
+              <div className="bg-gradient-to-b from-gray-50 to-gray-100">
+                <div className="h-10 sm:h-12 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100" />
+                {timeSlots.map((time) => (
+                  <div
+                    key={time}
+                    className="h-16 sm:h-20 bg-gradient-to-r from-gray-50 to-gray-100 p-1 sm:p-2 text-xs sm:text-sm font-medium text-gray-600 flex items-center justify-end pr-2 sm:pr-4 border-b border-gray-100"
+                  >
+                    {time}
+                  </div>
+                ))}
+              </div>
+
+              {/* Days columns */}
+              {weekDates.map((date, index) => (
+                <DroppableTimeSlot
+                  key={date.toISOString()}
+                  date={date}
+                  time={timeSlots[0]}
+                >
+                  <div
+                    className={`bg-white ${isToday(date.getDate()) ? "bg-red-50" : ""}`}
+                  >
+                    <div
+                      className={`h-10 sm:h-12 border-b border-gray-200 p-1 sm:p-2 bg-gradient-to-b from-gray-50 to-white ${isToday(date.getDate()) ? "bg-gradient-to-b from-red-50 to-red-100" : ""}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div
+                          className={`text-xs sm:text-sm font-semibold uppercase tracking-wide ${isToday(date.getDate()) ? "text-red-800" : "text-gray-900"}`}
+                        >
+                          {daysOfWeek[index]}
+                        </div>
+                        <div
+                          className={`text-base sm:text-lg font-bold ${isToday(date.getDate()) ? "text-red-600" : "text-gray-700"}`}
+                        >
+                          {date.getDate()}
+                        </div>
+                      </div>
+                    </div>
+                    {timeSlots.map((time) => {
+                      const sessions = getSessionsForTimeSlot(date, time);
+                      return (
+                        <DroppableTimeSlot
+                          key={`${date.toISOString()}|${time}`}
+                          date={date}
+                          time={time}
+                        >
+                          <div
+                            className={`h-16 sm:h-20 border-b border-gray-200 p-1 sm:p-2 relative transition-colors duration-150 ${
+                              isToday(date.getDate())
+                                ? "bg-red-50 hover:bg-red-100 border-red-200"
+                                : "bg-white hover:bg-gray-50 border-gray-100"
+                            }`}
+                          >
+                            {sessions.map((session) => (
+                              <DraggableSession
+                                key={session.id}
+                                session={session}
+                                isEditMode={isEditMode}
+                              >
+                                {renderEvent(session)}
+                              </DraggableSession>
+                            ))}
+                          </div>
+                        </DroppableTimeSlot>
+                      );
+                    })}
+                  </div>
+                </DroppableTimeSlot>
               ))}
             </div>
-
-            {/* Days columns */}
-            {weekDates.map((date, index) => (
-              <div
-                key={date.toISOString()}
-                className={`bg-white ${isToday(date.getDate()) ? "bg-red-50" : ""}`}
-              >
-                <div
-                  className={`h-10 sm:h-12 border-b border-gray-200 p-1 sm:p-2 bg-gradient-to-b from-gray-50 to-white ${isToday(date.getDate()) ? "bg-gradient-to-b from-red-50 to-red-100" : ""}`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div
-                      className={`text-xs sm:text-sm font-semibold uppercase tracking-wide ${isToday(date.getDate()) ? "text-red-800" : "text-gray-900"}`}
-                    >
-                      {daysOfWeek[index]}
-                    </div>
-                    <div
-                      className={`text-base sm:text-lg font-bold ${isToday(date.getDate()) ? "text-red-600" : "text-gray-700"}`}
-                    >
-                      {date.getDate()}
-                    </div>
-                  </div>
-                </div>
-                {timeSlots.map((time) => {
-                  const sessions = getSessionsForTimeSlot(date, time);
-                  return (
-                    <div
-                      key={`${date.toISOString()}-${time}`}
-                      className={`h-16 sm:h-20 border-b border-gray-200 p-1 sm:p-2 relative transition-colors duration-150 ${
-                        isToday(date.getDate())
-                          ? "bg-red-50 hover:bg-red-100 border-red-200"
-                          : "bg-white hover:bg-gray-50 border-gray-100"
-                      }`}
-                    >
-                      {sessions.map(renderEvent)}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
           </div>
+          <DragOverlay>
+            {activeDragSession ? renderEvent(activeDragSession) : null}
+          </DragOverlay>
         </div>
-      </div>
+      </DndContext>
     );
   };
 
@@ -1781,6 +2056,27 @@ export default function TrainerSchedulePage() {
     // Disable if no package exists or no sessions remaining
     return !packageInfo.hasPackage || !packageInfo.canBookSession;
   };
+
+  // Overlap check helper
+  function isOverlap(
+    sessions: any[],
+    newDate: string,
+    newStartTime: string,
+    newEndTime: string,
+    sessionId: string,
+    trainerId: string
+  ): boolean {
+    // Only check sessions for the same trainer, on the same date, excluding the current session
+    return sessions.some((s: any) => {
+      if (s.id === sessionId) return false;
+      if (s._dbData?.trainer_id !== trainerId) return false;
+      if (s.start.dateTime.split("T")[0] !== newDate) return false;
+      const sStart = s.start.dateTime.split("T")[1]?.slice(0, 5) || "";
+      const sEnd = s.end.dateTime.split("T")[1]?.slice(0, 5) || "";
+      // Overlap if not (end <= start2 or end2 <= start)
+      return !(newEndTime <= sStart || sEnd <= newStartTime);
+    });
+  }
 
   if (!isGoogleConnected) {
     return (
@@ -2140,6 +2436,471 @@ export default function TrainerSchedulePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Reschedule Confirmation Dialog */}
+      <Dialog
+        open={showRescheduleDialog}
+        onOpenChange={setShowRescheduleDialog}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Reschedule</DialogTitle>
+            <DialogDescription>
+              You are moving this session to{" "}
+              <b>{rescheduleTarget?.newDateStr}</b> at{" "}
+              <b>{rescheduleTarget?.newTime}</b>.<br />
+              You can change the time by clicking the session after moving.
+              <br />
+              Do you want to proceed?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              className="bg-gray-200 px-4 py-2 rounded mr-2"
+              onClick={() => setShowRescheduleDialog(false)}
+              disabled={isUpdating}
+            >
+              Cancel
+            </button>
+            <button
+              className="bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2"
+              disabled={isUpdating || isSyncingCalendar}
+              onClick={async () => {
+                setIsUpdating(true);
+                if (rescheduleTarget) {
+                  const { session, newDateStr, newTime } = rescheduleTarget;
+                  const newStartTime = parseTimeStringTo24Hour(newTime || "");
+                  const duration = session._dbData?.duration_minutes || 60;
+                  const newEndTime = addMinutesToTime(newStartTime, duration);
+                  // Overlap check
+                  if (
+                    isOverlap(
+                      events,
+                      newDateStr,
+                      newStartTime,
+                      newEndTime,
+                      session.id,
+                      String(session._dbData?.trainer_id || "")
+                    )
+                  ) {
+                    setFeedbackDialog({
+                      open: true,
+                      title: "Error",
+                      message:
+                        "There is already a session at this day and time. Please change the time first before dragging to this day.",
+                    });
+                    setIsUpdating(false);
+                    return;
+                  }
+                  // Call PATCH API
+                  try {
+                    const resp = await fetch(`/api/sessions/${session.id}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        date: newDateStr,
+                        start_time: newStartTime,
+                        end_time: newEndTime,
+                      }),
+                    });
+                    const data = await resp.json();
+                    console.log(
+                      "[Reschedule PATCH] Response status:",
+                      resp.status,
+                      "data:",
+                      data
+                    );
+                    if (!resp.ok) {
+                      setFeedbackDialog({
+                        open: true,
+                        title: "Error",
+                        message: data.error || "Failed to update session",
+                      });
+                    } else {
+                      // Show syncing state
+                      setIsSyncingCalendar(true);
+
+                      // Sync Google Calendar events
+                      try {
+                        await syncGoogleCalendarEvents(
+                          session,
+                          newDateStr,
+                          newStartTime,
+                          newEndTime
+                        );
+                        setFeedbackDialog({
+                          open: true,
+                          title: "Session rescheduled",
+                          message: `Session moved to ${newDateStr} at ${newTime}. Google Calendar events updated.`,
+                        });
+                      } catch (syncError) {
+                        console.error("[Calendar Sync Error]:", syncError);
+                        setFeedbackDialog({
+                          open: true,
+                          title: "Session rescheduled",
+                          message: `Session moved to ${newDateStr} at ${newTime}. Note: Google Calendar sync failed.`,
+                        });
+                      } finally {
+                        setIsSyncingCalendar(false);
+                      }
+
+                      setShowRescheduleDialog(false);
+                      // Refresh events
+                      console.log(
+                        "[Reschedule PATCH] Calling fetchEvents to refresh calendar..."
+                      );
+                      await fetchEvents();
+                      console.log("[Reschedule PATCH] fetchEvents complete.");
+                    }
+                  } catch (err) {
+                    setFeedbackDialog({
+                      open: true,
+                      title: "Error",
+                      message: "Failed to update session",
+                    });
+                  }
+                }
+                setIsUpdating(false);
+              }}
+            >
+              {isUpdating ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Updating...
+                </>
+              ) : isSyncingCalendar ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Syncing Calendar...
+                </>
+              ) : (
+                "Confirm"
+              )}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Feedback Dialog */}
+      <Dialog
+        open={feedbackDialog.open}
+        onOpenChange={(open) => setFeedbackDialog((f) => ({ ...f, open }))}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{feedbackDialog.title}</DialogTitle>
+            <DialogDescription>{feedbackDialog.message}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              className="bg-blue-600 text-white px-4 py-2 rounded"
+              onClick={() => setFeedbackDialog((f) => ({ ...f, open: false }))}
+            >
+              OK
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Session Dialog */}
+      <Dialog
+        open={showEditSessionDialog}
+        onOpenChange={setShowEditSessionDialog}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Session</DialogTitle>
+            <DialogDescription>
+              Update the session details. Changes will be reflected in both
+              calendars.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Date */}
+            <div className="space-y-2">
+              <Label htmlFor="edit-date">Date</Label>
+              <Input
+                id="edit-date"
+                type="date"
+                value={editSessionData.date}
+                onChange={(e) =>
+                  setEditSessionData((prev) => ({
+                    ...prev,
+                    date: e.target.value,
+                  }))
+                }
+              />
+            </div>
+
+            {/* Start Time */}
+            <div className="space-y-2">
+              <Label htmlFor="edit-start-time">Start Time</Label>
+              <Input
+                id="edit-start-time"
+                type="time"
+                value={editSessionData.startTime}
+                onChange={(e) => {
+                  const newStartTime = e.target.value;
+                  // Calculate new end time as 1 hour after start time
+                  const calculateEndTime = (startTimeStr: string) => {
+                    const [hours, minutes] = startTimeStr
+                      .split(":")
+                      .map(Number);
+                    const startDate = new Date(2000, 0, 1, hours, minutes);
+                    startDate.setHours(startDate.getHours() + 1);
+                    return `${String(startDate.getHours()).padStart(2, "0")}:${String(startDate.getMinutes()).padStart(2, "0")}`;
+                  };
+
+                  setEditSessionData((prev) => ({
+                    ...prev,
+                    startTime: newStartTime,
+                    endTime: calculateEndTime(newStartTime),
+                  }));
+                }}
+              />
+            </div>
+
+            {/* End Time (Auto-calculated) */}
+            <div className="space-y-2">
+              <Label htmlFor="edit-end-time">End Time</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="edit-end-time"
+                  type="time"
+                  value={editSessionData.endTime}
+                  disabled
+                  className="bg-gray-50 text-gray-600"
+                />
+                <span className="text-sm text-gray-500">
+                  (Auto-calculated: 1 hour after start)
+                </span>
+              </div>
+            </div>
+
+            {/* Session Type */}
+            <div className="space-y-2">
+              <Label htmlFor="edit-session-type">Session Type</Label>
+              <Select
+                value={editSessionData.sessionType}
+                onValueChange={(value) =>
+                  setEditSessionData((prev) => ({
+                    ...prev,
+                    sessionType: value,
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select session type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sessionTypes.map((type) => (
+                    <SelectItem key={type.id} value={type.name}>
+                      {type.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowEditSessionDialog(false)}
+              disabled={isUpdatingSession}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUpdateSession}
+              disabled={isUpdatingSession}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {isUpdatingSession ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                "Update Session"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
+}
+
+// Draggable session wrapper
+function DraggableSession({
+  session,
+  children,
+  isEditMode,
+}: {
+  session: DatabaseSession;
+  children: React.ReactNode;
+  isEditMode: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: session.id,
+    data: { session },
+    disabled: isEditMode,
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      {...(isEditMode ? {} : attributes)}
+      {...(isEditMode ? {} : listeners)}
+      style={{
+        opacity: isDragging ? 0.5 : 1,
+        cursor: isEditMode ? "pointer" : "grab",
+      }}
+      className={isDragging ? "ring-2 ring-blue-500" : ""}
+    >
+      {children}
+    </div>
+  );
+}
+
+// Droppable day column wrapper
+function DroppableTimeSlot({
+  date,
+  time,
+  children,
+}: {
+  date: Date;
+  time: string;
+  children: React.ReactNode;
+}) {
+  // Use local date string instead of ISO string to avoid timezone issues
+  const localDateStr = date.toLocaleDateString("en-CA"); // YYYY-MM-DD format
+  const id = `${localDateStr}|${encodeURIComponent(time)}`;
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      className={
+        isOver ? "bg-blue-50 border-blue-400 border-2 transition-colors" : ""
+      }
+    >
+      {children}
+    </div>
+  );
+}
+
+// Helper to parse '10:00 AM' to '10:00:00' (24-hour format)
+function parseTimeStringTo24Hour(timeStr: string): string {
+  const [time, modifier] = timeStr.split(" ");
+  let [hours, minutes] = time.split(":").map(Number);
+  if (modifier === "PM" && hours !== 12) hours += 12;
+  if (modifier === "AM" && hours === 12) hours = 0;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:00`;
+}
+// Helper to add minutes to a time string (HH:mm:ss)
+function addMinutesToTime(time: string, minutesToAdd: number): string {
+  const [h, m, s] = time.split(":").map(Number);
+  const date = new Date(2000, 0, 1, h, m, s || 0);
+  date.setMinutes(date.getMinutes() + minutesToAdd);
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}:00`;
+}
+
+// Function to sync Google Calendar events after session update
+async function syncGoogleCalendarEvents(
+  session: DatabaseSession,
+  newDate: string,
+  newStartTime: string,
+  newEndTime: string
+) {
+  console.log("[Calendar Sync] Starting sync for session:", session.id);
+
+  // Get client and trainer details
+  const clientId = session._dbData?.client_id;
+  const trainerId = session._dbData?.trainer_id;
+
+  if (!clientId || !trainerId) {
+    throw new Error("Missing client or trainer ID");
+  }
+
+  // Build event details
+  const startDateTime = new Date(`${newDate}T${newStartTime}`);
+  const endDateTime = new Date(`${newDate}T${newEndTime}`);
+
+  const eventDetails = {
+    type: session._dbData?.type || "Training",
+    clientName: session.users?.full_name || "Client",
+    description: `${session._dbData?.type || "Training"} session${session.description ? ` - ${session.description}` : ""}`,
+    start: {
+      dateTime: startDateTime.toISOString(),
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    },
+    end: {
+      dateTime: endDateTime.toISOString(),
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    },
+    attendees: session.users?.email ? [{ email: session.users.email }] : [],
+    reminders: {
+      useDefault: true,
+    },
+  };
+
+  // First, update the current session
+  console.log("[Calendar Sync] Updating current session calendar events");
+  const response = await fetch(
+    `/api/google/calendar/update-event?trainerId=${trainerId}&clientId=${clientId}&sessionId=${session.id}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(eventDetails),
+    }
+  );
+
+  if (!response.ok) {
+    console.error(
+      "[Calendar Sync] Current session calendar update failed:",
+      response.status
+    );
+    const errorText = await response.text();
+    console.error("[Calendar Sync] Error details:", errorText);
+    throw new Error("Failed to update current session calendar events");
+  }
+
+  const results = await response.json();
+  console.log("[Calendar Sync] Current session update results:", results);
+
+  // Now sync all other sessions between this client and trainer
+  console.log(
+    "[Calendar Sync] Syncing all sessions between client and trainer"
+  );
+  const syncAllResponse = await fetch(
+    `/api/google/calendar/sync-all-sessions?trainerId=${trainerId}&clientId=${clientId}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    }
+  );
+
+  if (!syncAllResponse.ok) {
+    console.error(
+      "[Calendar Sync] All sessions sync failed:",
+      syncAllResponse.status
+    );
+    const errorText = await syncAllResponse.text();
+    console.error(
+      "[Calendar Sync] All sessions sync error details:",
+      errorText
+    );
+    // Don't throw error for this - it's a background sync
+    console.log(
+      "[Calendar Sync] All sessions sync failed, but current session was updated successfully"
+    );
+  } else {
+    const allSessionsResults = await syncAllResponse.json();
+    console.log(
+      "[Calendar Sync] All sessions sync results:",
+      allSessionsResults
+    );
+  }
+
+  console.log("[Calendar Sync] Sync completed successfully");
 }

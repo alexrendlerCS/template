@@ -966,6 +966,9 @@ export default function BookingPage() {
       // Create calendar events for both trainer and client
       console.log("Creating calendar events...");
 
+      let trainerEventId = null;
+      let clientEventId = null;
+
       const baseEventDetails = {
         description: `${sessionTypeName} training session`,
         start: {
@@ -1008,18 +1011,21 @@ export default function BookingPage() {
           }
         );
 
-        const trainerEventResult = await trainerEventResponse.text();
         if (!trainerEventResponse.ok) {
+          const trainerEventResult = await trainerEventResponse.text();
           console.warn("Failed to create trainer calendar event:", {
             status: trainerEventResponse.status,
             statusText: trainerEventResponse.statusText,
             result: trainerEventResult,
           });
         } else {
+          const trainerEventData = await trainerEventResponse.json();
+          trainerEventId = trainerEventData.eventId;
           console.log(
             "Trainer calendar event created successfully:",
-            trainerEventResult
+            trainerEventId
           );
+          console.log("Trainer event response data:", trainerEventData);
         }
       } catch (error) {
         console.warn("Error creating trainer calendar event:", {
@@ -1036,29 +1042,110 @@ export default function BookingPage() {
           summary: `${sessionTypeName} with ${selectedTrainer.full_name}`,
         };
 
-        const clientEventResponse = await fetch("/api/google/calendar/event", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(clientEventDetails),
-        });
+        const clientEventResponse = await fetch(
+          `/api/google/calendar/client-event?clientId=${session.user.id}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(clientEventDetails),
+          }
+        );
 
-        const clientEventResult = await clientEventResponse.text();
         if (!clientEventResponse.ok) {
+          const clientEventResult = await clientEventResponse.text();
           console.warn("Failed to create client calendar event:", {
             status: clientEventResponse.status,
             statusText: clientEventResponse.statusText,
             result: clientEventResult,
           });
         } else {
+          const clientEventData = await clientEventResponse.json();
+          clientEventId = clientEventData.eventId;
           console.log(
             "Client calendar event created successfully:",
-            clientEventResult
+            clientEventId
           );
+          console.log("Client event response data:", clientEventData);
         }
       } catch (error) {
         console.warn("Error creating client calendar event:", error);
+      }
+
+      // Update session with Google Calendar event IDs if they were created successfully
+      console.log("About to update session with event IDs:", {
+        sessionId: sessionData.id,
+        trainerEventId,
+        clientEventId,
+        hasTrainerEvent: !!trainerEventId,
+        hasClientEvent: !!clientEventId,
+      });
+
+      if (trainerEventId || clientEventId) {
+        try {
+          const updateData: any = {};
+          if (trainerEventId) {
+            updateData.google_event_id = trainerEventId;
+          }
+          if (clientEventId) {
+            updateData.client_google_event_id = clientEventId;
+          }
+
+          console.log("Updating session with data:", updateData);
+
+          const { error: updateError } = await supabase
+            .from("sessions")
+            .update(updateData)
+            .eq("id", sessionData.id);
+
+          if (updateError) {
+            console.error(
+              "Failed to update session with Google Calendar event IDs:",
+              updateError
+            );
+            // Don't fail the entire operation, just log the error
+          } else {
+            console.log("✅ Session updated with Google Calendar event IDs:", {
+              sessionId: sessionData.id,
+              trainerEventId,
+              clientEventId,
+            });
+
+            // Verify the update actually worked by fetching the session again
+            console.log("🔍 Verifying database update...");
+            const { data: verifySession, error: verifyError } = await supabase
+              .from("sessions")
+              .select("google_event_id, client_google_event_id")
+              .eq("id", sessionData.id)
+              .single();
+
+            if (verifyError) {
+              console.error("❌ Error verifying session update:", verifyError);
+            } else {
+              console.log("✅ Database verification result:", {
+                sessionId: sessionData.id,
+                google_event_id: verifySession.google_event_id,
+                client_google_event_id: verifySession.client_google_event_id,
+                expectedTrainerEvent: trainerEventId,
+                expectedClientEvent: clientEventId,
+                trainerMatch: verifySession.google_event_id === trainerEventId,
+                clientMatch:
+                  verifySession.client_google_event_id === clientEventId,
+              });
+            }
+          }
+        } catch (error) {
+          console.error(
+            "Error updating session with Google Calendar event IDs:",
+            error
+          );
+          // Don't fail the entire operation, just log the error
+        }
+      } else {
+        console.log(
+          "No event IDs to update - both trainerEventId and clientEventId are null"
+        );
       }
 
       // Send email notification with type-safe values
