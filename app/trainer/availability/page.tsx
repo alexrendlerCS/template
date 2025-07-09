@@ -39,7 +39,7 @@ import {
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar } from "@/components/ui/calendar";
+import { DatePicker } from "@/components/DatePicker";
 
 interface TimeRange {
   id?: number;
@@ -188,12 +188,13 @@ function UnavailableSlotDialog({
         <div className="space-y-4 py-4">
           <div className="space-y-2">
             <Label>Select Date</Label>
-            <Calendar
-              mode="single"
-              selected={date}
-              onSelect={setDate}
-              className="rounded-md border"
-              disabled={(date) => date < new Date()}
+            <DatePicker
+              value={date ? date.toISOString().split("T")[0] : ""}
+              onChange={(dateStr) =>
+                setDate(dateStr ? new Date(dateStr) : undefined)
+              }
+              min={new Date().toISOString().split("T")[0]}
+              id="unavailable-date"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">

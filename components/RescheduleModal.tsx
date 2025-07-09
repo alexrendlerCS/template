@@ -23,6 +23,7 @@ import {
 import { Calendar, Clock, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabaseClient";
 import { toast } from "@/components/ui/use-toast";
+import { DatePicker } from "@/components/DatePicker";
 
 interface RescheduleModalProps {
   open: boolean;
@@ -263,12 +264,11 @@ export function RescheduleModal({
 
             <div className="space-y-2">
               <Label htmlFor="proposed-date">Date</Label>
-              <Input
-                id="proposed-date"
-                type="date"
+              <DatePicker
                 value={proposedDate}
-                onChange={(e) => setProposedDate(e.target.value)}
+                onChange={setProposedDate}
                 min={new Date().toISOString().split("T")[0]}
+                id="proposed-date"
               />
             </div>
 

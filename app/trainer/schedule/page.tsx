@@ -36,6 +36,7 @@ import {
   Clock,
   Edit,
   Move,
+  Calendar,
 } from "lucide-react";
 import { GoogleCalendarBanner } from "@/components/GoogleCalendarBanner";
 import { createClient } from "@/lib/supabaseClient";
@@ -47,6 +48,7 @@ import {
   DragOverlay,
 } from "@dnd-kit/core";
 import { useToast } from "@/components/ui/use-toast";
+import { DatePicker } from "@/components/DatePicker";
 
 interface DatabaseSession {
   id: string;
@@ -2301,11 +2303,11 @@ export default function TrainerSchedulePage() {
             {/* Date Selection */}
             <div className="space-y-2">
               <Label htmlFor="date">Date</Label>
-              <Input
-                type="date"
+              <DatePicker
                 value={selectedDateForSession}
-                onChange={(e) => setSelectedDateForSession(e.target.value)}
+                onChange={setSelectedDateForSession}
                 min={new Date().toISOString().split("T")[0]}
+                id="date"
               />
             </div>
 
@@ -2619,16 +2621,13 @@ export default function TrainerSchedulePage() {
             {/* Date */}
             <div className="space-y-2">
               <Label htmlFor="edit-date">Date</Label>
-              <Input
-                id="edit-date"
-                type="date"
+              <DatePicker
                 value={editSessionData.date}
-                onChange={(e) =>
-                  setEditSessionData((prev) => ({
-                    ...prev,
-                    date: e.target.value,
-                  }))
+                onChange={(date) =>
+                  setEditSessionData((prev) => ({ ...prev, date }))
                 }
+                min={new Date().toISOString().split("T")[0]}
+                id="edit-date"
               />
             </div>
 

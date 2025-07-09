@@ -53,8 +53,7 @@ import {
 } from "@/components/ui/popover";
 import { CalendarIcon } from "@radix-ui/react-icons";
 import { cn } from "@/lib/utils";
-import DatePicker from "react-datepicker";
-import "react-datepicker/dist/react-datepicker.css";
+import { DatePicker } from "@/components/DatePicker";
 import { useUser } from "@/lib/store/user";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -1402,66 +1401,16 @@ export default function BookingPage() {
                     <CardContent>
                       <div className="flex flex-col space-y-4">
                         <DatePicker
-                          selected={selectedDateObj}
-                          onChange={(date: Date | null) => {
-                            if (date) {
-                              setSelectedDateObj(date);
-                            }
-                          }}
-                          minDate={new Date()}
-                          maxDate={addDays(new Date(), 90)}
-                          dateFormat="EEEE, MMMM d, yyyy"
-                          inline
-                          calendarClassName="!bg-white rounded-lg shadow-sm border border-input"
-                          dayClassName={(date) =>
-                            date &&
-                            selectedDateObj &&
-                            date.getTime() === selectedDateObj.getTime()
-                              ? "bg-red-600 text-white rounded-md hover:bg-red-700"
-                              : "hover:bg-gray-100 rounded-md"
+                          value={
+                            selectedDateObj
+                              ? selectedDateObj.toISOString().split("T")[0]
+                              : ""
                           }
-                          renderCustomHeader={({
-                            date,
-                            decreaseMonth,
-                            increaseMonth,
-                            prevMonthButtonDisabled,
-                            nextMonthButtonDisabled,
-                          }) => (
-                            <div className="flex items-center justify-center px-2 py-2">
-                              <button
-                                onClick={decreaseMonth}
-                                disabled={prevMonthButtonDisabled}
-                                type="button"
-                                className="p-1 hover:bg-gray-100 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                <ChevronLeft className="h-4 w-4" />
-                              </button>
-                              <div className="flex-1 text-center">
-                                {format(date, "MMMM yyyy")}
-                              </div>
-                              <button
-                                onClick={increaseMonth}
-                                disabled={nextMonthButtonDisabled}
-                                type="button"
-                                className="p-1 hover:bg-gray-100 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                <ChevronRight className="h-4 w-4" />
-                              </button>
-                            </div>
-                          )}
-                          filterDate={(date: Date) => {
-                            // Disable past dates
-                            if (isBefore(date, startOfToday())) return false;
-                            // Get the day of week (0-6, where 0 is Sunday)
-                            const dayOfWeek = date.getDay();
-                            // Check if trainer is available on this day
-                            if (!selectedTrainer) return false;
-                            const hasAvailability = trainerAvailability.some(
-                              (slot: TrainerAvailability) =>
-                                slot.weekday === dayOfWeek
-                            );
-                            return hasAvailability;
+                          onChange={(date) => {
+                            if (date) setSelectedDateObj(new Date(date));
                           }}
+                          min={new Date().toISOString().split("T")[0]}
+                          id="booking-date"
                         />
                       </div>
                     </CardContent>
