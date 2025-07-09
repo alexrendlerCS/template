@@ -96,7 +96,9 @@ export async function DELETE(req: NextRequest) {
     let stripeError = null;
     try {
       if (data.stripe_promotion_code_id) {
-        await stripe.promotionCodes.del(data.stripe_promotion_code_id);
+        await stripe.promotionCodes.update(data.stripe_promotion_code_id, {
+          active: false,
+        });
       }
     } catch (err) {
       stripeError = err instanceof Error ? err.message : String(err);
