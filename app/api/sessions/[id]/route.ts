@@ -3,14 +3,15 @@ import { createClient } from "@/lib/supabase-server";
 
 export const dynamic = "force-dynamic";
 
-export async function DELETE(_: Request, context: { params: { id: string } }) {
+export async function DELETE(
+  _: Request,
+  context: { params: Promise<{ id: string }> }
+) {
   try {
     const supabase = createClient();
+    const { id } = await context.params;
 
-    const { error } = await supabase
-      .from("sessions")
-      .delete()
-      .eq("id", context.params.id);
+    const { error } = await supabase.from("sessions").delete().eq("id", id);
 
     if (error) {
       return NextResponse.json(

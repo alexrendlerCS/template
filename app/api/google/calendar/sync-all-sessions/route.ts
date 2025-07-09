@@ -114,7 +114,7 @@ export async function POST(request: Request) {
       console.log("Trainer calendar access successful:", {
         calendarId: calendarInfo.data.id,
         summary: calendarInfo.data.summary,
-        accessRole: calendarInfo.data.accessRole,
+        accessRole: (calendarInfo.data as any).accessRole,
       });
     } catch (error) {
       console.error("Trainer calendar access test failed:", error);
@@ -162,7 +162,7 @@ export async function POST(request: Request) {
             );
 
         const eventDetails = {
-          summary: `${session.type} with ${session.users?.full_name || "Client"}`,
+          summary: `${session.type} with ${(session.users as any)?.full_name || "Client"}`,
           description: session.notes || `${session.type} training session`,
           start: {
             dateTime: startDateTime.toISOString(),
@@ -172,8 +172,8 @@ export async function POST(request: Request) {
             dateTime: endDateTime.toISOString(),
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           },
-          attendees: session.users?.email
-            ? [{ email: session.users.email }]
+          attendees: (session.users as any)?.email
+            ? [{ email: (session.users as any).email }]
             : [],
           reminders: {
             useDefault: true,

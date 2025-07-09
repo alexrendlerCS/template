@@ -103,7 +103,7 @@ export async function PATCH(request: Request) {
             eventId: session.google_event_id,
             requestBody: trainerEventDetails,
           });
-          results.trainerEventId = event.data.id;
+          results.trainerEventId = event.data.id || null;
           results.trainerUpdated = true;
           console.log("Trainer calendar event updated:", event.data.id);
         } else {
@@ -113,7 +113,7 @@ export async function PATCH(request: Request) {
             calendarId: trainerData.google_calendar_id,
             requestBody: trainerEventDetails,
           });
-          results.trainerEventId = event.data.id;
+          results.trainerEventId = event.data.id || null;
           results.trainerUpdated = true;
           console.log("Trainer calendar event created:", event.data.id);
 
@@ -182,7 +182,7 @@ export async function PATCH(request: Request) {
                 eventId: clientGoogleEventId,
                 requestBody: clientEventDetails,
               });
-              results.clientEventId = event.data.id;
+              results.clientEventId = event.data.id || null;
               results.clientUpdated = true;
               updated = true;
               console.log("Client calendar event updated:", event.data.id);
@@ -200,7 +200,7 @@ export async function PATCH(request: Request) {
               calendarId: clientData.google_calendar_id,
               requestBody: clientEventDetails,
             });
-            results.clientEventId = event.data.id;
+            results.clientEventId = event.data.id || null;
             results.clientUpdated = true;
             console.log("Client calendar event created:", event.data.id);
             // Update session with new client event ID
