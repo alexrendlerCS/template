@@ -258,28 +258,40 @@ export default function TrainerSchedulePage() {
 
       // Generate time slots based on availability
       if (availability && availability.length > 0) {
-        const timeSlotsSet = new Set<string>();
+        // Find the earliest start time and latest end time across all availability slots
+        let earliestStart = new Date(`2000-01-01T23:59:59`);
+        let latestEnd = new Date(`2000-01-01T00:00:00`);
 
         availability.forEach((slot) => {
           const startTime = new Date(`2000-01-01T${slot.start_time}`);
           const endTime = new Date(`2000-01-01T${slot.end_time}`);
 
-          // Generate hourly slots from start_time to end_time - 1 hour
-          let currentTime = new Date(startTime);
-          const endTimeMinusOneHour = new Date(
-            endTime.getTime() - 60 * 60 * 1000
-          ); // Subtract 1 hour
-
-          while (currentTime <= endTimeMinusOneHour) {
-            const timeString = currentTime.toLocaleTimeString("en-US", {
-              hour: "numeric",
-              minute: "2-digit",
-              hour12: true,
-            });
-            timeSlotsSet.add(timeString);
-            currentTime.setHours(currentTime.getHours() + 1);
+          if (startTime < earliestStart) {
+            earliestStart = new Date(startTime);
+          }
+          if (endTime > latestEnd) {
+            latestEnd = new Date(endTime);
           }
         });
+
+        // Generate hourly slots from earliest start to latest end - 1 hour
+        // Always start on the hour (set minutes to 0)
+        let currentTime = new Date(earliestStart);
+        currentTime.setMinutes(0, 0, 0); // Set to start of hour
+        const endTimeMinusOneHour = new Date(
+          latestEnd.getTime() - 60 * 60 * 1000
+        ); // Subtract 1 hour
+
+        const timeSlotsSet = new Set<string>();
+        while (currentTime <= endTimeMinusOneHour) {
+          const timeString = currentTime.toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+          });
+          timeSlotsSet.add(timeString);
+          currentTime.setHours(currentTime.getHours() + 1);
+        }
 
         // Convert to array and sort
         const sortedTimeSlots = Array.from(timeSlotsSet).sort((a, b) => {
@@ -1139,11 +1151,33 @@ export default function TrainerSchedulePage() {
 
           if (!clientEventResponse.ok) {
             calendarSuccess = false;
-            calendarErrorMsg += "Failed to create client calendar event. ";
+            // Check if the client doesn't have Google Calendar connected
+            if (clientEventResponse.status === 400) {
+              const responseText = await clientEventResponse.text();
+              if (
+                responseText.includes("Client Google Calendar not connected")
+              ) {
+                calendarErrorMsg +=
+                  "Client's Google Calendar is not connected. The session was booked successfully, but the client will need to connect their Google Calendar to view it there. ";
+              } else {
+                calendarErrorMsg += "Failed to create client calendar event. ";
+              }
+            } else {
+              calendarErrorMsg += "Failed to create client calendar event. ";
+            }
           }
         } catch (error) {
           calendarSuccess = false;
-          calendarErrorMsg += "Error creating client calendar event. ";
+          // Check if the error is related to Google Calendar not being connected
+          if (
+            error instanceof Error &&
+            error.message.includes("Client Google Calendar not connected")
+          ) {
+            calendarErrorMsg +=
+              "Client's Google Calendar is not connected. The session was booked successfully, but the client will need to connect their Google Calendar to view it there. ";
+          } else {
+            calendarErrorMsg += "Error creating client calendar event. ";
+          }
         }
       }
 
