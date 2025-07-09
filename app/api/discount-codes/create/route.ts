@@ -69,3 +69,63 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const { id } = await req.json();
+    if (!id) {
+      return NextResponse.json(
+        { error: "Missing discount code id" },
+        { status: 400 }
+      );
+    }
+    const supabase = createClient();
+    // Fetch the code to get Stripe IDs
+    const { data, error: fetchError } = await supabase
+      .from("discount_codes")
+      .select("stripe_coupon_id, stripe_promotion_code_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (fetchError || !data) {
+      return NextResponse.json(
+        { error: "Discount code not found" },
+        { status: 404 }
+      );
+    }
+    // Delete from Stripe (promotion code first, then coupon)
+    let stripeError = null;
+    try {
+      if (data.stripe_promotion_code_id) {
+        await stripe.promotionCodes.del(data.stripe_promotion_code_id);
+      }
+    } catch (err) {
+      stripeError = err instanceof Error ? err.message : String(err);
+    }
+    try {
+      if (data.stripe_coupon_id) {
+        await stripe.coupons.del(data.stripe_coupon_id);
+      }
+    } catch (err) {
+      stripeError =
+        (stripeError ? stripeError + "; " : "") +
+        (err instanceof Error ? err.message : String(err));
+    }
+    // Delete from DB
+    const { error: dbError } = await supabase
+      .from("discount_codes")
+      .delete()
+      .eq("id", id);
+    if (dbError) {
+      return NextResponse.json({ error: dbError.message }, { status: 500 });
+    }
+    if (stripeError) {
+      return NextResponse.json({ success: true, warning: stripeError });
+    }
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Unknown error" },
+      { status: 500 }
+    );
+  }
+}

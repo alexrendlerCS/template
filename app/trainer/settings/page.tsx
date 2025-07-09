@@ -31,6 +31,7 @@ import {
   Download,
   Eye,
   Loader2,
+  Trash2,
 } from "lucide-react";
 import GoogleCalendarPopup from "@/components/GoogleCalendarPopup";
 import GoogleCalendarSuccessDialog from "@/components/GoogleCalendarSuccessDialog";
@@ -1181,7 +1182,10 @@ function CreatePromoCodeModal({
         body: JSON.stringify({
           code,
           discountType,
-          value: Number(value),
+          value:
+            discountType === "amount"
+              ? Math.round(Number(value) * 100)
+              : Number(value),
           maxRedemptions: maxRedemptions ? Number(maxRedemptions) : undefined,
           expiresAt: expiresAt || undefined,
           currency: discountType === "amount" ? "usd" : undefined,
@@ -1333,6 +1337,9 @@ function CreatePromoCodeModal({
 function PromoCodesTable({ trainerId }: { trainerId: string }) {
   const [codes, setCodes] = useState<DiscountCodeType[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const supabase = createClient();
   const { toast } = useToast();
 
@@ -1344,13 +1351,56 @@ function PromoCodesTable({ trainerId }: { trainerId: string }) {
       .select(
         "id, code, percent_off, amount_off, currency, max_redemptions, expires_at, created_at, stripe_promotion_code_id"
       )
-      .eq("created_by", trainerId)
+      // .eq("created_by", trainerId) // Removed this line to show all codes
       .order("created_at", { ascending: false })
       .then(({ data, error }) => {
         if (!error && data) setCodes(data);
         setLoading(false);
       });
   }, [trainerId, supabase]);
+
+  const handleDelete = async (id: string) => {
+    setDeletingId(id);
+    try {
+      const res = await fetch("/api/discount-codes/create", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCodes((prev) => prev.filter((c) => c.id !== id));
+        toast({ title: "Promo code deleted" });
+        if (data.warning) {
+          toast({
+            title: "Warning",
+            description: data.warning,
+            variant: "destructive",
+          });
+        }
+      } else {
+        toast({
+          title: "Failed to delete promo code",
+          description: data.error || "Unknown error",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      toast({
+        title: "Failed to delete promo code",
+        description: err instanceof Error ? err.message : String(err),
+        variant: "destructive",
+      });
+    }
+    setDeletingId(null);
+    setShowConfirm(false);
+    setPendingDelete(null);
+  };
+
+  const confirmDelete = (id: string) => {
+    setPendingDelete(id);
+    setShowConfirm(true);
+  };
 
   const copyToClipboard = (code: string) => {
     navigator.clipboard.writeText(code);
@@ -1388,6 +1438,7 @@ function PromoCodesTable({ trainerId }: { trainerId: string }) {
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
               Status
             </th>
+            <th className="px-4 py-2"></th>
             <th className="px-4 py-2"></th>
           </tr>
         </thead>
@@ -1430,11 +1481,52 @@ function PromoCodesTable({ trainerId }: { trainerId: string }) {
                     Copy
                   </Button>
                 </td>
+                <td className="px-4 py-2 text-right">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => confirmDelete(c.id)}
+                    disabled={deletingId === c.id}
+                    aria-label="Delete promo code"
+                  >
+                    <Trash2 className="h-5 w-5 text-red-600" />
+                  </Button>
+                </td>
               </tr>
             );
           })}
         </tbody>
       </table>
+      {/* Confirm Delete Dialog */}
+      {showConfirm && (
+        <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Delete Promo Code?</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete this promo code? This action
+                cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowConfirm(false)}
+                disabled={deletingId !== null}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="bg-red-600 hover:bg-red-700"
+                onClick={() => pendingDelete && handleDelete(pendingDelete)}
+                disabled={deletingId !== null}
+              >
+                {deletingId !== null ? "Deleting..." : "Delete"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
