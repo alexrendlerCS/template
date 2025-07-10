@@ -80,11 +80,7 @@ export function DatePicker({
                 onChange(`${year}-${month}-${day}`);
               }
             }}
-            disabled={
-              min
-                ? { before: min ? parseLocalDateString(min) : undefined }
-                : undefined
-            }
+            disabled={min ? { before: parseLocalDateString(min) } : undefined}
             initialFocus
           />
         </div>

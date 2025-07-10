@@ -137,6 +137,33 @@ export async function POST(req: Request) {
       return new Response("Failed to create session in DB", { status: 500 });
     }
 
+    // Sync all sessions to ensure everything is properly synchronized
+    // This handles any edge cases and ensures old sessions are also synced
+    try {
+      console.log("Syncing all sessions after booking new session");
+      const syncResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/google/calendar/sync-all-sessions?trainerId=${trainer_id}&clientId=${client_id}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (syncResponse.ok) {
+        const syncResult = await syncResponse.json();
+        console.log("Sync all sessions completed:", syncResult);
+      } else {
+        console.warn(
+          "Sync all sessions failed, but session was created successfully"
+        );
+      }
+    } catch (syncError) {
+      console.error("Error during sync all sessions:", syncError);
+      // Don't fail the session creation if sync fails
+    }
+
     return new Response("Session and calendar event created", { status: 200 });
   } catch (err) {
     console.error(err);

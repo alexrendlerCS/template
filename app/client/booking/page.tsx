@@ -1192,6 +1192,33 @@ export default function BookingPage() {
         session_type: getSelectedSessionType()?.name || selectedType,
       };
 
+      // Sync all sessions to ensure everything is properly synchronized
+      // This handles any edge cases and ensures old sessions are also synced
+      try {
+        console.log("Syncing all sessions after booking new session");
+        const syncResponse = await fetch(
+          `/api/google/calendar/sync-all-sessions?trainerId=${selectedTrainer.id}&clientId=${session.user.id}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        if (syncResponse.ok) {
+          const syncResult = await syncResponse.json();
+          console.log("Sync all sessions completed:", syncResult);
+        } else {
+          console.warn(
+            "Sync all sessions failed, but session was created successfully"
+          );
+        }
+      } catch (syncError) {
+        console.error("Error during sync all sessions:", syncError);
+        // Don't fail the booking if sync fails
+      }
+
       await fetch("/api/email/session-created", {
         method: "POST",
         headers: {
