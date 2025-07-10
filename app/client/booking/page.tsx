@@ -68,6 +68,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import CountUp from "react-countup";
+import { formatLocalDate, getTodayString } from "@/lib/utils";
 
 type UserProfile = Database["public"]["Tables"]["users"]["Row"];
 
@@ -275,6 +276,12 @@ const getDayName = (index: number): string => {
   return days[index] || "";
 };
 
+// Helper function to safely parse a YYYY-MM-DD string to a local Date object
+function parseLocalDateString(dateStr: string): Date {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
 export default function BookingPage() {
   const [selectedType, setSelectedType] = useState("");
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -318,18 +325,18 @@ export default function BookingPage() {
       try {
         setLoadingTimeSlots(true);
 
-        const dateObj = new Date(selectedDate + "T00:00:00Z");
-        const jsDay = dateObj.getUTCDay();
-        const selectedDayOfWeek = jsDay === 0 ? 7 : jsDay;
+        // Parse selectedDate as local date
+        const dateObj = parseLocalDateString(selectedDate);
+        const jsDay = dateObj.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
+        const selectedDayOfWeek = jsDay;
 
-        console.log("Date debugging:", {
+        console.log("[DEBUG] fetchAvailableTimeSlots:", {
           selectedDate,
-          dateString: selectedDate + "T00:00:00Z",
-          dateObj,
-          utcString: dateObj.toUTCString(),
+          dateObj: dateObj.toString(),
           jsDay,
           selectedDayOfWeek,
           dayName: getDayName(jsDay),
+          trainerId: selectedTrainer.id,
         });
 
         // 1. Get trainer's regular availability for this day
@@ -339,6 +346,12 @@ export default function BookingPage() {
             .select("*")
             .eq("trainer_id", selectedTrainer.id)
             .eq("weekday", selectedDayOfWeek);
+
+        console.log("[DEBUG] DB availability query result:", {
+          weekdayQueried: selectedDayOfWeek,
+          availabilityData,
+          availabilityError,
+        });
 
         if (availabilityError) throw availabilityError;
 
@@ -350,6 +363,11 @@ export default function BookingPage() {
             .eq("trainer_id", selectedTrainer.id)
             .eq("date", selectedDate);
 
+        console.log("[DEBUG] DB unavailability query result:", {
+          unavailabilityData,
+          unavailabilityError,
+        });
+
         if (unavailabilityError) throw unavailabilityError;
 
         // 3. Get existing sessions for the selected date
@@ -360,16 +378,19 @@ export default function BookingPage() {
           .eq("date", selectedDate)
           .neq("status", "cancelled"); // Exclude cancelled sessions
 
-        if (sessionError) throw sessionError;
-
-        console.log("Availability data:", {
-          regular: availabilityData,
-          unavailable: unavailabilityData,
-          sessions: sessionData,
+        console.log("[DEBUG] DB sessions query result:", {
+          sessionData,
+          sessionError,
         });
 
+        if (sessionError) throw sessionError;
+
         if (!availabilityData?.length) {
-          console.log("No availability found for this day");
+          console.log("[DEBUG] No availability found for this day", {
+            selectedDayOfWeek,
+            dayName: getDayName(selectedDayOfWeek),
+            selectedDate,
+          });
           setAvailableTimeSlots([]);
           setLoadingTimeSlots(false);
           return;
@@ -394,12 +415,12 @@ export default function BookingPage() {
           allSlots = [...allSlots, ...windowSlots];
         }
 
-        console.log("Generated time slots:", allSlots);
+        console.log("[DEBUG] Generated time slots:", allSlots);
 
         setAvailableTimeSlots(allSlots);
         setLoadingTimeSlots(false);
       } catch (error) {
-        console.error("Error fetching time slots:", error);
+        console.error("[DEBUG] Error fetching time slots:", error);
         setError(
           error instanceof Error ? error.message : "Failed to load time slots"
         );
@@ -649,7 +670,7 @@ export default function BookingPage() {
     setSelectedTrainer(trainer);
     setShowTrainerModal(false);
     // Set initial date to today when trainer is selected
-    setSelectedDate(format(new Date(), "yyyy-MM-dd"));
+    setSelectedDate(getTodayString());
   };
 
   const handleDateSelect = (date: string) => {
@@ -674,18 +695,28 @@ export default function BookingPage() {
     );
   };
 
-  // Update selectedDate when date changes
+  // Update selectedDate when date changes (from DatePicker)
   useEffect(() => {
     if (date) {
-      setSelectedDate(format(date, "yyyy-MM-dd"));
+      // Always set as local YYYY-MM-DD string
+      setSelectedDate(formatLocalDate(date));
     }
   }, [date]);
 
-  // Format the booking date in a friendly way
+  // Update selectedDate when selectedDateObj changes
+  useEffect(() => {
+    if (selectedDateObj) {
+      setSelectedDate(formatLocalDate(selectedDateObj));
+    }
+  }, [selectedDateObj]);
+
+  // When displaying the selected date in the input field, always use local parsing
+  // (handled in DatePicker component already)
+
+  // When using selectedDate for logic, always parse as local
   const getFormattedBookingDate = () => {
     if (!selectedDate) return "";
-    // Add time component and parse in local timezone
-    const dateObj = new Date(`${selectedDate}T00:00:00`);
+    const dateObj = parseLocalDateString(selectedDate);
     return format(dateObj, "EEEE, MMMM d, yyyy");
   };
 
@@ -704,13 +735,6 @@ export default function BookingPage() {
   // Check if we can show the booking button
   const canShowBookingButton =
     selectedTrainer && selectedDate && selectedTimeSlot && selectedType;
-
-  // Update selectedDate when selectedDateObj changes
-  useEffect(() => {
-    if (selectedDateObj) {
-      setSelectedDate(format(selectedDateObj, "yyyy-MM-dd"));
-    }
-  }, [selectedDateObj]);
 
   // Fetch trainer availability when trainer is selected
   useEffect(() => {
@@ -971,11 +995,15 @@ export default function BookingPage() {
       const baseEventDetails = {
         description: `${sessionTypeName} training session`,
         start: {
-          dateTime: `${selectedDate}T${selectedTimeSlot.startTime}`,
+          dateTime: new Date(
+            `${selectedDate}T${selectedTimeSlot.startTime}`
+          ).toISOString(),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         },
         end: {
-          dateTime: `${selectedDate}T${selectedTimeSlot.endTime}`,
+          dateTime: new Date(
+            `${selectedDate}T${selectedTimeSlot.endTime}`
+          ).toISOString(),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         },
         attendees: [
@@ -1403,13 +1431,21 @@ export default function BookingPage() {
                         <DatePicker
                           value={
                             selectedDateObj
-                              ? selectedDateObj.toISOString().split("T")[0]
+                              ? formatLocalDate(selectedDateObj)
                               : ""
                           }
                           onChange={(date) => {
-                            if (date) setSelectedDateObj(new Date(date));
+                            if (date) {
+                              // Parse as local date, not UTC
+                              const [year, month, day] = date
+                                .split("-")
+                                .map(Number);
+                              setSelectedDateObj(
+                                new Date(year, month - 1, day)
+                              );
+                            }
                           }}
-                          min={new Date().toISOString().split("T")[0]}
+                          min={getTodayString()}
                           id="booking-date"
                         />
                       </div>

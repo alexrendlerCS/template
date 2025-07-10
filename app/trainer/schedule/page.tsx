@@ -688,9 +688,9 @@ export default function TrainerSchedulePage() {
     const [year, month, day] = date.split("-").map(Number);
     const selectedDate = new Date(year, month - 1, day); // Local time
     // JS: 0=Sunday, 1=Monday, ..., 6=Saturday
-    // DB: 1=Monday, 2=Tuesday, ..., 7=Sunday
+    // DB: 0=Sunday, 1=Monday, ..., 6=Saturday (same as JS)
     const jsDay = selectedDate.getDay();
-    const weekday = jsDay === 0 ? 7 : jsDay; // 1 (Mon) - 7 (Sun)
+    const weekday = jsDay; // Keep 0-6 numbering (Sunday=0, Monday=1, etc.)
 
     // Find availability for this weekday
     const dayAvailability = trainerAvailability.filter(

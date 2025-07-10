@@ -32,12 +32,25 @@ export function DatePicker({
     return () => document.removeEventListener("mousedown", handleClick);
   }, [show]);
 
+  // Helper to parse YYYY-MM-DD to local Date
+  function parseLocalDateString(dateStr: string): Date {
+    const [year, month, day] = dateStr.split("-").map(Number);
+    return new Date(year, month - 1, day);
+  }
+
   return (
     <div className="relative" ref={ref}>
       <input
         id={id}
         type="text"
-        value={value ? new Date(value).toLocaleDateString() : ""}
+        value={
+          value
+            ? (() => {
+                const [year, month, day] = value.split("-").map(Number);
+                return new Date(year, month - 1, day).toLocaleDateString();
+              })()
+            : ""
+        }
         readOnly
         placeholder={placeholder}
         className="pr-10 pl-3 w-full h-10 cursor-pointer border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors text-sm font-normal"
@@ -56,12 +69,22 @@ export function DatePicker({
         <div className="absolute z-50 bg-white border rounded shadow mt-2 left-0">
           <DayPicker
             mode="single"
-            selected={value ? new Date(value) : undefined}
+            selected={value ? parseLocalDateString(value) : undefined}
             onSelect={(date) => {
               setShow(false);
-              if (date) onChange(date.toISOString().split("T")[0]);
+              if (date) {
+                // Always use local date, never toISOString
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, "0");
+                const day = String(date.getDate()).padStart(2, "0");
+                onChange(`${year}-${month}-${day}`);
+              }
             }}
-            disabled={min ? { before: new Date(min) } : undefined}
+            disabled={
+              min
+                ? { before: min ? parseLocalDateString(min) : undefined }
+                : undefined
+            }
             initialFocus
           />
         </div>

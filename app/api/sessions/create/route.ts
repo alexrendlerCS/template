@@ -69,8 +69,14 @@ export async function POST(req: Request) {
       requestBody: {
         summary: `${type} with Client`,
         description: "Auto-synced from Fitness Platform",
-        start: { dateTime: startDateTime.toISOString() },
-        end: { dateTime: endDateTime.toISOString() },
+        start: {
+          dateTime: startDateTime.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        },
+        end: {
+          dateTime: endDateTime.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        },
         attendees: clientEmail ? [{ email: clientEmail }] : [],
       },
     });
@@ -93,8 +99,14 @@ export async function POST(req: Request) {
           requestBody: {
             summary: `${type} with Trainer`,
             description: "Auto-synced from Fitness Platform",
-            start: { dateTime: startDateTime.toISOString() },
-            end: { dateTime: endDateTime.toISOString() },
+            start: {
+              dateTime: startDateTime.toISOString(),
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            },
+            end: {
+              dateTime: endDateTime.toISOString(),
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            },
             attendees: trainer.email ? [{ email: trainer.email }] : [],
           },
         });

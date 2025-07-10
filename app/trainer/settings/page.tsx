@@ -46,6 +46,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
+import { DatePicker } from "@/components/DatePicker";
+import { useRouter } from "next/navigation";
 
 type DiscountCodeType = {
   id: string;
@@ -1165,6 +1167,7 @@ function CreatePromoCodeModal({
   const [createdCode, setCreatedCode] = useState("");
   const supabase = createClient();
   const { toast } = useToast();
+  const router = useRouter();
 
   const handleSubmit = async () => {
     setSubmitting(true);
@@ -1261,10 +1264,12 @@ function CreatePromoCodeModal({
             </div>
             <div>
               <Label>Expiry Date (optional)</Label>
-              <Input
-                type="date"
+              <DatePicker
                 value={expiresAt}
-                onChange={(e) => setExpiresAt(e.target.value)}
+                onChange={setExpiresAt}
+                min={new Date().toISOString().split("T")[0]}
+                id="promo-expiry-date"
+                placeholder="Select expiry date"
               />
             </div>
             {error && <div className="text-red-600 text-sm mt-2">{error}</div>}
@@ -1293,7 +1298,16 @@ function CreatePromoCodeModal({
         </DialogContent>
       </Dialog>
       {/* How to Use Promo Code Popup */}
-      <Dialog open={showHowTo} onOpenChange={setShowHowTo}>
+      <Dialog
+        open={showHowTo}
+        onOpenChange={(open) => {
+          setShowHowTo(open);
+          if (!open) {
+            onOpenChange(false); // Close the create promo code dialog as well
+            router.refresh();
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Promo Code Created!</DialogTitle>
@@ -1323,7 +1337,11 @@ function CreatePromoCodeModal({
           <DialogFooter>
             <Button
               className="bg-red-600 hover:bg-red-700"
-              onClick={() => setShowHowTo(false)}
+              onClick={() => {
+                setShowHowTo(false);
+                onOpenChange(false);
+                window.location.reload();
+              }}
             >
               Close
             </Button>

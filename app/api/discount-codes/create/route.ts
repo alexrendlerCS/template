@@ -17,6 +17,18 @@ export async function POST(req: NextRequest) {
       trainerId,
     } = body;
 
+    // Validate code format
+    const codeRegex = /^[a-zA-Z0-9\-_]+$/;
+    if (!codeRegex.test(code)) {
+      return NextResponse.json(
+        {
+          error:
+            "Promo code must be one word (letters, numbers, dashes, or underscores only, no spaces or special characters).",
+        },
+        { status: 400 }
+      );
+    }
+
     // Create coupon in Stripe
     const coupon = await stripe.coupons.create({
       percent_off: discountType === "percent" ? value : undefined,

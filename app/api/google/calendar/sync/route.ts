@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
         summary: "Training Sessions",
         description:
           "Automatically synced training sessions from Fitness Training app",
-        timeZone: "UTC",
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       },
     });
 
@@ -208,11 +208,11 @@ export async function POST(request: NextRequest) {
             }`,
           start: {
             dateTime: sessionDate.toISOString(),
-            timeZone: "UTC",
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           },
           end: {
             dateTime: endDate.toISOString(),
-            timeZone: "UTC",
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           },
           attendees:
             Array.isArray(session.users) && session.users[0]?.email
