@@ -207,6 +207,17 @@ export async function POST(request: Request) {
           continue;
         }
 
+        // Format dates in local timezone to avoid UTC conversion issues
+        const formatDateTime = (date: Date) => {
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, "0");
+          const day = String(date.getDate()).padStart(2, "0");
+          const hours = String(date.getHours()).padStart(2, "0");
+          const minutes = String(date.getMinutes()).padStart(2, "0");
+          const seconds = String(date.getSeconds()).padStart(2, "0");
+          return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+        };
+
         // Build event details
         const startDateTime = new Date(`${session.date}T${session.start_time}`);
         const endDateTime = session.end_time
@@ -218,11 +229,11 @@ export async function POST(request: Request) {
         const baseEventDetails = {
           description: session.notes || `${session.type} training session`,
           start: {
-            dateTime: startDateTime.toISOString(),
+            dateTime: formatDateTime(startDateTime),
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           },
           end: {
-            dateTime: endDateTime.toISOString(),
+            dateTime: formatDateTime(endDateTime),
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           },
           reminders: {

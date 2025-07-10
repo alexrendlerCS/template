@@ -171,6 +171,7 @@ export async function POST(request: NextRequest) {
             : (session.users as { full_name?: string })?.full_name
         );
         // Combine date and start_time to get start DateTime
+        // Create dates in local timezone without converting to UTC
         const sessionDate = new Date(session.date + "T" + session.start_time);
         let endDate;
         if (session.end_time) {
@@ -191,6 +192,17 @@ export async function POST(request: NextRequest) {
           );
         }
 
+        // Format dates in local timezone to avoid UTC conversion issues
+        const formatDateTime = (date: Date) => {
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, "0");
+          const day = String(date.getDate()).padStart(2, "0");
+          const hours = String(date.getHours()).padStart(2, "0");
+          const minutes = String(date.getMinutes()).padStart(2, "0");
+          const seconds = String(date.getSeconds()).padStart(2, "0");
+          return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+        };
+
         const event = {
           summary: `${session.type} - ${
             Array.isArray(session.users)
@@ -207,11 +219,11 @@ export async function POST(request: NextRequest) {
                   "client"
             }`,
           start: {
-            dateTime: sessionDate.toISOString(),
+            dateTime: formatDateTime(sessionDate),
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           },
           end: {
-            dateTime: endDate.toISOString(),
+            dateTime: formatDateTime(endDate),
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           },
           attendees:

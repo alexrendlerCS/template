@@ -987,23 +987,36 @@ export default function BookingPage() {
       }
 
       // Create calendar events for both trainer and client
-      console.log("Creating calendar events...");
+      console.log("Creating calendar events for session:", sessionData.id);
 
       let trainerEventId = null;
       let clientEventId = null;
 
+      // Format dates in local timezone to avoid UTC conversion issues
+      const formatDateTime = (date: Date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        const hours = String(date.getHours()).padStart(2, "0");
+        const minutes = String(date.getMinutes()).padStart(2, "0");
+        const seconds = String(date.getSeconds()).padStart(2, "0");
+        return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+      };
+
+      // Create dates in local timezone without converting to UTC
+      const sessionDate = new Date(
+        `${selectedDate}T${selectedTimeSlot.startTime}`
+      );
+      const endDate = new Date(`${selectedDate}T${selectedTimeSlot.endTime}`);
+
       const baseEventDetails = {
         description: `${sessionTypeName} training session`,
         start: {
-          dateTime: new Date(
-            `${selectedDate}T${selectedTimeSlot.startTime}`
-          ).toISOString(),
+          dateTime: formatDateTime(sessionDate),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         },
         end: {
-          dateTime: new Date(
-            `${selectedDate}T${selectedTimeSlot.endTime}`
-          ).toISOString(),
+          dateTime: formatDateTime(endDate),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         },
         attendees: [
@@ -1020,6 +1033,7 @@ export default function BookingPage() {
         console.log("Creating trainer calendar event for trainer:", {
           trainerId: selectedTrainer.id,
           trainerEmail: selectedTrainer.email,
+          sessionId: sessionData.id,
         });
 
         const trainerEventDetails = {
@@ -1192,32 +1206,9 @@ export default function BookingPage() {
         session_type: getSelectedSessionType()?.name || selectedType,
       };
 
-      // Sync all sessions to ensure everything is properly synchronized
-      // This handles any edge cases and ensures old sessions are also synced
-      try {
-        console.log("Syncing all sessions after booking new session");
-        const syncResponse = await fetch(
-          `/api/google/calendar/sync-all-sessions?trainerId=${selectedTrainer.id}&clientId=${session.user.id}`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-          }
-        );
-
-        if (syncResponse.ok) {
-          const syncResult = await syncResponse.json();
-          console.log("Sync all sessions completed:", syncResult);
-        } else {
-          console.warn(
-            "Sync all sessions failed, but session was created successfully"
-          );
-        }
-      } catch (syncError) {
-        console.error("Error during sync all sessions:", syncError);
-        // Don't fail the booking if sync fails
-      }
+      // Note: Removed sync-all-sessions call to prevent duplicate calendar events
+      // Calendar events are now created directly with session validation
+      // Note: Removed cleanup function to prevent timezone-related issues
 
       await fetch("/api/email/session-created", {
         method: "POST",
