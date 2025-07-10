@@ -1062,6 +1062,8 @@ export default function TrainerSchedulePage() {
         "✅ Package availability confirmed - proceeding with session creation"
       );
 
+      const userTimezone =
+        Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Denver";
       // Insert into sessions table
       const { data: sessionData, error: sessionError } = await supabase
         .from("sessions")
@@ -1078,6 +1080,7 @@ export default function TrainerSchedulePage() {
           is_recurring: false,
           google_event_id: null,
           session_notes: sessionNotes || null,
+          timezone: userTimezone,
         })
         .select()
         .single();
@@ -1126,6 +1129,8 @@ export default function TrainerSchedulePage() {
 
       let calendarSuccess = true;
       let calendarErrorMsg = "";
+      let trainerEventId = null;
+      let clientEventId = null;
 
       if (selectedClient) {
         // Create calendar event for trainer
@@ -1166,7 +1171,10 @@ export default function TrainerSchedulePage() {
             }
           );
 
-          if (!trainerEventResponse.ok) {
+          if (trainerEventResponse.ok) {
+            const trainerEventData = await trainerEventResponse.json();
+            trainerEventId = trainerEventData.eventId;
+          } else {
             calendarSuccess = false;
             calendarErrorMsg += "Failed to create trainer calendar event. ";
           }
@@ -1193,7 +1201,10 @@ export default function TrainerSchedulePage() {
             }
           );
 
-          if (!clientEventResponse.ok) {
+          if (clientEventResponse.ok) {
+            const clientEventData = await clientEventResponse.json();
+            clientEventId = clientEventData.eventId;
+          } else {
             calendarSuccess = false;
             // Check if the client doesn't have Google Calendar connected
             if (clientEventResponse.status === 400) {
@@ -1269,6 +1280,28 @@ export default function TrainerSchedulePage() {
             "Session booked, but there was a problem adding to Google Calendar."
         );
         setShowErrorDialog(true);
+      }
+
+      // After creating calendar events, update the session with the event IDs
+      if (trainerEventId || clientEventId) {
+        try {
+          const updateData: any = {};
+          if (trainerEventId) {
+            updateData.google_event_id = trainerEventId;
+          }
+          if (clientEventId) {
+            updateData.client_google_event_id = clientEventId;
+          }
+          await supabase
+            .from("sessions")
+            .update(updateData)
+            .eq("id", sessionData.id);
+        } catch (error) {
+          console.error(
+            "Error updating session with Google Calendar event IDs:",
+            error
+          );
+        }
       }
     } catch (error) {
       console.error("❌ Error creating session:", error);
@@ -2843,7 +2876,7 @@ async function syncGoogleCalendarEvents(
     },
   };
 
-  // First, update the current session
+  // Update the current session
   console.log("[Calendar Sync] Updating current session calendar events");
   const response = await fetch(
     `/api/google/calendar/update-event?trainerId=${trainerId}&clientId=${clientId}&sessionId=${session.id}`,
@@ -2867,39 +2900,9 @@ async function syncGoogleCalendarEvents(
   const results = await response.json();
   console.log("[Calendar Sync] Current session update results:", results);
 
-  // Now sync all other sessions between this client and trainer
-  console.log(
-    "[Calendar Sync] Syncing all sessions between client and trainer"
-  );
-  const syncAllResponse = await fetch(
-    `/api/google/calendar/sync-all-sessions?trainerId=${trainerId}&clientId=${clientId}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-    }
-  );
-
-  if (!syncAllResponse.ok) {
-    console.error(
-      "[Calendar Sync] All sessions sync failed:",
-      syncAllResponse.status
-    );
-    const errorText = await syncAllResponse.text();
-    console.error(
-      "[Calendar Sync] All sessions sync error details:",
-      errorText
-    );
-    // Don't throw error for this - it's a background sync
-    console.log(
-      "[Calendar Sync] All sessions sync failed, but current session was updated successfully"
-    );
-  } else {
-    const allSessionsResults = await syncAllResponse.json();
-    console.log(
-      "[Calendar Sync] All sessions sync results:",
-      allSessionsResults
-    );
-  }
+  // Note: Removed sync-all-sessions call as it's unnecessary and causes 404 errors
+  // The current session was already updated successfully above
+  // Other sessions don't need to be updated when only one session changes
 
   console.log("[Calendar Sync] Sync completed successfully");
 }

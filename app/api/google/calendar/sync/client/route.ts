@@ -16,6 +16,7 @@ type Session = {
   users?:
     | { full_name?: string; email?: string }
     | { full_name?: string; email?: string }[];
+  timezone?: string;
 };
 
 export async function POST(request: NextRequest) {
@@ -122,7 +123,8 @@ export async function POST(request: NextRequest) {
         duration_minutes,
         type,
         notes,
-        users!sessions_trainer_id_fkey(full_name, email)
+        users!sessions_trainer_id_fkey(full_name, email),
+        timezone
       `
       )
       .eq("client_id", user.id)
@@ -203,6 +205,7 @@ export async function POST(request: NextRequest) {
           return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
         };
 
+        const DEFAULT_TIMEZONE = "America/Denver";
         const event = {
           summary: `${session.type} - ${
             Array.isArray(session.users)
@@ -220,11 +223,11 @@ export async function POST(request: NextRequest) {
             }`,
           start: {
             dateTime: formatDateTime(sessionDate),
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            timeZone: session.timezone || DEFAULT_TIMEZONE,
           },
           end: {
             dateTime: formatDateTime(endDate),
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            timeZone: session.timezone || DEFAULT_TIMEZONE,
           },
           attendees:
             Array.isArray(session.users) && session.users[0]?.email
@@ -255,10 +258,19 @@ export async function POST(request: NextRequest) {
           attendees: event.attendees,
         });
 
-        await calendar.events.insert({
+        // Create the event in the new calendar
+        const createdEvent = await calendar.events.insert({
           calendarId: newCalendarId,
           requestBody: event,
         });
+
+        // Update the session record with the new client event ID
+        if (createdEvent.data.id) {
+          await supabase
+            .from("sessions")
+            .update({ client_google_event_id: createdEvent.data.id })
+            .eq("id", session.id);
+        }
 
         console.log(
           "[DEBUG] Successfully created event for session:",

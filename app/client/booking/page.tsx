@@ -817,6 +817,8 @@ export default function BookingPage() {
         throw new Error("Required booking data is missing");
       }
 
+      const userTimezone =
+        Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Denver";
       // TypeScript now knows these values are not null
       const { data: sessionData, error: sessionError } = await supabase
         .from("sessions")
@@ -828,6 +830,7 @@ export default function BookingPage() {
           end_time: selectedTimeSlot.endTime,
           type: selectedType,
           status: "confirmed",
+          timezone: userTimezone,
         })
         .select()
         .single();
@@ -1115,14 +1118,6 @@ export default function BookingPage() {
       }
 
       // Update session with Google Calendar event IDs if they were created successfully
-      console.log("About to update session with event IDs:", {
-        sessionId: sessionData.id,
-        trainerEventId,
-        clientEventId,
-        hasTrainerEvent: !!trainerEventId,
-        hasClientEvent: !!clientEventId,
-      });
-
       if (trainerEventId || clientEventId) {
         try {
           const updateData: any = {};
@@ -1133,60 +1128,16 @@ export default function BookingPage() {
             updateData.client_google_event_id = clientEventId;
           }
 
-          console.log("Updating session with data:", updateData);
-
-          const { error: updateError } = await supabase
+          await supabase
             .from("sessions")
             .update(updateData)
             .eq("id", sessionData.id);
-
-          if (updateError) {
-            console.error(
-              "Failed to update session with Google Calendar event IDs:",
-              updateError
-            );
-            // Don't fail the entire operation, just log the error
-          } else {
-            console.log("✅ Session updated with Google Calendar event IDs:", {
-              sessionId: sessionData.id,
-              trainerEventId,
-              clientEventId,
-            });
-
-            // Verify the update actually worked by fetching the session again
-            console.log("🔍 Verifying database update...");
-            const { data: verifySession, error: verifyError } = await supabase
-              .from("sessions")
-              .select("google_event_id, client_google_event_id")
-              .eq("id", sessionData.id)
-              .single();
-
-            if (verifyError) {
-              console.error("❌ Error verifying session update:", verifyError);
-            } else {
-              console.log("✅ Database verification result:", {
-                sessionId: sessionData.id,
-                google_event_id: verifySession.google_event_id,
-                client_google_event_id: verifySession.client_google_event_id,
-                expectedTrainerEvent: trainerEventId,
-                expectedClientEvent: clientEventId,
-                trainerMatch: verifySession.google_event_id === trainerEventId,
-                clientMatch:
-                  verifySession.client_google_event_id === clientEventId,
-              });
-            }
-          }
         } catch (error) {
           console.error(
             "Error updating session with Google Calendar event IDs:",
             error
           );
-          // Don't fail the entire operation, just log the error
         }
-      } else {
-        console.log(
-          "No event IDs to update - both trainerEventId and clientEventId are null"
-        );
       }
 
       // Send email notification with type-safe values

@@ -279,6 +279,20 @@ export async function POST(request: Request) {
                 errorMessage: (error as any)?.message,
               });
 
+              // If it's a 404 error, clear the orphaned event ID from the database
+              if (
+                (error as any)?.code === 404 ||
+                (error as any)?.status === 404
+              ) {
+                console.log(
+                  `Clearing orphaned trainer event ID for session ${session.id}`
+                );
+                await supabase
+                  .from("sessions")
+                  .update({ google_event_id: null })
+                  .eq("id", session.id);
+              }
+
               // Event might not exist, try to create new one
               try {
                 console.log(
@@ -310,9 +324,23 @@ export async function POST(request: Request) {
                   errorStatus: (createError as any)?.status,
                   errorMessage: (createError as any)?.message,
                 });
-                results.errors.push(
-                  `Session ${session.id}: Failed to create trainer event`
-                );
+
+                // If both update and create failed with 404, the calendar might be inaccessible
+                if (
+                  (createError as any)?.code === 404 ||
+                  (createError as any)?.status === 404
+                ) {
+                  console.error(
+                    `Trainer calendar appears to be inaccessible: ${trainerData!.google_calendar_id}`
+                  );
+                  results.errors.push(
+                    `Session ${session.id}: Trainer calendar inaccessible - please reconnect Google Calendar`
+                  );
+                } else {
+                  results.errors.push(
+                    `Session ${session.id}: Failed to create trainer event`
+                  );
+                }
               }
             }
           } else {
@@ -390,6 +418,20 @@ export async function POST(request: Request) {
                 errorMessage: (error as any)?.message,
               });
 
+              // If it's a 404 error, clear the orphaned event ID from the database
+              if (
+                (error as any)?.code === 404 ||
+                (error as any)?.status === 404
+              ) {
+                console.log(
+                  `Clearing orphaned client event ID for session ${session.id}`
+                );
+                await supabase
+                  .from("sessions")
+                  .update({ client_google_event_id: null })
+                  .eq("id", session.id);
+              }
+
               // Event might not exist, try to create new one
               try {
                 console.log(
@@ -421,9 +463,23 @@ export async function POST(request: Request) {
                   errorStatus: (createError as any)?.status,
                   errorMessage: (createError as any)?.message,
                 });
-                results.errors.push(
-                  `Session ${session.id}: Failed to create client event`
-                );
+
+                // If both update and create failed with 404, the calendar might be inaccessible
+                if (
+                  (createError as any)?.code === 404 ||
+                  (createError as any)?.status === 404
+                ) {
+                  console.error(
+                    `Client calendar appears to be inaccessible: ${clientData!.google_calendar_id}`
+                  );
+                  results.errors.push(
+                    `Session ${session.id}: Client calendar inaccessible - please reconnect Google Calendar`
+                  );
+                } else {
+                  results.errors.push(
+                    `Session ${session.id}: Failed to create client event`
+                  );
+                }
               }
             }
           } else {

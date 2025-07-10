@@ -48,6 +48,13 @@ export async function PATCH(request: Request) {
       return new NextResponse("Session not found", { status: 404 });
     }
 
+    console.log("Session data for update:", {
+      sessionId,
+      google_event_id: session.google_event_id,
+      client_id: session.client_id,
+      trainer_id: session.trainer_id,
+    });
+
     const results = {
       trainerUpdated: false,
       clientUpdated: false,
@@ -98,17 +105,41 @@ export async function PATCH(request: Request) {
             "Updating existing trainer calendar event:",
             session.google_event_id
           );
-          const event = await calendar.events.update({
-            calendarId: trainerData.google_calendar_id,
-            eventId: session.google_event_id,
-            requestBody: trainerEventDetails,
-          });
-          results.trainerEventId = event.data.id || null;
-          results.trainerUpdated = true;
-          console.log("Trainer calendar event updated:", event.data.id);
+          try {
+            const event = await calendar.events.update({
+              calendarId: trainerData.google_calendar_id,
+              eventId: session.google_event_id,
+              requestBody: trainerEventDetails,
+            });
+            results.trainerEventId = event.data.id || null;
+            results.trainerUpdated = true;
+            console.log("Trainer calendar event updated:", event.data.id);
+          } catch (updateError) {
+            console.error(
+              "Failed to update trainer event, will create new one:",
+              updateError
+            );
+            // If update fails (e.g., event doesn't exist), create new event
+            console.log("Creating new trainer calendar event (update failed)");
+            const event = await calendar.events.insert({
+              calendarId: trainerData.google_calendar_id,
+              requestBody: trainerEventDetails,
+            });
+            results.trainerEventId = event.data.id || null;
+            results.trainerUpdated = true;
+            console.log("Trainer calendar event created:", event.data.id);
+
+            // Update session with new event ID
+            await supabase
+              .from("sessions")
+              .update({ google_event_id: event.data.id })
+              .eq("id", sessionId);
+          }
         } else {
           // Create new event
-          console.log("Creating new trainer calendar event");
+          console.log(
+            "Creating new trainer calendar event (no existing event ID)"
+          );
           const event = await calendar.events.insert({
             calendarId: trainerData.google_calendar_id,
             requestBody: trainerEventDetails,
