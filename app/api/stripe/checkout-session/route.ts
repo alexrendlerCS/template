@@ -247,17 +247,7 @@ export async function POST(req: Request) {
           message: "Can't wait to start your fitness journey! 🎉",
         },
       },
-      custom_fields: [
-        {
-          key: "goals",
-          label: {
-            type: "custom",
-            custom: "What are your main fitness goals?",
-          },
-          type: "text",
-          optional: true,
-        },
-      ],
+
       metadata: {
         user_id: userId,
         sessions_included: proratedSessions.toString(), // actual # of sessions this user is buying
