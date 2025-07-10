@@ -231,7 +231,7 @@ export async function POST(request: Request) {
         };
 
         // Handle trainer calendar
-        if (trainerCalendar) {
+        if (trainerCalendar && trainerData) {
           const trainerEventDetails = {
             ...baseEventDetails,
             summary: `${session.type} with ${(session.users as any)?.full_name || "Client"}`,
@@ -247,7 +247,7 @@ export async function POST(request: Request) {
                 `Updating existing trainer event ${session.google_event_id} for session ${session.id}`
               );
               await trainerCalendar.events.update({
-                calendarId: trainerData.google_calendar_id,
+                calendarId: trainerData!.google_calendar_id,
                 eventId: session.google_event_id,
                 requestBody: trainerEventDetails,
               });
@@ -261,7 +261,7 @@ export async function POST(request: Request) {
                 error
               );
               console.error("Update error details:", {
-                calendarId: trainerData.google_calendar_id,
+                calendarId: trainerData!.google_calendar_id,
                 eventId: session.google_event_id,
                 errorCode: (error as any)?.code,
                 errorStatus: (error as any)?.status,
@@ -274,7 +274,7 @@ export async function POST(request: Request) {
                   `Creating new trainer event for session ${session.id}`
                 );
                 const newEvent = await trainerCalendar.events.insert({
-                  calendarId: trainerData.google_calendar_id,
+                  calendarId: trainerData!.google_calendar_id,
                   requestBody: trainerEventDetails,
                 });
 
@@ -294,7 +294,7 @@ export async function POST(request: Request) {
                   createError
                 );
                 console.error("Create error details:", {
-                  calendarId: trainerData.google_calendar_id,
+                  calendarId: trainerData!.google_calendar_id,
                   errorCode: (createError as any)?.code,
                   errorStatus: (createError as any)?.status,
                   errorMessage: (createError as any)?.message,
@@ -311,7 +311,7 @@ export async function POST(request: Request) {
                 `Creating new trainer event for session ${session.id}`
               );
               const newEvent = await trainerCalendar.events.insert({
-                calendarId: trainerData.google_calendar_id,
+                calendarId: trainerData!.google_calendar_id,
                 requestBody: trainerEventDetails,
               });
 
@@ -331,7 +331,7 @@ export async function POST(request: Request) {
                 error
               );
               console.error("Create new event error details:", {
-                calendarId: trainerData.google_calendar_id,
+                calendarId: trainerData!.google_calendar_id,
                 errorCode: (error as any)?.code,
                 errorStatus: (error as any)?.status,
                 errorMessage: (error as any)?.message,
@@ -344,7 +344,7 @@ export async function POST(request: Request) {
         }
 
         // Handle client calendar
-        if (clientCalendar) {
+        if (clientCalendar && clientData) {
           const clientEventDetails = {
             ...baseEventDetails,
             summary: `${session.type} with Trainer`,
@@ -358,7 +358,7 @@ export async function POST(request: Request) {
                 `Updating existing client event ${session.client_google_event_id} for session ${session.id}`
               );
               await clientCalendar.events.update({
-                calendarId: clientData.google_calendar_id,
+                calendarId: clientData!.google_calendar_id,
                 eventId: session.client_google_event_id,
                 requestBody: clientEventDetails,
               });
@@ -372,7 +372,7 @@ export async function POST(request: Request) {
                 error
               );
               console.error("Update error details:", {
-                calendarId: clientData.google_calendar_id,
+                calendarId: clientData!.google_calendar_id,
                 eventId: session.client_google_event_id,
                 errorCode: (error as any)?.code,
                 errorStatus: (error as any)?.status,
@@ -385,7 +385,7 @@ export async function POST(request: Request) {
                   `Creating new client event for session ${session.id}`
                 );
                 const newEvent = await clientCalendar.events.insert({
-                  calendarId: clientData.google_calendar_id,
+                  calendarId: clientData!.google_calendar_id,
                   requestBody: clientEventDetails,
                 });
 
@@ -405,7 +405,7 @@ export async function POST(request: Request) {
                   createError
                 );
                 console.error("Create error details:", {
-                  calendarId: clientData.google_calendar_id,
+                  calendarId: clientData!.google_calendar_id,
                   errorCode: (createError as any)?.code,
                   errorStatus: (createError as any)?.status,
                   errorMessage: (createError as any)?.message,
@@ -422,7 +422,7 @@ export async function POST(request: Request) {
                 `Creating new client event for session ${session.id} (no existing client event ID)`
               );
               const newEvent = await clientCalendar.events.insert({
-                calendarId: clientData.google_calendar_id,
+                calendarId: clientData!.google_calendar_id,
                 requestBody: clientEventDetails,
               });
 
@@ -442,7 +442,7 @@ export async function POST(request: Request) {
                 error
               );
               console.error("Create new event error details:", {
-                calendarId: clientData.google_calendar_id,
+                calendarId: clientData!.google_calendar_id,
                 errorCode: (error as any)?.code,
                 errorStatus: (error as any)?.status,
                 errorMessage: (error as any)?.message,
