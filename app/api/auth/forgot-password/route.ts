@@ -73,7 +73,13 @@ export async function POST(request: Request) {
     const appUrl =
       process.env.NEXT_PUBLIC_APP_URL ||
       process.env.NEXT_PUBLIC_SITE_URL ||
-      "http://localhost:3000";
+      process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : process.env.NODE_ENV === "production"
+          ? request.headers.get("host")
+            ? `https://${request.headers.get("host")}`
+            : "https://yourdomain.com"
+          : "http://localhost:3000";
     const resetUrl = `${appUrl}/reset-password?token=${resetToken}`;
 
     // Format the email HTML

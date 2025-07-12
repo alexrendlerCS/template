@@ -158,8 +158,8 @@ const calculateExpirationDate = (purchaseDate: string) => {
   const nextMonth = new Date(
     purchase.getFullYear(),
     purchase.getMonth() + 1,
-    4
-  ); // 4th of next month
+    1
+  ); // 1st of next month
   return nextMonth;
 };
 
@@ -993,114 +993,6 @@ export default function ClientDashboard() {
 
             {/* Right Column - Payment Summary */}
             <div className="space-y-4">
-              {/* Quick Actions */}
-              <Card className="overflow-hidden">
-                <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 pb-4">
-                  <CardTitle className="flex items-center space-x-2">
-                    <div className="p-2 bg-white rounded-lg shadow-sm">
-                      <Menu className="h-4 w-4 text-gray-700" />
-                    </div>
-                    <span className="text-gray-900">Quick Actions</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-4">
-                  <div className="grid grid-cols-1 gap-3">
-                    <Link href="/client/messages">
-                      <div className="group flex items-center p-3 bg-white rounded-lg border border-gray-200 hover:border-red-300 hover:bg-red-50 transition-all duration-200 cursor-pointer">
-                        <div className="p-2 bg-red-100 rounded-lg group-hover:bg-red-200 transition-colors">
-                          <User className="h-4 w-4 text-red-600" />
-                        </div>
-                        <div className="ml-3 flex-1">
-                          <p className="font-medium text-gray-900 group-hover:text-red-900 transition-colors">
-                            Contact Trainer
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            Send a message
-                          </p>
-                        </div>
-                        <div className="text-gray-400 group-hover:text-red-400 transition-colors">
-                          <svg
-                            className="h-4 w-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M9 5l7 7-7 7"
-                            />
-                          </svg>
-                        </div>
-                      </div>
-                    </Link>
-
-                    <Link href="/client/calendar">
-                      <div className="group flex items-center p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all duration-200 cursor-pointer">
-                        <div className="p-2 bg-blue-100 rounded-lg group-hover:bg-blue-200 transition-colors">
-                          <Calendar className="h-4 w-4 text-blue-600" />
-                        </div>
-                        <div className="ml-3 flex-1">
-                          <p className="font-medium text-gray-900 group-hover:text-blue-900 transition-colors">
-                            View Full Calendar
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            See all sessions
-                          </p>
-                        </div>
-                        <div className="text-gray-400 group-hover:text-blue-400 transition-colors">
-                          <svg
-                            className="h-4 w-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M9 5l7 7-7 7"
-                            />
-                          </svg>
-                        </div>
-                      </div>
-                    </Link>
-
-                    <Link href="/client/packages">
-                      <div className="group flex items-center p-3 bg-white rounded-lg border border-gray-200 hover:border-green-300 hover:bg-green-50 transition-all duration-200 cursor-pointer">
-                        <div className="p-2 bg-green-100 rounded-lg group-hover:bg-green-200 transition-colors">
-                          <CreditCard className="h-4 w-4 text-green-600" />
-                        </div>
-                        <div className="ml-3 flex-1">
-                          <p className="font-medium text-gray-900 group-hover:text-green-900 transition-colors">
-                            View Packages
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            Browse options
-                          </p>
-                        </div>
-                        <div className="text-gray-400 group-hover:text-green-400 transition-colors">
-                          <svg
-                            className="h-4 w-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M9 5l7 7-7 7"
-                            />
-                          </svg>
-                        </div>
-                      </div>
-                    </Link>
-                  </div>
-                </CardContent>
-              </Card>
-
               {/* Payment Summary */}
               <Card>
                 <CardHeader className="pb-3">
@@ -1115,16 +1007,20 @@ export default function ClientDashboard() {
                     <div className="flex items-center gap-3">
                       <div
                         className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                          totalSessionsRemaining <= 1
+                          totalSessionsRemaining === 0
                             ? "bg-red-100"
-                            : "bg-green-100"
+                            : totalSessionsRemaining <= 2
+                              ? "bg-yellow-500"
+                              : "bg-green-100"
                         }`}
                       >
                         <span
                           className={`text-xl font-bold ${
-                            totalSessionsRemaining <= 1
+                            totalSessionsRemaining === 0
                               ? "text-red-600"
-                              : "text-green-600"
+                              : totalSessionsRemaining <= 2
+                                ? "text-yellow-900"
+                                : "text-green-600"
                           }`}
                         >
                           {totalSessionsRemaining}
@@ -1135,14 +1031,23 @@ export default function ClientDashboard() {
                           Sessions Remaining
                         </p>
                         <p className="text-sm text-gray-500">
-                          {totalSessionsRemaining <= 1
-                            ? "Time to renew!"
-                            : "You're all set"}
+                          {totalSessionsRemaining === 0
+                            ? "No sessions left!"
+                            : totalSessionsRemaining <= 2
+                              ? "Running low"
+                              : "You're all set"}
                         </p>
                       </div>
                     </div>
-                    {totalSessionsRemaining <= 1 && (
-                      <div className="w-6 h-6 bg-red-500 rounded-full flex items-center justify-center">
+                    {(totalSessionsRemaining === 0 ||
+                      totalSessionsRemaining <= 2) && (
+                      <div
+                        className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                          totalSessionsRemaining === 0
+                            ? "bg-red-500"
+                            : "bg-yellow-500"
+                        }`}
+                      >
                         <AlertCircle className="h-3 w-3 text-white" />
                       </div>
                     )}
@@ -1228,21 +1133,29 @@ export default function ClientDashboard() {
                         if (daysUntilExpiration > 0) {
                           return (
                             <div className="flex items-center gap-2">
-                              <div className="flex-1 bg-blue-200 rounded-full h-1.5">
+                              <div className="flex-1 bg-gray-200 rounded-full h-1.5">
                                 <div
                                   className={`h-1.5 rounded-full transition-all duration-300 ${
-                                    daysUntilExpiration <= 7
+                                    daysUntilExpiration <= 1
                                       ? "bg-red-500"
-                                      : daysUntilExpiration <= 14
-                                        ? "bg-orange-500"
-                                        : "bg-blue-500"
+                                      : daysUntilExpiration <= 7
+                                        ? "bg-yellow-500"
+                                        : "bg-green-500"
                                   }`}
                                   style={{
                                     width: `${Math.max(5, Math.min(100, (daysUntilExpiration / 30) * 100))}%`,
                                   }}
                                 ></div>
                               </div>
-                              <span className="text-xs font-medium text-blue-700">
+                              <span
+                                className={`text-xs font-medium ${
+                                  daysUntilExpiration <= 1
+                                    ? "text-red-700"
+                                    : daysUntilExpiration <= 7
+                                      ? "text-yellow-700"
+                                      : "text-green-700"
+                                }`}
+                              >
                                 {daysUntilExpiration}d
                               </span>
                             </div>
