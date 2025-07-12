@@ -29,6 +29,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { createClient } from "@/lib/supabaseClient";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Footer } from "@/components/ui/footer";
+import { ForgotPasswordModal } from "@/components/ForgotPasswordModal";
 
 interface FormData {
   email: string;
@@ -54,6 +55,7 @@ export default function LoginPage() {
     message: string;
   }>({ type: null, message: "" });
   const [loginData, setLoginData] = useState({ email: "", password: "" });
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
   const supabase = createClient();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -529,12 +531,13 @@ export default function LoginPage() {
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600">
               Forgot your password?{" "}
-              <Link
-                href="#"
+              <button
+                type="button"
+                onClick={() => setShowForgotPassword(true)}
                 className="text-red-600 hover:text-red-700 font-medium"
               >
                 Reset it here
-              </Link>
+              </button>
             </p>
           </div>
         </CardContent>
@@ -566,6 +569,12 @@ export default function LoginPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Forgot Password Modal */}
+      <ForgotPasswordModal
+        open={showForgotPassword}
+        onOpenChange={setShowForgotPassword}
+      />
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // Define public routes that don't require authentication
-const publicRoutes = ["/", "/login", "/privacy", "/terms"];
+const publicRoutes = ["/", "/login", "/reset-password", "/privacy", "/terms"];
 
 // Define routes that require authentication
 const protectedRoutes = [
