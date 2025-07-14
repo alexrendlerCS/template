@@ -122,35 +122,45 @@ export default function LoginPage() {
     }
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: loginData.email,
-        password: loginData.password,
+      // Use the login API route instead of direct Supabase auth
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: loginData.email,
+          password: loginData.password,
+        }),
       });
 
-      if (error) {
+      const data = await response.json();
+
+      if (!response.ok) {
         // Handle specific authentication errors
         let errorMessage = "Failed to log in";
 
-        if (error.message === "Invalid login credentials") {
+        if (
+          data.error === "Invalid login credentials" ||
+          data.error.includes("Invalid login credentials")
+        ) {
           errorMessage = "Invalid email or password. Please try again.";
-        } else if (error.message.includes("Email not confirmed")) {
+        } else if (data.error.includes("Email not confirmed")) {
           errorMessage =
             "Please check your email and confirm your account before signing in.";
-        } else if (error.message.includes("Too many requests")) {
+        } else if (data.error.includes("Too many requests")) {
           errorMessage = "Too many login attempts. Please try again later.";
-        } else if (error.message.includes("User not found")) {
+        } else if (data.error.includes("User not found")) {
           errorMessage =
             "No account found with this email address. Please check your email or create a new account.";
-        } else if (error.message.includes("Account disabled")) {
+        } else if (data.error.includes("Account disabled")) {
           errorMessage =
             "Your account has been disabled. Please contact support for assistance.";
-        } else if (error.message.includes("Password expired")) {
+        } else if (data.error.includes("Password expired")) {
           errorMessage =
             "Your password has expired. Please reset your password.";
-        } else if (error.message.includes("Invalid email")) {
+        } else if (data.error.includes("Invalid email")) {
           errorMessage = "Please enter a valid email address.";
         } else {
-          errorMessage = error.message;
+          errorMessage = data.error || "Failed to log in";
         }
 
         setStatusMessage({
@@ -160,24 +170,8 @@ export default function LoginPage() {
         return;
       }
 
-      // Get user's role from the database
-      const { data: userData, error: userError } = await supabase
-        .from("users")
-        .select("role, full_name")
-        .eq("email", loginData.email)
-        .single();
-
-      if (userError) {
-        console.error("Error fetching user role:", userError);
-        setStatusMessage({
-          type: "error",
-          message: "Failed to fetch user information. Please try again.",
-        });
-        return;
-      }
-
-      // Check if user exists in the users table
-      if (!userData) {
+      // Check if user exists and has the correct role
+      if (!data.user) {
         setStatusMessage({
           type: "error",
           message: "User account not found. Please contact support.",
@@ -186,8 +180,8 @@ export default function LoginPage() {
       }
 
       // Validate role-based login
-      if (userData.role !== userType) {
-        const correctRole = userData.role === "trainer" ? "Trainer" : "Client";
+      if (data.user.role !== userType) {
+        const correctRole = data.user.role === "trainer" ? "Trainer" : "Client";
         const selectedRole = userType === "trainer" ? "Trainer" : "Client";
 
         setStatusMessage({
@@ -199,7 +193,7 @@ export default function LoginPage() {
 
       // Redirect based on role
       const redirectTo =
-        userData.role === "trainer"
+        data.user.role === "trainer"
           ? "/trainer/dashboard"
           : "/client/dashboard";
       router.push(redirectTo);

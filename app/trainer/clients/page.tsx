@@ -23,6 +23,17 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   Users,
   Search,
   Plus,
@@ -33,16 +44,20 @@ import {
   MoreHorizontal,
   MessageSquare,
   Loader2,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { createClient } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 import { startOfMonth } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
 
 // Interface for real client data
 interface Client {
@@ -146,8 +161,10 @@ export default function TrainerClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingClientId, setDeletingClientId] = useState<string | null>(null);
   const supabase = createClient();
   const router = useRouter();
+  const { toast } = useToast();
   const [clientsWithNoUpcoming, setClientsWithNoUpcoming] = useState<number>(0);
   const [newClientsThisMonth, setNewClientsThisMonth] = useState<number>(0);
   const sessionsDataRef = useRef<any[]>([]);
@@ -411,6 +428,46 @@ export default function TrainerClientsPage() {
         ))}
       </div>
     );
+  };
+
+  const handleDeleteClient = async (clientId: string, clientName: string) => {
+    try {
+      setDeletingClientId(clientId);
+
+      const response = await fetch("/api/trainer/delete-client", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ clientId }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to delete client");
+      }
+
+      // Remove the client from the local state
+      setClients((prevClients) =>
+        prevClients.filter((client) => client.id !== clientId)
+      );
+
+      toast({
+        title: "Client Deleted",
+        description: `Successfully deleted ${clientName} and all associated data.`,
+      });
+    } catch (error) {
+      console.error("Error deleting client:", error);
+      toast({
+        title: "Error",
+        description:
+          error instanceof Error ? error.message : "Failed to delete client",
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingClientId(null);
+    }
   };
 
   return (
@@ -721,6 +778,62 @@ export default function TrainerClientsPage() {
                               <DollarSign className="h-4 w-4 mr-2" />
                               View Payments
                             </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <DropdownMenuItem
+                                  onSelect={(e) => e.preventDefault()}
+                                  className="text-red-600 focus:text-red-600"
+                                  disabled={deletingClientId === client.id}
+                                >
+                                  {deletingClientId === client.id ? (
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                  )}
+                                  Delete Client
+                                </DropdownMenuItem>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle className="flex items-center gap-2">
+                                    <AlertTriangle className="h-5 w-5 text-red-600" />
+                                    Delete Client
+                                  </AlertDialogTitle>
+                                </AlertDialogHeader>
+                                <div className="text-sm text-muted-foreground">
+                                  <p>
+                                    Are you sure you want to delete{" "}
+                                    <strong>{client.full_name}</strong>? This
+                                    action will permanently remove:
+                                  </p>
+                                  <ul className="list-disc list-inside mt-2 space-y-1">
+                                    <li>All client profile data</li>
+                                    <li>All training sessions</li>
+                                    <li>All payment records</li>
+                                    <li>All package information</li>
+                                    <li>All contracts and agreements</li>
+                                  </ul>
+                                  <p className="mt-3 font-semibold text-red-600">
+                                    This action cannot be undone.
+                                  </p>
+                                </div>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() =>
+                                      handleDeleteClient(
+                                        client.id,
+                                        client.full_name
+                                      )
+                                    }
+                                    className="bg-red-600 hover:bg-red-700"
+                                  >
+                                    Delete Client
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>

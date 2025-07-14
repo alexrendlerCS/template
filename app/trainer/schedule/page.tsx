@@ -1303,6 +1303,42 @@ export default function TrainerSchedulePage() {
           );
         }
       }
+
+      // Send email notification to trainer
+      try {
+        // Format time strings to 12-hour format
+        const formatTimeTo12Hour = (timeStr: string) => {
+          const [hours, minutes] = timeStr.split(":");
+          const hour = parseInt(hours, 10);
+          const period = hour >= 12 ? "PM" : "AM";
+          const formattedHour = hour % 12 || 12;
+          return `${formattedHour}:${minutes} ${period}`;
+        };
+
+        const emailPayload = {
+          trainer_email: session.user.email || "",
+          trainer_name: session.user.user_metadata?.full_name || "Trainer",
+          client_name: selectedClient?.full_name || "Client",
+          date: selectedDateForSession,
+          start_time: formatTimeTo12Hour(startTimeStr),
+          end_time: formatTimeTo12Hour(endTimeStr),
+          session_type: selectedSessionTypeName,
+          notes: sessionNotes || undefined,
+        };
+
+        await fetch("/api/email/session-created", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(emailPayload),
+        });
+
+        console.debug("✅ Email notification sent successfully");
+      } catch (emailError) {
+        console.error("❌ Failed to send email notification:", emailError);
+        // Don't fail the session creation if email fails
+      }
     } catch (error) {
       console.error("❌ Error creating session:", error);
       setErrorMessage(
