@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -182,7 +182,6 @@ export default function TrainerSchedulePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isGoogleConnected, setIsGoogleConnected] = useState(true);
-  const [timeSlots, setTimeSlots] = useState<string[]>([]);
   const [trainerAvailability, setTrainerAvailability] = useState<any[]>([]);
   const [clients, setClients] = useState<any[]>([]);
   const [selectedClientForSession, setSelectedClientForSession] = useState("");
@@ -235,6 +234,26 @@ export default function TrainerSchedulePage() {
     sessionType: "",
   });
   const [isUpdatingSession, setIsUpdatingSession] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const firstSessionRowRef = useRef<HTMLDivElement>(null);
+
+  // Replace dynamic time slot logic with static 30-min slots from 12:00 AM to 11:30 PM
+  function generateStaticTimeSlots() {
+    const slots = [];
+    let current = new Date(2000, 0, 1, 0, 0, 0); // 12:00 AM
+    const end = new Date(2000, 0, 1, 23, 30, 0); // 11:30 PM
+    while (current <= end) {
+      slots.push(
+        current.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        })
+      );
+      current.setMinutes(current.getMinutes() + 30);
+    }
+    return slots;
+  }
 
   // Handle client filter from URL query parameter
   useEffect(() => {
@@ -269,119 +288,6 @@ export default function TrainerSchedulePage() {
       const clientB = getClientName(b);
       return clientA.localeCompare(clientB);
     });
-  };
-
-  // Function to fetch trainer availability and generate time slots
-  const fetchTrainerAvailability = async () => {
-    try {
-      // Get current trainer's session
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session?.user) {
-        console.error("No authenticated user found");
-        return;
-      }
-
-      console.log("🔍 Fetching trainer availability for:", session.user.id);
-
-      // Fetch trainer availability
-      const { data: availability, error } = await supabase
-        .from("trainer_availability")
-        .select("*")
-        .eq("trainer_id", session.user.id);
-
-      if (error) {
-        console.error("❌ Error fetching trainer availability:", error);
-        return;
-      }
-
-      console.log("✅ Trainer availability fetched:", availability);
-      setTrainerAvailability(availability || []);
-
-      // Generate time slots based on availability
-      if (availability && availability.length > 0) {
-        // Find the earliest start time and latest end time across all availability slots
-        let earliestStart = new Date(`2000-01-01T23:59:59`);
-        let latestEnd = new Date(`2000-01-01T00:00:00`);
-
-        availability.forEach((slot) => {
-          const startTime = new Date(`2000-01-01T${slot.start_time}`);
-          const endTime = new Date(`2000-01-01T${slot.end_time}`);
-
-          if (startTime < earliestStart) {
-            earliestStart = new Date(startTime);
-          }
-          if (endTime > latestEnd) {
-            latestEnd = new Date(endTime);
-          }
-        });
-
-        // Generate hourly slots from earliest start to latest end - 1 hour
-        // Always start on the hour (set minutes to 0)
-        let currentTime = new Date(earliestStart);
-        currentTime.setMinutes(0, 0, 0); // Set to start of hour
-        const endTimeMinusOneHour = new Date(
-          latestEnd.getTime() - 60 * 60 * 1000
-        ); // Subtract 1 hour
-
-        const timeSlotsSet = new Set<string>();
-        while (currentTime <= endTimeMinusOneHour) {
-          const timeString = currentTime.toLocaleTimeString("en-US", {
-            hour: "numeric",
-            minute: "2-digit",
-            hour12: true,
-          });
-          timeSlotsSet.add(timeString);
-          currentTime.setHours(currentTime.getHours() + 1);
-        }
-
-        // Convert to array and sort
-        const sortedTimeSlots = Array.from(timeSlotsSet).sort((a, b) => {
-          const timeA = new Date(`2000-01-01T${a}`);
-          const timeB = new Date(`2000-01-01T${b}`);
-          return timeA.getTime() - timeB.getTime();
-        });
-
-        console.log("🕐 Generated time slots:", sortedTimeSlots);
-        setTimeSlots(sortedTimeSlots);
-      } else {
-        // Fallback to default time slots if no availability found
-        const defaultTimeSlots = [
-          "8:00 AM",
-          "9:00 AM",
-          "10:00 AM",
-          "11:00 AM",
-          "12:00 PM",
-          "1:00 PM",
-          "2:00 PM",
-          "3:00 PM",
-          "4:00 PM",
-          "5:00 PM",
-          "6:00 PM",
-          "7:00 PM",
-        ];
-        setTimeSlots(defaultTimeSlots);
-      }
-    } catch (error) {
-      console.error("❌ Error in fetchTrainerAvailability:", error);
-      // Fallback to default time slots
-      const defaultTimeSlots = [
-        "8:00 AM",
-        "9:00 AM",
-        "10:00 AM",
-        "11:00 AM",
-        "12:00 PM",
-        "1:00 PM",
-        "2:00 PM",
-        "3:00 PM",
-        "4:00 PM",
-        "5:00 PM",
-        "6:00 PM",
-        "7:00 PM",
-      ];
-      setTimeSlots(defaultTimeSlots);
-    }
   };
 
   // Function to fetch events
@@ -637,7 +543,6 @@ export default function TrainerSchedulePage() {
       "🔍 fetchPackageInfo function exists:",
       typeof fetchPackageInfo
     );
-    fetchTrainerAvailability();
     fetchEvents();
     fetchClients();
     console.log("📦 About to call fetchPackageInfo...");
@@ -1705,11 +1610,48 @@ export default function TrainerSchedulePage() {
     }
   };
 
+  // Find the first time slot index with a session in the current week
+  function getFirstSessionRowIndex() {
+    const weekDates = getWeekDates(currentDate);
+    const timeSlots = generateStaticTimeSlots();
+    for (let i = 0; i < timeSlots.length; i++) {
+      for (let j = 0; j < weekDates.length; j++) {
+        const sessions = getSessionsForTimeSlot(weekDates[j], timeSlots[i]);
+        if (sessions.length > 0) {
+          return i;
+        }
+      }
+    }
+    return null;
+  }
+
+  // Auto-scroll to the first session row when events or week change
+  useEffect(() => {
+    const firstIndex = getFirstSessionRowIndex();
+    if (
+      firstIndex !== null &&
+      scrollContainerRef.current &&
+      firstSessionRowRef.current
+    ) {
+      const container = scrollContainerRef.current;
+      let targetRow = firstSessionRowRef.current;
+      // Try to get the previous sibling (row above)
+      if (targetRow.previousElementSibling) {
+        targetRow = targetRow.previousElementSibling;
+      }
+      const headerHeight = 48; // Adjust if your header is taller/shorter
+      const rowHeight = targetRow.offsetHeight;
+      container.scrollTop = targetRow.offsetTop - container.offsetTop - headerHeight + rowHeight / 2;
+    }
+  }, [events, currentDate]);
+
   // Update renderWeekView to use DroppableTimeSlot for each cell
   const renderWeekView = () => {
     const weekDates = getWeekDates(currentDate);
     const startDate = weekDates[0];
     const endDate = weekDates[6];
+    const timeSlots = generateStaticTimeSlots();
+    const firstSessionRowIndex = getFirstSessionRowIndex();
 
     return (
       <DndContext
@@ -1719,144 +1661,126 @@ export default function TrainerSchedulePage() {
         onDragOver={handleDragOver}
       >
         <div className="flex flex-col h-full">
-          <div className="flex items-center justify-between mb-4 px-2 sm:px-4">
-            <div className="flex items-center gap-3">
-              <div className="w-1 h-8 bg-gradient-to-b from-red-500 to-red-600 rounded-full"></div>
-              <h2 className="text-lg sm:text-xl font-bold text-gray-900">
-                Week of{" "}
-                {startDate.toLocaleDateString("en-US", {
-                  month: "long",
-                  day: "numeric",
-                })}{" "}
-                -{" "}
-                {endDate.toLocaleDateString("en-US", {
-                  month: "long",
-                  day: "numeric",
-                  year: "numeric",
-                })}
-              </h2>
-            </div>
-            <div className="flex items-center gap-2">
-              {/* Edit Mode Toggle */}
-              <div className="flex items-center gap-2 mr-4 border-r border-gray-300 pr-4">
-                <span className="text-sm font-medium text-gray-700">Mode:</span>
-                <div className="flex bg-gray-100 rounded-lg p-1">
-                  <button
-                    onClick={() => setIsEditMode(false)}
-                    className={`flex items-center gap-1 px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                      !isEditMode
-                        ? "bg-red-600 text-white shadow-sm"
-                        : "text-gray-600 hover:text-gray-900"
-                    }`}
-                  >
-                    <Move className="h-3 w-3" />
-                    Drag
-                  </button>
-                  <button
-                    onClick={() => setIsEditMode(true)}
-                    className={`flex items-center gap-1 px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                      isEditMode
-                        ? "bg-red-600 text-white shadow-sm"
-                        : "text-gray-600 hover:text-gray-900"
-                    }`}
-                  >
-                    <Edit className="h-3 w-3" />
-                    Edit
-                  </button>
-                </div>
+          {/* Sticky header group: controls + days/dates header */}
+          <div className="sticky top-0 z-30 bg-white">
+            <div className="flex items-center justify-between mb-0 px-2 sm:px-4 pt-4 pb-2 border-b border-gray-200">
+              <div className="flex items-center gap-3">
+                <div className="w-1 h-8 bg-gradient-to-b from-red-500 to-red-600 rounded-full"></div>
+                <h2 className="text-lg sm:text-xl font-bold text-gray-900">
+                  Week of {startDate.toLocaleDateString("en-US", { month: "long", day: "numeric" })} - {endDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                </h2>
               </div>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigateWeek("prev")}
-                className="hover:bg-gray-50 border-gray-300"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigateWeek("next")}
-                className="hover:bg-gray-50 border-gray-300"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+              <div className="flex items-center gap-2">
+                {/* Edit Mode Toggle */}
+                <div className="flex items-center gap-2 mr-4 border-r border-gray-300 pr-4">
+                  <span className="text-sm font-medium text-gray-700">Mode:</span>
+                  <div className="flex bg-gray-100 rounded-lg p-1">
+                    <button
+                      onClick={() => setIsEditMode(false)}
+                      className={`flex items-center gap-1 px-3 py-1 rounded-md text-sm font-medium transition-colors ${!isEditMode ? "bg-red-600 text-white shadow-sm" : "text-gray-600 hover:text-gray-900"}`}
+                    >
+                      <Move className="h-3 w-3" /> Drag
+                    </button>
+                    <button
+                      onClick={() => setIsEditMode(true)}
+                      className={`flex items-center gap-1 px-3 py-1 rounded-md text-sm font-medium transition-colors ${isEditMode ? "bg-red-600 text-white shadow-sm" : "text-gray-600 hover:text-gray-900"}`}
+                    >
+                      <Edit className="h-3 w-3" /> Edit
+                    </button>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigateWeek("prev")}
+                  className="hover:bg-gray-50 border-gray-300"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigateWeek("next")}
+                  className="hover:bg-gray-50 border-gray-300"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
-
+          {/* Header and grid alignment wrapper - both in the same scrollable container */}
           <div className="flex-1 overflow-x-auto">
-            <div className="grid grid-cols-[80px_repeat(7,1fr)] gap-0 bg-white rounded-xl shadow-lg overflow-hidden min-w-[700px] h-[calc(100vh-12rem)] border border-gray-200 divide-x divide-gray-300">
-              {/* Time column */}
-              <div className="bg-gradient-to-b from-gray-50 to-gray-100">
-                <div className="h-10 sm:h-12 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100" />
-                {timeSlots.map((time) => (
-                  <div
-                    key={time}
-                    className="h-16 sm:h-20 bg-gradient-to-r from-gray-50 to-gray-100 p-1 sm:p-2 text-xs sm:text-sm font-medium text-gray-600 flex items-center justify-end pr-2 sm:pr-4 border-b border-gray-100"
+            <div ref={scrollContainerRef} className="h-[600px] overflow-y-auto w-full">
+              {/* Sticky header row inside the scrollable container */}
+              <div className="sticky top-0 z-30 bg-white">
+                <div className="grid grid-cols-[80px_repeat(7,1fr)] min-w-[700px] bg-white border-b border-gray-200">
+                  {/* Time column header (empty) */}
+                  <div className="bg-gradient-to-b from-gray-50 to-gray-100 h-10 sm:h-12" />
+                  {/* Day/date headers */}
+                  {weekDates.map((date, index) => (
+                    <div
+                      key={date.toISOString()}
+                      className={`flex flex-col items-center justify-center h-10 sm:h-12 px-2 sm:px-4 bg-gradient-to-b from-gray-50 to-white border-l border-gray-200 ${isToday(date.getDate()) ? "bg-gradient-to-b from-red-50 to-red-100" : ""}`}
+                    >
+                      <span className={`text-xs sm:text-sm font-semibold uppercase tracking-wide ${isToday(date.getDate()) ? "text-red-800" : "text-gray-900"}`}>{daysOfWeek[index]}</span>
+                      <span className={`text-base sm:text-lg font-bold ${isToday(date.getDate()) ? "text-red-600" : "text-gray-700"}`}>{date.getDate()}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {/* The grid itself */}
+              <div className="grid grid-cols-[80px_repeat(7,1fr)] gap-0 bg-white rounded-xl shadow-lg overflow-hidden min-w-[700px] border border-gray-200 divide-x divide-gray-300">
+                {/* Time column */}
+                <div className="bg-gradient-to-b from-gray-50 to-gray-100">
+                  <div className="h-10 sm:h-12 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100" />
+                  {timeSlots.map((time, i) => (
+                    <div
+                      key={time}
+                      ref={i === firstSessionRowIndex ? firstSessionRowRef : undefined}
+                      className="h-16 sm:h-20 bg-gradient-to-r from-gray-50 to-gray-100 p-1 sm:p-2 text-xs sm:text-sm font-medium text-gray-600 flex items-center justify-end pr-2 sm:pr-4 border-b border-gray-100"
+                    >
+                      {time}
+                    </div>
+                  ))}
+                </div>
+                {/* Days columns */}
+                {weekDates.map((date, index) => (
+                  <DroppableTimeSlot
+                    key={date.toISOString()}
+                    date={date}
+                    time={timeSlots[0]}
                   >
-                    {time}
-                  </div>
+                    <div className={`bg-white ${isToday(date.getDate()) ? "bg-red-50" : ""}`}>
+                      <div className="h-10 sm:h-12 border-b border-gray-200 p-1 sm:p-2 bg-gradient-to-b from-gray-50 to-white" />
+                      {timeSlots.map((time, i) => {
+                        const sessions = getSessionsForTimeSlot(date, time);
+                        return (
+                          <DroppableTimeSlot
+                            key={`${date.toISOString()}|${time}`}
+                            date={date}
+                            time={time}
+                          >
+                            <div
+                              ref={i === firstSessionRowIndex ? firstSessionRowRef : undefined}
+                              className={`h-16 sm:h-20 border-b border-gray-200 p-1 sm:p-2 relative transition-colors duration-150 ${isToday(date.getDate()) ? "bg-red-50 hover:bg-red-100 border-red-200" : "bg-white hover:bg-gray-50 border-gray-100"}`}
+                            >
+                              {sessions.map((session) => (
+                                <DraggableSession
+                                  key={session.id}
+                                  session={session}
+                                  isEditMode={isEditMode}
+                                >
+                                  {renderEvent(session)}
+                                </DraggableSession>
+                              ))}
+                            </div>
+                          </DroppableTimeSlot>
+                        );
+                      })}
+                    </div>
+                  </DroppableTimeSlot>
                 ))}
               </div>
-
-              {/* Days columns */}
-              {weekDates.map((date, index) => (
-                <DroppableTimeSlot
-                  key={date.toISOString()}
-                  date={date}
-                  time={timeSlots[0]}
-                >
-                  <div
-                    className={`bg-white ${isToday(date.getDate()) ? "bg-red-50" : ""}`}
-                  >
-                    <div
-                      className={`h-10 sm:h-12 border-b border-gray-200 p-1 sm:p-2 bg-gradient-to-b from-gray-50 to-white ${isToday(date.getDate()) ? "bg-gradient-to-b from-red-50 to-red-100" : ""}`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div
-                          className={`text-xs sm:text-sm font-semibold uppercase tracking-wide ${isToday(date.getDate()) ? "text-red-800" : "text-gray-900"}`}
-                        >
-                          {daysOfWeek[index]}
-                        </div>
-                        <div
-                          className={`text-base sm:text-lg font-bold ${isToday(date.getDate()) ? "text-red-600" : "text-gray-700"}`}
-                        >
-                          {date.getDate()}
-                        </div>
-                      </div>
-                    </div>
-                    {timeSlots.map((time) => {
-                      const sessions = getSessionsForTimeSlot(date, time);
-                      return (
-                        <DroppableTimeSlot
-                          key={`${date.toISOString()}|${time}`}
-                          date={date}
-                          time={time}
-                        >
-                          <div
-                            className={`h-16 sm:h-20 border-b border-gray-200 p-1 sm:p-2 relative transition-colors duration-150 ${
-                              isToday(date.getDate())
-                                ? "bg-red-50 hover:bg-red-100 border-red-200"
-                                : "bg-white hover:bg-gray-50 border-gray-100"
-                            }`}
-                          >
-                            {sessions.map((session) => (
-                              <DraggableSession
-                                key={session.id}
-                                session={session}
-                                isEditMode={isEditMode}
-                              >
-                                {renderEvent(session)}
-                              </DraggableSession>
-                            ))}
-                          </div>
-                        </DroppableTimeSlot>
-                      );
-                    })}
-                  </div>
-                </DroppableTimeSlot>
-              ))}
             </div>
           </div>
           <DragOverlay>
