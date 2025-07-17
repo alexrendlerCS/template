@@ -1635,9 +1635,10 @@ export default function TrainerSchedulePage() {
     ) {
       const container = scrollContainerRef.current;
       let targetRow = firstSessionRowRef.current;
-      // Try to get the previous sibling (row above)
-      if (targetRow.previousElementSibling) {
-        targetRow = targetRow.previousElementSibling;
+      // Try to get the previous sibling (row above), but only if it's an HTMLDivElement
+      const prev = targetRow.previousElementSibling;
+      if (prev && prev instanceof HTMLDivElement) {
+        targetRow = prev;
       }
       const headerHeight = 48; // Adjust if your header is taller/shorter
       const rowHeight = targetRow.offsetHeight;
