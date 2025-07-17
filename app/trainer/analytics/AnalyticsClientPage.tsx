@@ -72,7 +72,7 @@ export default function AnalyticsClientPage() {
   >([]);
   const [showAllPayments, setShowAllPayments] = useState(false);
   const [recentSessions, setRecentSessions] = useState<
-    { id: string; client: string; type: string; date: string; status: string }[]
+    { id: string; client: string; clientId: string; type: string; date: string; status: string }[]
   >([]);
   const [showAllSessions, setShowAllSessions] = useState(false);
   const supabase = createClient();
