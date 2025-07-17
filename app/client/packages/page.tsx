@@ -74,6 +74,15 @@ const packageSections: PackageSection[] = [
     icon: "🏋️",
     packages: [
       {
+        id: "inperson-1",
+        name: "1x Per Week",
+        sessionsPerWeek: 1,
+        hourlyRate: 130,
+        monthlySessionCount: 4,
+        monthlyPrice: 520,
+        priceId: "price_PLACEHOLDER_1",
+      },
+      {
         id: "inperson-2",
         name: "2x Per Week",
         sessionsPerWeek: 2,
@@ -117,6 +126,15 @@ const packageSections: PackageSection[] = [
     icon: "💻",
     packages: [
       {
+        id: "virtual-1",
+        name: "1x Per Week",
+        sessionsPerWeek: 1,
+        hourlyRate: 120,
+        monthlySessionCount: 4,
+        monthlyPrice: 480,
+        priceId: "price_PLACEHOLDER_2",
+      },
+      {
         id: "virtual-2",
         name: "2x Per Week",
         sessionsPerWeek: 2,
@@ -159,6 +177,15 @@ const packageSections: PackageSection[] = [
     description: "Train with a friend and share the journey (Price per person)",
     icon: "👫",
     packages: [
+      {
+        id: "partner-1",
+        name: "1x Per Week",
+        sessionsPerWeek: 1,
+        hourlyRate: 100,
+        monthlySessionCount: 4,
+        monthlyPrice: 400,
+        priceId: "price_PLACEHOLDER_3",
+      },
       {
         id: "partner-2",
         name: "2x Per Week",
@@ -922,7 +949,7 @@ function PackagesContent() {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 sm:gap-6">
                 {section.packages.map((pkg) => (
                   <Card key={pkg.id} className="flex flex-col">
                     <CardHeader className="pb-2 sm:pb-4">
@@ -979,7 +1006,7 @@ function PackagesContent() {
                                 [pkg.id]: e.target.value,
                               }));
                             }}
-                            className="w-full border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-red-500 pr-10"
+                            className="w-full border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-red-500 pr-10 placeholder:text-xs"
                             placeholder="Enter promo code"
                             disabled={
                               isLoading === pkg.id || validatingPromo === pkg.id

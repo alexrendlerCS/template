@@ -1290,32 +1290,23 @@ export default function TrainerSchedulePage() {
 
   const getSessionsForTimeSlot = (date: Date, time: string) => {
     const sessions = getSessionsForDate(date);
+    // Compute slot start and end time
+    const slotMatch = time.match(/(\d+):(\d+)\s*(AM|PM)/);
+    if (!slotMatch) return [];
+    let slotHour = parseInt(slotMatch[1]);
+    const slotMinute = parseInt(slotMatch[2]);
+    const slotPeriod = slotMatch[3];
+    if (slotPeriod === "PM" && slotHour !== 12) slotHour += 12;
+    if (slotPeriod === "AM" && slotHour === 12) slotHour = 0;
+    const slotStart = new Date(date);
+    slotStart.setHours(slotHour, slotMinute, 0, 0);
+    const slotEnd = new Date(slotStart.getTime() + 30 * 60 * 1000); // 30 min slot
+
     return sessions.filter((session) => {
-      const eventTime = new Date(session.start.dateTime);
-      const eventHour = eventTime.getHours();
-      const eventMinute = eventTime.getMinutes();
-
-      // Parse the time slot (e.g., "9:00 AM" -> 9, 0)
-      const timeMatch = time.match(/(\d+):(\d+)\s*(AM|PM)/);
-      if (!timeMatch) return false;
-
-      let slotHour = parseInt(timeMatch[1]);
-      const slotMinute = parseInt(timeMatch[2]);
-      const period = timeMatch[3];
-
-      // Convert to 24-hour format
-      if (period === "PM" && slotHour !== 12) {
-        slotHour += 12;
-      } else if (period === "AM" && slotHour === 12) {
-        slotHour = 0;
-      }
-
-      // Check if event starts within this time slot (within 1 hour)
-      return (
-        eventHour === slotHour &&
-        eventMinute >= slotMinute &&
-        eventMinute < slotMinute + 60
-      );
+      const eventStart = new Date(session.start.dateTime);
+      const eventEnd = new Date(session.end.dateTime);
+      // Check if session overlaps this slot
+      return eventStart < slotEnd && eventEnd > slotStart;
     });
   };
 

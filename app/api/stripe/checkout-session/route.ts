@@ -22,6 +22,7 @@ export async function POST(req: Request) {
     const pricingMatrix: Record<string, Record<number, number>> = {
       "In-Person Training": {
         1: 15000, // $150 for single session
+        4: 52000, // $520 for 1x/week (new)
         8: 100000, // $1,000
         12: 138000, // $1,380
         16: 176000, // $1,760
@@ -29,7 +30,7 @@ export async function POST(req: Request) {
       },
       "Virtual Training": {
         1: 15000, // $150 for single session
-        4: 48000, // $480
+        4: 48000, // $480 for 1x/week (new)
         8: 92000, // $920
         12: 126000, // $1,260
         16: 160000, // $1,600
@@ -37,7 +38,7 @@ export async function POST(req: Request) {
       },
       "Partner Training": {
         1: 15000, // $150 for single session
-        4: 36000, // $360
+        4: 40000, // $400 for 1x/week (new)
         8: 68000, // $680
         12: 96000, // $960
         16: 120000, // $1,200
