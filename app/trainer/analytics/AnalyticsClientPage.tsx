@@ -508,7 +508,7 @@ export default function AnalyticsClientPage() {
 
   // Filter and paginate sessions for display
   const filteredSessions = selectedClient
-    ? recentSessions.filter((s) => s.client === selectedClient)
+    ? recentSessions.filter((s) => s.clientId === selectedClient)
     : recentSessions;
   const totalSessionPages = Math.ceil(filteredSessions.length / sessionsPerPage);
   const paginatedSessions = filteredSessions.slice(
