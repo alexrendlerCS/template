@@ -33,8 +33,9 @@ import {
   Legend,
 } from "recharts";
 import { createClient } from "@/lib/supabaseClient";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
+import { useSearchParams } from "next/navigation";
 
 interface RevenueData {
   day: string;
@@ -75,6 +76,12 @@ export default function TrainerAnalyticsPage() {
   >([]);
   const [showAllSessions, setShowAllSessions] = useState(false);
   const supabase = createClient();
+  const [selectedClient, setSelectedClient] = useState<string | null>(null);
+  const [currentSessionPage, setCurrentSessionPage] = useState(1);
+  const sessionsPerPage = 5;
+  const [clientOptions, setClientOptions] = useState<{ id: string; name: string }[]>([]);
+  const searchParams = useSearchParams();
+  const recentSessionsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     console.debug("useEffect running in analytics page");
@@ -87,6 +94,20 @@ export default function TrainerAnalyticsPage() {
     fetchRecentPayments();
     fetchRecentSessions();
   }, []);
+
+  useEffect(() => {
+    const clientIdFromUrl = searchParams.get("client");
+    if (clientIdFromUrl) {
+      setSelectedClient(clientIdFromUrl);
+      setCurrentSessionPage(1);
+      // Scroll to Recent Sessions after a short delay to ensure rendering
+      setTimeout(() => {
+        if (recentSessionsRef.current) {
+          recentSessionsRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 300);
+    }
+  }, [searchParams]);
 
   const fetchRevenueData = async () => {
     console.debug("fetchRevenueData called");
@@ -401,24 +422,27 @@ export default function TrainerAnalyticsPage() {
         data: { session },
       } = await supabase.auth.getSession();
       if (!session) return;
-      // Fetch sessions with start date before now (limit 10)
+      // Fetch ALL sessions for debugging
       const now = new Date();
+      console.log('[DEBUG] Current date/time for filtering:', now.toISOString());
       const { data: sessions, error: sessionsError } = await supabase
         .from("sessions")
-        .select("id, client_id, type, date, start_time, status")
+        .select("id, client_id, type, date, start_time, end_time, duration_minutes, status, timezone")
         .order("date", { ascending: false })
-        .order("start_time", { ascending: false })
-        .limit(20); // fetch more in case some are filtered out
+        .order("start_time", { ascending: false }); // no limit
       if (sessionsError) {
         setRecentSessions([]);
+        console.log('[DEBUG] Error fetching sessions:', sessionsError);
         return;
       }
-      // Filter for sessions before now
+      console.log('[DEBUG] Raw sessions from Supabase (count):', sessions?.length, sessions);
+      // Filter for sessions before now (existing logic)
       const filtered = sessions.filter((s) => {
         if (!s.date || !s.start_time) return false;
         const sessionDate = new Date(`${s.date}T${s.start_time}`);
         return sessionDate < now;
       });
+      console.log('[DEBUG] Filtered sessions (past, count):', filtered.length, filtered);
       // Fetch client names
       const clientIds = Array.from(
         new Set(filtered.map((s) => s.client_id).filter(Boolean))
@@ -435,10 +459,15 @@ export default function TrainerAnalyticsPage() {
           });
         }
       }
-      // Prepare data
-      const data = filtered.slice(0, 10).map((s) => ({
+      // Prepare client options for dropdown
+      setClientOptions(
+        Object.entries(clientNames).map(([id, name]) => ({ id, name }))
+      );
+      // Prepare data (keep all, don't slice here)
+      const data = filtered.map((s) => ({
         id: s.id,
         client: clientNames[s.client_id] || "Unknown",
+        clientId: s.client_id,
         type: s.type,
         date:
           s.date && s.start_time
@@ -446,9 +475,12 @@ export default function TrainerAnalyticsPage() {
             : "",
         status: s.status,
       }));
+      console.log('[DEBUG] Final mapped session data:', data);
       setRecentSessions(data);
+      setCurrentSessionPage(1); // Reset to first page on fetch
     } catch (error) {
       setRecentSessions([]);
+      console.log('[DEBUG] Exception in fetchRecentSessions:', error);
     }
   };
 
@@ -461,6 +493,16 @@ export default function TrainerAnalyticsPage() {
     "#fbbf24",
     "#6366f1",
   ];
+
+  // Filter and paginate sessions for display
+  const filteredSessions = selectedClient
+    ? recentSessions.filter((s) => s.client === selectedClient)
+    : recentSessions;
+  const totalSessionPages = Math.ceil(filteredSessions.length / sessionsPerPage);
+  const paginatedSessions = filteredSessions.slice(
+    (currentSessionPage - 1) * sessionsPerPage,
+    currentSessionPage * sessionsPerPage
+  );
 
   return (
     <div className="flex-1">
@@ -756,10 +798,26 @@ export default function TrainerAnalyticsPage() {
             </CardContent>
           </Card>
           {/* Recent Sessions */}
-          <Card>
+          <Card ref={recentSessionsRef}>
             <CardHeader>
               <CardTitle>Recent Sessions</CardTitle>
               <CardDescription>Latest session activity</CardDescription>
+              {/* Client filter dropdown */}
+              <div className="mt-2">
+                <select
+                  value={selectedClient || ""}
+                  onChange={e => {
+                    setSelectedClient(e.target.value || null);
+                    setCurrentSessionPage(1);
+                  }}
+                  className="border rounded px-2 py-1"
+                >
+                  <option value="">All Clients</option>
+                  {clientOptions.map(opt => (
+                    <option key={opt.id} value={opt.id}>{opt.name}</option>
+                  ))}
+                </select>
+              </div>
             </CardHeader>
             <CardContent>
               <Table>
@@ -772,10 +830,7 @@ export default function TrainerAnalyticsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(showAllSessions
-                    ? recentSessions
-                    : recentSessions.slice(0, 5)
-                  ).map((s) => (
+                  {paginatedSessions.map((s) => (
                     <TableRow key={s.id}>
                       <TableCell>{s.client}</TableCell>
                       <TableCell>{s.type}</TableCell>
@@ -787,16 +842,26 @@ export default function TrainerAnalyticsPage() {
                   ))}
                 </TableBody>
               </Table>
-              {recentSessions.length > 5 && (
-                <div className="flex justify-center mt-2">
-                  <button
-                    className="text-blue-600 hover:underline text-sm font-medium"
-                    onClick={() => setShowAllSessions((v) => !v)}
-                  >
-                    {showAllSessions ? "Show Less" : "Show More"}
-                  </button>
-                </div>
-              )}
+              {/* Pagination controls */}
+              <div className="flex justify-between items-center mt-2">
+                <button
+                  className="text-blue-600 hover:underline text-sm font-medium disabled:text-gray-400"
+                  onClick={() => setCurrentSessionPage((p) => Math.max(1, p - 1))}
+                  disabled={currentSessionPage === 1}
+                >
+                  Previous
+                </button>
+                <span className="text-sm">
+                  Page {currentSessionPage} of {totalSessionPages || 1}
+                </span>
+                <button
+                  className="text-blue-600 hover:underline text-sm font-medium disabled:text-gray-400"
+                  onClick={() => setCurrentSessionPage((p) => Math.min(totalSessionPages, p + 1))}
+                  disabled={currentSessionPage === totalSessionPages || totalSessionPages === 0}
+                >
+                  Next
+                </button>
+              </div>
             </CardContent>
           </Card>
         </div>

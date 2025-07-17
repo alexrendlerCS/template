@@ -46,6 +46,7 @@ import {
   Loader2,
   Trash2,
   AlertTriangle,
+  BarChart,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -777,6 +778,14 @@ export default function TrainerClientsPage() {
                             >
                               <DollarSign className="h-4 w-4 mr-2" />
                               View Payments
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                router.push(`/trainer/analytics?client=${client.id}`);
+                              }}
+                            >
+                              <BarChart className="h-4 w-4 mr-2" />
+                              Past Sessions
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <AlertDialog>
