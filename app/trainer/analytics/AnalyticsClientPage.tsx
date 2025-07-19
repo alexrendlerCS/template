@@ -36,6 +36,13 @@ import { createClient } from "@/lib/supabaseClient";
 import { useEffect, useState, useRef } from "react";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import { useSearchParams } from "next/navigation";
+import { 
+  getCurrentTier, 
+  isAnalyticsFeatureEnabled, 
+  isFeatureEnabled,
+  getCurrentTierConfig 
+} from "@/lib/config/features";
+import { UpgradeOverlay } from "@/components/ui/upgrade-overlay";
 
 interface RevenueData {
   day: string;
@@ -83,17 +90,27 @@ export default function AnalyticsClientPage() {
   const searchParams = useSearchParams();
   const recentSessionsRef = useRef<HTMLDivElement>(null);
 
+  // Feature flag state
+  const currentTier = getCurrentTier();
+  const tierConfig = getCurrentTierConfig();
+  const analyticsEnabled = isFeatureEnabled('analyticsEnabled');
+
   useEffect(() => {
     console.debug("useEffect running in analytics page");
-    fetchRevenueData();
-    fetchNewClientsData();
-    fetchWeekdaySessionsData();
-    fetchPackageSessionsData();
-    fetchTopRevenueClients();
-    fetchTopSessionTimes();
-    fetchRecentPayments();
-    fetchRecentSessions();
-  }, []);
+    // Only fetch data if analytics is enabled for current tier
+    if (analyticsEnabled) {
+      fetchRevenueData();
+      fetchNewClientsData();
+      fetchWeekdaySessionsData();
+      fetchPackageSessionsData();
+      fetchTopRevenueClients();
+      fetchTopSessionTimes();
+      fetchRecentPayments();
+      fetchRecentSessions();
+    } else {
+      setLoading(false);
+    }
+  }, [analyticsEnabled]);
 
   useEffect(() => {
     const clientIdFromUrl = searchParams.get("client");
@@ -108,6 +125,35 @@ export default function AnalyticsClientPage() {
       }, 300);
     }
   }, [searchParams]);
+
+  const handleUpgrade = () => {
+    // This would typically redirect to a pricing/upgrade page
+    console.log("Upgrade requested");
+    // You can implement your upgrade flow here
+  };
+
+  // If analytics is completely disabled for this tier, show upgrade overlay
+  if (!analyticsEnabled) {
+    return (
+      <div className="flex-1">
+        <header className="border-b bg-white px-6 py-4">
+          <div className="flex items-center space-x-4">
+            <SidebarTrigger />
+            <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
+          </div>
+        </header>
+        <main className="p-6">
+          <UpgradeOverlay
+            feature="Analytics"
+            currentTier={currentTier}
+            onUpgrade={handleUpgrade}
+            className="min-h-[600px]"
+            variant="overlay"
+          />
+        </main>
+      </div>
+    );
+  }
 
   const fetchRevenueData = async () => {
     console.debug("fetchRevenueData called");
@@ -522,361 +568,466 @@ export default function AnalyticsClientPage() {
         <div className="flex items-center space-x-4">
           <SidebarTrigger />
           <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
+          <div className="ml-auto">
+            <span className="text-sm text-gray-500">
+              Current Plan: {tierConfig.name}
+            </span>
+          </div>
         </div>
       </header>
       <main className="p-6 space-y-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* Revenue Trend */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <LineChart className="h-5 w-5 text-blue-600" /> Revenue Trend
-              </CardTitle>
-              <CardDescription>
-                Revenue trends over the past month
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="h-40 flex items-center justify-center text-gray-400">
-                  Loading...
-                </div>
-              ) : (
+          {isAnalyticsFeatureEnabled('revenueTrend') ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <LineChart className="h-5 w-5 text-blue-600" /> Revenue Trend
+                </CardTitle>
+                <CardDescription>
+                  Revenue trends over the past month
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="h-40 flex items-center justify-center text-gray-400">
+                    Loading...
+                  </div>
+                ) : (
+                  <div className="h-40">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RechartsLineChart data={revenueData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis
+                          dataKey="day"
+                          fontSize={12}
+                          tick={{ fontSize: 10 }}
+                        />
+                        <YAxis
+                          fontSize={12}
+                          tick={{ fontSize: 10 }}
+                          tickFormatter={(value) => `$${value}`}
+                        />
+                        <Tooltip
+                          formatter={(value: number) => [`$${value}`, "Revenue"]}
+                          labelFormatter={(label) => `Month: ${label}`}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="revenue"
+                          stroke="#2563eb"
+                          strokeWidth={2}
+                          dot={{ fill: "#2563eb", strokeWidth: 2, r: 4 }}
+                          activeDot={{
+                            r: 6,
+                            stroke: "#2563eb",
+                            strokeWidth: 2,
+                          }}
+                        />
+                      </RechartsLineChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <UpgradeOverlay
+              feature="Revenue Analytics"
+              currentTier={currentTier}
+              onUpgrade={handleUpgrade}
+              variant="blur"
+            />
+          )}
+
+          {/* New Clients Per Month */}
+          {isAnalyticsFeatureEnabled('newClientsPerMonth') ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart className="h-5 w-5 text-green-600" /> New Clients Per Month
+                </CardTitle>
+                <CardDescription>
+                  How many new clients joined each month
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
                 <div className="h-40">
                   <ResponsiveContainer width="100%" height="100%">
-                    <RechartsLineChart data={revenueData}>
+                    <RechartsBarChart data={newClientsData}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis
-                        dataKey="day"
+                        dataKey="month"
                         fontSize={12}
                         tick={{ fontSize: 10 }}
                       />
                       <YAxis
+                        allowDecimals={false}
                         fontSize={12}
                         tick={{ fontSize: 10 }}
-                        tickFormatter={(value) => `$${value}`}
                       />
                       <Tooltip
-                        formatter={(value: number) => [`$${value}`, "Revenue"]}
+                        formatter={(value: number) => [value, "New Clients"]}
                         labelFormatter={(label) => `Month: ${label}`}
                       />
-                      <Line
-                        type="monotone"
-                        dataKey="revenue"
-                        stroke="#2563eb"
-                        strokeWidth={2}
-                        dot={{ fill: "#2563eb", strokeWidth: 2, r: 4 }}
-                        activeDot={{
-                          r: 6,
-                          stroke: "#2563eb",
-                          strokeWidth: 2,
-                        }}
-                      />
-                    </RechartsLineChart>
+                      <Bar dataKey="count" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                    </RechartsBarChart>
                   </ResponsiveContainer>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-          {/* New Clients Per Month */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BarChart className="h-5 w-5 text-green-600" /> New Clients Per
-                Month
-              </CardTitle>
-              <CardDescription>
-                How many new clients joined each month
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-40">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RechartsBarChart data={newClientsData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis
-                      dataKey="month"
-                      fontSize={12}
-                      tick={{ fontSize: 10 }}
-                    />
-                    <YAxis
-                      allowDecimals={false}
-                      fontSize={12}
-                      tick={{ fontSize: 10 }}
-                    />
-                    <Tooltip
-                      formatter={(value: number) => [value, "New Clients"]}
-                      labelFormatter={(label) => `Month: ${label}`}
-                    />
-                    <Bar dataKey="count" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                  </RechartsBarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-          {/* Sessions Per Month -> Sessions by Weekday */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BarChart className="h-5 w-5 text-purple-600" /> Sessions by
-                Weekday
-              </CardTitle>
-              <CardDescription>
-                Frequency of sessions on each weekday
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-40">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RechartsBarChart data={weekdaySessionsData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis
-                      dataKey="weekday"
-                      fontSize={12}
-                      tick={{ fontSize: 10 }}
-                    />
-                    <YAxis
-                      allowDecimals={false}
-                      fontSize={12}
-                      tick={{ fontSize: 10 }}
-                    />
-                    <Tooltip
-                      formatter={(value: number) => [value, "Sessions"]}
-                      labelFormatter={(label) => `Weekday: ${label}`}
-                    />
-                    <Bar dataKey="count" fill="#a21caf" radius={[4, 4, 0, 0]} />
-                  </RechartsBarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          ) : (
+            <UpgradeOverlay
+              feature="Client Growth Analytics"
+              currentTier={currentTier}
+              onUpgrade={handleUpgrade}
+              variant="blur"
+            />
+          )}
+
+          {/* Sessions by Weekday */}
+          {isAnalyticsFeatureEnabled('sessionsByWeekday') ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart className="h-5 w-5 text-purple-600" /> Sessions by Weekday
+                </CardTitle>
+                <CardDescription>
+                  Frequency of sessions on each weekday
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-40">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RechartsBarChart data={weekdaySessionsData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis
+                        dataKey="weekday"
+                        fontSize={12}
+                        tick={{ fontSize: 10 }}
+                      />
+                      <YAxis
+                        allowDecimals={false}
+                        fontSize={12}
+                        tick={{ fontSize: 10 }}
+                      />
+                      <Tooltip
+                        formatter={(value: number) => [value, "Sessions"]}
+                        labelFormatter={(label) => `Weekday: ${label}`}
+                      />
+                      <Bar dataKey="count" fill="#a21caf" radius={[4, 4, 0, 0]} />
+                    </RechartsBarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <UpgradeOverlay
+              feature="Session Analytics"
+              currentTier={currentTier}
+              onUpgrade={handleUpgrade}
+              variant="blur"
+            />
+          )}
+
           {/* Package Sales by Type */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BarChart className="h-5 w-5 text-pink-600" /> Package Sales by
-                Type
-              </CardTitle>
-              <CardDescription>Which packages are most popular</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-40">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RechartsPieChart>
-                    <Pie
-                      data={packageSessionsData}
-                      dataKey="sessions"
-                      nameKey="package_type"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={70}
-                      label
-                    >
-                      {packageSessionsData.map((entry, idx) => (
-                        <Cell
-                          key={`cell-${idx}`}
-                          fill={pieColors[idx % pieColors.length]}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(value: number) => [value, "Sessions"]}
-                    />
-                    <Legend
-                      layout="vertical"
-                      align="right"
-                      verticalAlign="middle"
-                    />
-                  </RechartsPieChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
+          {isAnalyticsFeatureEnabled('packageSalesByType') ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart className="h-5 w-5 text-pink-600" /> Package Sales by Type
+                </CardTitle>
+                <CardDescription>Which packages are most popular</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-40">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RechartsPieChart>
+                      <Pie
+                        data={packageSessionsData}
+                        dataKey="sessions"
+                        nameKey="package_type"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={70}
+                        label
+                      >
+                        {packageSessionsData.map((entry, idx) => (
+                          <Cell
+                            key={`cell-${idx}`}
+                            fill={pieColors[idx % pieColors.length]}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value: number) => [value, "Sessions"]}
+                      />
+                      <Legend
+                        layout="vertical"
+                        align="right"
+                        verticalAlign="middle"
+                      />
+                    </RechartsPieChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <UpgradeOverlay
+              feature="Package Analytics"
+              currentTier={currentTier}
+              onUpgrade={handleUpgrade}
+              variant="blur"
+            />
+          )}
+
           {/* Top Revenue Clients */}
-          <Card className="col-span-1 md:col-span-2 lg:col-span-1">
-            <CardHeader>
-              <CardTitle>Top Revenue Clients</CardTitle>
-              <CardDescription>Clients who have spent the most</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Client</TableHead>
-                    <TableHead>Total Spent</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {topRevenueClients.map((client) => (
-                    <TableRow key={client.client_id}>
-                      <TableCell>{client.name}</TableCell>
-                      <TableCell>
-                        $
-                        {client.total.toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
-                      </TableCell>
+          {isAnalyticsFeatureEnabled('topRevenueClients') ? (
+            <Card className="col-span-1 md:col-span-2 lg:col-span-1">
+              <CardHeader>
+                <CardTitle>Top Revenue Clients</CardTitle>
+                <CardDescription>Clients who have spent the most</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Client</TableHead>
+                      <TableHead>Total Spent</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-          {/* Top Session Types -> Top Session Times */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Top Session Times</CardTitle>
-              <CardDescription>
-                Most frequently booked session start times
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-40">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RechartsBarChart data={topSessionTimes}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis
-                      dataKey="time"
-                      fontSize={12}
-                      tick={{ fontSize: 10 }}
-                    />
-                    <YAxis
-                      allowDecimals={false}
-                      fontSize={12}
-                      tick={{ fontSize: 10 }}
-                    />
-                    <Tooltip
-                      formatter={(value: number) => [value, "Sessions"]}
-                      labelFormatter={(label) => `Time: ${label}`}
-                    />
-                    <Bar dataKey="count" fill="#f59e42" radius={[4, 4, 0, 0]} />
-                  </RechartsBarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {topRevenueClients.map((client) => (
+                      <TableRow key={client.client_id}>
+                        <TableCell>{client.name}</TableCell>
+                        <TableCell>
+                          $
+                          {client.total.toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          ) : (
+            <UpgradeOverlay
+              feature="Client Revenue Analytics"
+              currentTier={currentTier}
+              onUpgrade={handleUpgrade}
+              variant="blur"
+            />
+          )}
+
+          {/* Top Session Times */}
+          {isAnalyticsFeatureEnabled('topSessionTimes') ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Top Session Times</CardTitle>
+                <CardDescription>
+                  Most frequently booked session start times
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-40">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RechartsBarChart data={topSessionTimes}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis
+                        dataKey="time"
+                        fontSize={12}
+                        tick={{ fontSize: 10 }}
+                      />
+                      <YAxis
+                        allowDecimals={false}
+                        fontSize={12}
+                        tick={{ fontSize: 10 }}
+                      />
+                      <Tooltip
+                        formatter={(value: number) => [value, "Sessions"]}
+                        labelFormatter={(label) => `Time: ${label}`}
+                      />
+                      <Bar dataKey="count" fill="#f59e42" radius={[4, 4, 0, 0]} />
+                    </RechartsBarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <UpgradeOverlay
+              feature="Session Time Analytics"
+              currentTier={currentTier}
+              onUpgrade={handleUpgrade}
+              variant="blur"
+            />
+          )}
         </div>
+
         {/* Recent Payments & Sessions */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Recent Payments */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Payments</CardTitle>
-              <CardDescription>Latest payment activity</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Client</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Date</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(showAllPayments
-                    ? recentPayments
-                    : recentPayments.slice(0, 5)
-                  ).map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell>{p.client}</TableCell>
-                      <TableCell>
-                        $
-                        {p.amount.toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
-                      </TableCell>
-                      <TableCell>
-                        {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
-                      </TableCell>
-                      <TableCell>{p.date}</TableCell>
+          {isAnalyticsFeatureEnabled('recentPayments') ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Payments</CardTitle>
+                <CardDescription>Latest payment activity</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Client</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Date</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              {recentPayments.length > 5 && (
-                <div className="flex justify-center mt-2">
-                  <button
-                    className="text-blue-600 hover:underline text-sm font-medium"
-                    onClick={() => setShowAllPayments((v) => !v)}
+                  </TableHeader>
+                  <TableBody>
+                    {(showAllPayments
+                      ? recentPayments
+                      : recentPayments.slice(0, 5)
+                    ).map((p) => (
+                      <TableRow key={p.id}>
+                        <TableCell>{p.client}</TableCell>
+                        <TableCell>
+                          $
+                          {p.amount.toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </TableCell>
+                        <TableCell>
+                          {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
+                        </TableCell>
+                        <TableCell>{p.date}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                {recentPayments.length > 5 && (
+                  <div className="flex justify-center mt-2">
+                    <button
+                      className="text-blue-600 hover:underline text-sm font-medium"
+                      onClick={() => setShowAllPayments((v) => !v)}
+                    >
+                      {showAllPayments ? "Show Less" : "Show More"}
+                    </button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <UpgradeOverlay
+              feature="Payment History"
+              currentTier={currentTier}
+              onUpgrade={handleUpgrade}
+              variant="blur"
+            />
+          )}
+
+          {/* Recent Sessions */}
+          {isAnalyticsFeatureEnabled('recentSessions') ? (
+            <Card ref={recentSessionsRef}>
+              <CardHeader>
+                <CardTitle>Recent Sessions</CardTitle>
+                <CardDescription>Latest session activity</CardDescription>
+                {/* Client filter dropdown */}
+                <div className="mt-2">
+                  <select
+                    value={selectedClient || ""}
+                    onChange={e => {
+                      setSelectedClient(e.target.value || null);
+                      setCurrentSessionPage(1);
+                    }}
+                    className="border rounded px-2 py-1"
                   >
-                    {showAllPayments ? "Show Less" : "Show More"}
+                    <option value="">All Clients</option>
+                    {clientOptions.map(opt => (
+                      <option key={opt.id} value={opt.id}>{opt.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Client</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedSessions.map((s) => (
+                      <TableRow key={s.id}>
+                        <TableCell>{s.client}</TableCell>
+                        <TableCell>{s.type}</TableCell>
+                        <TableCell>{s.date}</TableCell>
+                        <TableCell>
+                          {s.status.charAt(0).toUpperCase() + s.status.slice(1)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                {/* Pagination controls */}
+                <div className="flex justify-between items-center mt-2">
+                  <button
+                    className="text-blue-600 hover:underline text-sm font-medium disabled:text-gray-400"
+                    onClick={() => setCurrentSessionPage((p) => Math.max(1, p - 1))}
+                    disabled={currentSessionPage === 1}
+                  >
+                    Previous
+                  </button>
+                  <span className="text-sm">
+                    Page {currentSessionPage} of {totalSessionPages || 1}
+                  </span>
+                  <button
+                    className="text-blue-600 hover:underline text-sm font-medium disabled:text-gray-400"
+                    onClick={() => setCurrentSessionPage((p) => Math.min(totalSessionPages, p + 1))}
+                    disabled={currentSessionPage === totalSessionPages || totalSessionPages === 0}
+                  >
+                    Next
                   </button>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-          {/* Recent Sessions */}
-          <Card ref={recentSessionsRef}>
+              </CardContent>
+            </Card>
+          ) : (
+            <UpgradeOverlay
+              feature="Session History"
+              currentTier={currentTier}
+              onUpgrade={handleUpgrade}
+              variant="blur"
+            />
+          )}
+        </div>
+
+        {/* Custom Analytics Dashboard - Only for highest tier */}
+        {isFeatureEnabled('customAnalyticsDashboard') && (
+          <Card>
             <CardHeader>
-              <CardTitle>Recent Sessions</CardTitle>
-              <CardDescription>Latest session activity</CardDescription>
-              {/* Client filter dropdown */}
-              <div className="mt-2">
-                <select
-                  value={selectedClient || ""}
-                  onChange={e => {
-                    setSelectedClient(e.target.value || null);
-                    setCurrentSessionPage(1);
-                  }}
-                  className="border rounded px-2 py-1"
-                >
-                  <option value="">All Clients</option>
-                  {clientOptions.map(opt => (
-                    <option key={opt.id} value={opt.id}>{opt.name}</option>
-                  ))}
-                </select>
-              </div>
+              <CardTitle className="flex items-center gap-2">
+                <BarChart className="h-5 w-5 text-indigo-600" /> Custom Analytics Dashboard
+              </CardTitle>
+              <CardDescription>
+                Request custom analytics and insights tailored to your business needs
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Client</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedSessions.map((s) => (
-                    <TableRow key={s.id}>
-                      <TableCell>{s.client}</TableCell>
-                      <TableCell>{s.type}</TableCell>
-                      <TableCell>{s.date}</TableCell>
-                      <TableCell>
-                        {s.status.charAt(0).toUpperCase() + s.status.slice(1)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              {/* Pagination controls */}
-              <div className="flex justify-between items-center mt-2">
-                <button
-                  className="text-blue-600 hover:underline text-sm font-medium disabled:text-gray-400"
-                  onClick={() => setCurrentSessionPage((p) => Math.max(1, p - 1))}
-                  disabled={currentSessionPage === 1}
-                >
-                  Previous
-                </button>
-                <span className="text-sm">
-                  Page {currentSessionPage} of {totalSessionPages || 1}
-                </span>
-                <button
-                  className="text-blue-600 hover:underline text-sm font-medium disabled:text-gray-400"
-                  onClick={() => setCurrentSessionPage((p) => Math.min(totalSessionPages, p + 1))}
-                  disabled={currentSessionPage === totalSessionPages || totalSessionPages === 0}
-                >
-                  Next
+              <div className="text-center py-8">
+                <p className="text-gray-600 mb-4">
+                  As an Enterprise customer, you can request custom analytics dashboards and reports.
+                </p>
+                <button className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">
+                  Request Custom Analytics
                 </button>
               </div>
             </CardContent>
           </Card>
-        </div>
+        )}
       </main>
     </div>
   );

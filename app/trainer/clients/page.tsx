@@ -59,6 +59,13 @@ import { createClient } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 import { startOfMonth } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import { 
+  getCurrentTier, 
+  getCurrentTierConfig, 
+  hasReachedClientLimit, 
+  getFeatureLimit 
+} from "@/lib/config/features";
+import { UpgradeOverlay } from "@/components/ui/upgrade-overlay";
 
 // Interface for real client data
 interface Client {
@@ -169,6 +176,21 @@ export default function TrainerClientsPage() {
   const [clientsWithNoUpcoming, setClientsWithNoUpcoming] = useState<number>(0);
   const [newClientsThisMonth, setNewClientsThisMonth] = useState<number>(0);
   const sessionsDataRef = useRef<any[]>([]);
+
+  // Feature flag state
+  const currentTier = getCurrentTier();
+  const tierConfig = getCurrentTierConfig();
+  const maxClients = getFeatureLimit('maxClients');
+  const hasReachedLimit = hasReachedClientLimit(clients.length);
+
+  const handleUpgrade = () => {
+    // This would typically redirect to a pricing/upgrade page
+    console.log("Upgrade requested for client limit");
+    toast({
+      title: "Upgrade Required",
+      description: "Please upgrade your plan to add more clients.",
+    });
+  };
 
   // Fetch package information for clients
   const fetchPackageInfo = async (clientIds: string[]) => {
@@ -478,46 +500,65 @@ export default function TrainerClientsPage() {
           <div className="flex items-center space-x-4">
             <SidebarTrigger />
             <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
+            <div className="flex items-center space-x-2 text-sm text-gray-500">
+              <span>Plan: {tierConfig.name}</span>
+              <span>•</span>
+              <span>
+                {clients.length}
+                {maxClients !== -1 ? ` / ${maxClients}` : ''} clients
+              </span>
+            </div>
           </div>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button className="bg-red-600 hover:bg-red-700">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Client
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add New Client</DialogTitle>
-                <DialogDescription>
-                  Add a new client to your training roster
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">First Name</label>
-                    <Input placeholder="John" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Last Name</label>
-                    <Input placeholder="Doe" />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Email</label>
-                  <Input type="email" placeholder="john@email.com" />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Phone</label>
-                  <Input placeholder="+1 (555) 123-4567" />
-                </div>
-                <Button className="w-full bg-red-600 hover:bg-red-700">
+          
+          {hasReachedLimit ? (
+            <UpgradeOverlay
+              feature="More Clients"
+              currentTier={currentTier}
+              onUpgrade={handleUpgrade}
+              variant="banner"
+              showPricing={false}
+            />
+          ) : (
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button className="bg-red-600 hover:bg-red-700">
+                  <Plus className="h-4 w-4 mr-2" />
                   Add Client
                 </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add New Client</DialogTitle>
+                  <DialogDescription>
+                    Add a new client to your training roster
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">First Name</label>
+                      <Input placeholder="John" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Last Name</label>
+                      <Input placeholder="Doe" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Email</label>
+                    <Input type="email" placeholder="john@email.com" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Phone</label>
+                    <Input placeholder="+1 (555) 123-4567" />
+                  </div>
+                  <Button className="w-full bg-red-600 hover:bg-red-700">
+                    Add Client
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </header>
 
