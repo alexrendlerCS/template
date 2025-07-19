@@ -113,6 +113,7 @@ export default function AnalyticsClientPage() {
   const [clientOptions, setClientOptions] = useState<{ id: string; name: string }[]>([]);
   const searchParams = useSearchParams();
   const recentSessionsRef = useRef<HTMLDivElement>(null);
+  const [sessionsPerClient, setSessionsPerClient] = useState<{ client: string; count: number }[]>([]);
 
   // Feature flag state
   const currentTier = getCurrentTier();
@@ -155,6 +156,57 @@ export default function AnalyticsClientPage() {
       }, 300);
     }
   }, [searchParams]);
+
+  // Fetch sessions per client (should run for both middle and highest tiers)
+  useEffect(() => {
+    if (currentTier === 'middle' || currentTier === 'highest') {
+      (async () => {
+        const { data: sessions, error } = await supabase
+          .from('sessions')
+          .select('client_id');
+        if (error || !sessions) {
+          setSessionsPerClient([]);
+          return;
+        }
+        // Count sessions per client_id
+        const counts: Record<string, number> = {};
+        sessions.forEach((s) => {
+          if (!s.client_id) return;
+          counts[s.client_id] = (counts[s.client_id] || 0) + 1;
+        });
+        // Fetch client names
+        const clientIds = Object.keys(counts);
+        let clientNames: Record<string, string> = {};
+        if (clientIds.length > 0) {
+          const { data: users, error: usersError } = await supabase
+            .from('users')
+            .select('id, full_name')
+            .in('id', clientIds);
+          if (!usersError && users) {
+            users.forEach((u) => {
+              if (!u.full_name) {
+                clientNames[u.id] = 'Unknown';
+              } else {
+                const parts = u.full_name.trim().split(' ');
+                const first = parts[0];
+                const lastInitial = parts.length > 1 ? parts[parts.length - 1][0] + '.' : '';
+                clientNames[u.id] = `${first} ${lastInitial}`.trim();
+              }
+            });
+          }
+        }
+        // Prepare sorted array (top 8 clients)
+        const sorted = Object.entries(counts)
+          .map(([client_id, count]) => ({
+            client: clientNames[client_id] || 'Unknown',
+            count,
+          }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 8);
+        setSessionsPerClient(sorted);
+      })();
+    }
+  }, [currentTier]);
 
   const handleUpgrade = () => {
     // This would typically redirect to a pricing/upgrade page
@@ -695,12 +747,12 @@ export default function AnalyticsClientPage() {
             </Card>
           ) : (
             <Card className="min-h-[180px] flex items-center justify-center">
-              <UpgradeOverlay
-                feature="Revenue Analytics"
-                currentTier={currentTier}
-                onUpgrade={handleUpgrade}
-                variant="blur"
-              />
+            <UpgradeOverlay
+              feature="Revenue Analytics"
+              currentTier={currentTier}
+              onUpgrade={handleUpgrade}
+              variant="blur"
+            />
             </Card>
           )}
 
@@ -779,12 +831,12 @@ export default function AnalyticsClientPage() {
             </Card>
           ) : (
             <Card className="min-h-[180px] flex items-center justify-center">
-              <UpgradeOverlay
-                feature="Client Growth Analytics"
-                currentTier={currentTier}
-                onUpgrade={handleUpgrade}
-                variant="blur"
-              />
+            <UpgradeOverlay
+              feature="Client Growth Analytics"
+              currentTier={currentTier}
+              onUpgrade={handleUpgrade}
+              variant="blur"
+            />
             </Card>
           )}
 
@@ -863,12 +915,12 @@ export default function AnalyticsClientPage() {
             </Card>
           ) : (
             <Card className="min-h-[180px] flex items-center justify-center">
-              <UpgradeOverlay
-                feature="Session Analytics"
-                currentTier={currentTier}
-                onUpgrade={handleUpgrade}
-                variant="blur"
-              />
+            <UpgradeOverlay
+              feature="Session Analytics"
+              currentTier={currentTier}
+              onUpgrade={handleUpgrade}
+              variant="blur"
+            />
             </Card>
           )}
 
@@ -876,44 +928,44 @@ export default function AnalyticsClientPage() {
           {isMiddleTier ? (
             <Card>
               <BlurredLockOverlay feature="Package Analytics" onUpgrade={handleUpgrade}>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <BarChart className="h-5 w-5 text-pink-600" /> Package Sales by Type
-                  </CardTitle>
-                  <CardDescription>Which packages are most popular</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-40">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <RechartsPieChart>
-                        <Pie
-                          data={packageSessionsData}
-                          dataKey="sessions"
-                          nameKey="package_type"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={70}
-                          label
-                        >
-                          {packageSessionsData.map((entry, idx) => (
-                            <Cell
-                              key={`cell-${idx}`}
-                              fill={pieColors[idx % pieColors.length]}
-                            />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          formatter={(value: number) => [value, "Sessions"]}
-                        />
-                        <Legend
-                          layout="vertical"
-                          align="right"
-                          verticalAlign="middle"
-                        />
-                      </RechartsPieChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart className="h-5 w-5 text-pink-600" /> Package Sales by Type
+                </CardTitle>
+                <CardDescription>Which packages are most popular</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-40">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RechartsPieChart>
+                      <Pie
+                        data={packageSessionsData}
+                        dataKey="sessions"
+                        nameKey="package_type"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={70}
+                        label
+                      >
+                        {packageSessionsData.map((entry, idx) => (
+                          <Cell
+                            key={`cell-${idx}`}
+                            fill={pieColors[idx % pieColors.length]}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value: number) => [value, "Sessions"]}
+                      />
+                      <Legend
+                        layout="vertical"
+                        align="right"
+                        verticalAlign="middle"
+                      />
+                    </RechartsPieChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
               </BlurredLockOverlay>
             </Card>
           ) : isAnalyticsFeatureEnabled('packageSalesByType') ? (
@@ -959,12 +1011,12 @@ export default function AnalyticsClientPage() {
             </Card>
           ) : (
             <Card className="min-h-[180px] flex items-center justify-center">
-              <UpgradeOverlay
+            <UpgradeOverlay
                 feature="Package Analytics"
-                currentTier={currentTier}
-                onUpgrade={handleUpgrade}
-                variant="blur"
-              />
+              currentTier={currentTier}
+              onUpgrade={handleUpgrade}
+              variant="blur"
+            />
             </Card>
           )}
 
@@ -1039,12 +1091,56 @@ export default function AnalyticsClientPage() {
             </Card>
           ) : (
             <Card className="min-h-[180px] flex items-center justify-center">
-              <UpgradeOverlay
-                feature="Session Time Analytics"
-                currentTier={currentTier}
-                onUpgrade={handleUpgrade}
-                variant="blur"
-              />
+            <UpgradeOverlay
+              feature="Session Time Analytics"
+              currentTier={currentTier}
+              onUpgrade={handleUpgrade}
+              variant="blur"
+            />
+            </Card>
+          )}
+          {/* Sessions per Client (Enterprise: normal, Professional: blurred/locked) */}
+          {isMiddleTier ? (
+            <Card>
+              <BlurredLockOverlay feature="Sessions per Client" onUpgrade={handleUpgrade}>
+                <CardHeader>
+                  <CardTitle>Sessions per Client</CardTitle>
+                  <CardDescription>Top clients by number of sessions</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-40">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RechartsBarChart data={sessionsPerClient} layout="vertical" margin={{ left: -10, right: 20, top: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" allowDecimals={false} fontSize={12} tick={{ fontSize: 10 }} />
+                        <YAxis dataKey="client" type="category" fontSize={12} tick={{ fontSize: 12 }} width={120} interval={0} />
+                        <Tooltip formatter={(value: number) => [value, 'Sessions']} />
+                        <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 4, 4]} />
+                      </RechartsBarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </BlurredLockOverlay>
+            </Card>
+          ) : currentTier === 'highest' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Sessions per Client</CardTitle>
+                <CardDescription>Top clients by number of sessions</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-40">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RechartsBarChart data={sessionsPerClient} layout="vertical" margin={{ left: -10, right: 20, top: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis type="number" allowDecimals={false} fontSize={12} tick={{ fontSize: 10 }} />
+                      <YAxis dataKey="client" type="category" fontSize={12} tick={{ fontSize: 12 }} width={120} interval={0} />
+                      <Tooltip formatter={(value: number) => [value, 'Sessions']} />
+                      <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 4, 4]} />
+                    </RechartsBarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
             </Card>
           )}
         </div>
@@ -1084,55 +1180,55 @@ export default function AnalyticsClientPage() {
                   </Table>
                 </CardContent>
               </Card>
-              <Card>
-                <CardHeader>
-                  <CardTitle>Recent Payments</CardTitle>
-                  <CardDescription>Latest payment activity</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Client</TableHead>
-                        <TableHead>Amount</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Date</TableHead>
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Payments</CardTitle>
+                <CardDescription>Latest payment activity</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Client</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(showAllPayments
+                      ? recentPayments
+                      : recentPayments.slice(0, 5)
+                    ).map((p) => (
+                      <TableRow key={p.id}>
+                        <TableCell>{p.client}</TableCell>
+                        <TableCell>
+                          $
+                          {p.amount.toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </TableCell>
+                        <TableCell>
+                          {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
+                        </TableCell>
+                        <TableCell>{p.date}</TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {(showAllPayments
-                        ? recentPayments
-                        : recentPayments.slice(0, 5)
-                      ).map((p) => (
-                        <TableRow key={p.id}>
-                          <TableCell>{p.client}</TableCell>
-                          <TableCell>
-                            $
-                            {p.amount.toLocaleString(undefined, {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                          </TableCell>
-                          <TableCell>
-                            {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
-                          </TableCell>
-                          <TableCell>{p.date}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                  {recentPayments.length > 5 && (
-                    <div className="flex justify-center mt-2">
-                      <button
-                        className="text-blue-600 hover:underline text-sm font-medium"
-                        onClick={() => setShowAllPayments((v) => !v)}
-                      >
-                        {showAllPayments ? "Show Less" : "Show More"}
-                      </button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                    ))}
+                  </TableBody>
+                </Table>
+                {recentPayments.length > 5 && (
+                  <div className="flex justify-center mt-2">
+                    <button
+                      className="text-blue-600 hover:underline text-sm font-medium"
+                      onClick={() => setShowAllPayments((v) => !v)}
+                    >
+                      {showAllPayments ? "Show Less" : "Show More"}
+                    </button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
               <Card ref={recentSessionsRef}>
                 <CardHeader>
                   <CardTitle>Recent Sessions</CardTitle>
@@ -1201,7 +1297,7 @@ export default function AnalyticsClientPage() {
               </Card>
             </>
           )}
-          {/* For highest tier: show all as before */}
+          {/* For highest tier: show all as before, plus Sessions per Client */}
           {!isMiddleTier && (
             <>
               {isAnalyticsFeatureEnabled('topRevenueClients') && (
@@ -1288,69 +1384,91 @@ export default function AnalyticsClientPage() {
                 </Card>
               )}
               {isAnalyticsFeatureEnabled('recentSessions') && (
-                <Card ref={recentSessionsRef}>
+            <Card ref={recentSessionsRef}>
+              <CardHeader>
+                <CardTitle>Recent Sessions</CardTitle>
+                <CardDescription>Latest session activity</CardDescription>
+                {/* Client filter dropdown */}
+                <div className="mt-2">
+                  <select
+                    value={selectedClient || ""}
+                    onChange={e => {
+                      setSelectedClient(e.target.value || null);
+                      setCurrentSessionPage(1);
+                    }}
+                    className="border rounded px-2 py-1"
+                  >
+                    <option value="">All Clients</option>
+                    {clientOptions.map(opt => (
+                      <option key={opt.id} value={opt.id}>{opt.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Client</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedSessions.map((s) => (
+                      <TableRow key={s.id}>
+                        <TableCell>{s.client}</TableCell>
+                        <TableCell>{s.type}</TableCell>
+                        <TableCell>{s.date}</TableCell>
+                        <TableCell>
+                          {s.status.charAt(0).toUpperCase() + s.status.slice(1)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                {/* Pagination controls */}
+                <div className="flex justify-between items-center mt-2">
+                  <button
+                    className="text-blue-600 hover:underline text-sm font-medium disabled:text-gray-400"
+                    onClick={() => setCurrentSessionPage((p) => Math.max(1, p - 1))}
+                    disabled={currentSessionPage === 1}
+                  >
+                    Previous
+                  </button>
+                  <span className="text-sm">
+                    Page {currentSessionPage} of {totalSessionPages || 1}
+                  </span>
+                  <button
+                    className="text-blue-600 hover:underline text-sm font-medium disabled:text-gray-400"
+                    onClick={() => setCurrentSessionPage((p) => Math.min(totalSessionPages, p + 1))}
+                    disabled={currentSessionPage === totalSessionPages || totalSessionPages === 0}
+                  >
+                    Next
+                  </button>
+                </div>
+              </CardContent>
+            </Card>
+              )}
+              {/* Sessions per Client (Enterprise only) */}
+              {currentTier === 'highest' && (
+                <Card>
                   <CardHeader>
-                    <CardTitle>Recent Sessions</CardTitle>
-                    <CardDescription>Latest session activity</CardDescription>
-                    {/* Client filter dropdown */}
-                    <div className="mt-2">
-                      <select
-                        value={selectedClient || ""}
-                        onChange={e => {
-                          setSelectedClient(e.target.value || null);
-                          setCurrentSessionPage(1);
-                        }}
-                        className="border rounded px-2 py-1"
-                      >
-                        <option value="">All Clients</option>
-                        {clientOptions.map(opt => (
-                          <option key={opt.id} value={opt.id}>{opt.name}</option>
-                        ))}
-                      </select>
-                    </div>
+                    <CardTitle>Sessions per Client</CardTitle>
+                    <CardDescription>Top clients by number of sessions</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Client</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Status</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {paginatedSessions.map((s) => (
-                          <TableRow key={s.id}>
-                            <TableCell>{s.client}</TableCell>
-                            <TableCell>{s.type}</TableCell>
-                            <TableCell>{s.date}</TableCell>
-                            <TableCell>
-                              {s.status.charAt(0).toUpperCase() + s.status.slice(1)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    {/* Pagination controls */}
-                    <div className="flex justify-between items-center mt-2">
-                      <button
-                        className="text-blue-600 hover:underline text-sm font-medium disabled:text-gray-400"
-                        onClick={() => setCurrentSessionPage((p) => Math.max(1, p - 1))}
-                        disabled={currentSessionPage === 1}
-                      >
-                        Previous
-                      </button>
-                      <span className="text-sm">
-                        Page {currentSessionPage} of {totalSessionPages || 1}
-                      </span>
-                      <button
-                        className="text-blue-600 hover:underline text-sm font-medium disabled:text-gray-400"
-                        onClick={() => setCurrentSessionPage((p) => Math.min(totalSessionPages, p + 1))}
-                        disabled={currentSessionPage === totalSessionPages || totalSessionPages === 0}
-                      >
-                        Next
-                      </button>
+                    <div className="h-40">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <RechartsBarChart data={sessionsPerClient} layout="vertical" margin={{ left: 0, right: 20, top: 0, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis type="number" allowDecimals={false} fontSize={12} tick={{ fontSize: 10 }} />
+                          <YAxis dataKey="client" type="category" fontSize={12} tick={{ fontSize: 12 }} width={120} interval={0} />
+                          <Tooltip formatter={(value: number) => [value, 'Sessions']} />
+                          <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 4, 4]} />
+                        </RechartsBarChart>
+                      </ResponsiveContainer>
                     </div>
                   </CardContent>
                 </Card>
