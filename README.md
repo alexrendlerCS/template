@@ -316,3 +316,74 @@ export const defaultBranding: BrandingConfig = {
 ---
 
 **Built with ❤️ for fitness professionals** 
+
+## 🔧 **Step 1: Configure Git Identity**
+
+### **Set your Git identity:**
+```bash
+git config --global user.name "Alex Rendler"
+git config --global user.email "your.email@example.com"
+```
+
+Replace `your.email@example.com` with your actual email address.
+
+### **Verify the configuration:**
+```bash
+git config --global user.name
+git config --global user.email
+```
+
+## 🔄 **Step 2: Commit the Changes**
+
+### **Now commit the changes:**
+```bash
+git commit -m "Clean up template repository"
+```
+
+## 🚀 **Step 3: Add Remote and Push**
+
+### **Add the remote:**
+```bash
+git remote add origin https://github.com/alexrendlerCS/template.git
+```
+
+### **Verify the remote:**
+```bash
+git remote -v
+```
+
+### **Push to GitHub:**
+```bash
+git push -u origin main
+```
+
+Use your personal access token when prompted.
+
+## 📋 **Step 4: Create GitHub Repository**
+
+**Before pushing, make sure you've created the repository on GitHub:**
+
+1. Go to [github.com](https://github.com) and sign in
+2. Click the **"+"** icon in the top right
+3. Select **"New repository"**
+4. Fill in:
+   - **Repository name**: `template`
+   - **Description**: `Fitness Training Platform - White Label Template`
+   - **Make it Public**
+   - **Don't** initialize with README, .gitignore, or license
+5. Click **"Create repository"**
+
+## ✅ **Step 5: Verify Everything**
+
+### **Check both repositories:**
+```bash
+# Check original project
+cd /mnt/c/Users/alexr/OneDrive/Desktop/Projects/personal-trainer
+git log --oneline -3
+
+# Check template project
+cd /mnt/c/Users/alexr/OneDrive/Desktop/Projects/template
+git log --oneline -3
+```
+
+Once you set up your Git identity, we should be able to commit and push the template repository successfully! 
