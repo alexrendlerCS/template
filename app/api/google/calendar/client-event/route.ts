@@ -1,11 +1,18 @@
 import { createClient } from "@/lib/supabase-server";
 import { getGoogleCalendarClient } from "@/lib/google";
 import { NextResponse } from "next/server";
+import { isGoogleCalendarEnabled } from "@/lib/config/features";
 
 export async function POST(request: Request) {
   try {
     console.log("Client calendar event creation request received");
     const supabase = createClient();
+
+    // Check if Google Calendar is enabled for current tier
+    if (!isGoogleCalendarEnabled()) {
+      console.log("Google Calendar feature is disabled for current tier");
+      return new NextResponse("Google Calendar feature not available in current tier", { status: 403 });
+    }
 
     // Use getUser() instead of getSession() for better security
     const {

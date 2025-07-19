@@ -45,6 +45,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { QRCodeCanvas } from "qrcode.react";
+import { isGoogleCalendarEnabled, getCurrentTier } from "@/lib/config/features";
 
 const mockClients = [
   {
@@ -145,6 +146,39 @@ function GoogleCalendarSection({
   isConnected: boolean;
   onConnect: () => void;
 }) {
+  // Check if Google Calendar is enabled for current tier
+  const googleCalendarEnabled = isGoogleCalendarEnabled();
+  const currentTier = getCurrentTier();
+
+  const handleUpgrade = () => {
+    // This would typically redirect to a pricing/upgrade page
+    console.log("Upgrade requested for Google Calendar");
+    toast({
+      title: "Upgrade Required",
+      description: "Please upgrade your plan to access Google Calendar integration.",
+    });
+  };
+
+  // If Google Calendar is not enabled, show upgrade prompt
+  if (!googleCalendarEnabled) {
+    return (
+      <div className="flex items-center space-x-2">
+        <Calendar className="h-4 w-4 text-gray-400" />
+        <span className="text-sm text-gray-500">
+          Google Calendar (Upgrade Required)
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          className="ml-2"
+          onClick={handleUpgrade}
+        >
+          Upgrade
+        </Button>
+      </div>
+    );
+  }
+
   if (isConnected) {
     return (
       <div className="flex items-center space-x-2">
@@ -281,11 +315,11 @@ export default function TrainerDashboard() {
         if (!contractAccepted) {
           console.log("Showing contract modal - contract not accepted");
           setShowContractModal(true);
-        } else if (!googleConnected) {
-          console.log("Showing Google popup - Google not connected");
+        } else if (!googleConnected && googleCalendarEnabled) {
+          console.log("Showing Google popup - Google not connected and feature enabled");
           setShowGooglePopup(true);
         } else {
-          console.log("Both contract accepted and Google connected");
+          console.log("Both contract accepted and Google connected or feature disabled");
         }
       }
     } catch (error) {

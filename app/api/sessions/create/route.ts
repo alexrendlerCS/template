@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { getGoogleCalendarClient } from "@/lib/google";
+import { isGoogleCalendarEnabled } from "@/lib/config/features";
 
 export async function POST(req: Request) {
   try {
@@ -18,6 +19,9 @@ export async function POST(req: Request) {
       return new Response("Missing required fields", { status: 400 });
     }
 
+    // Check if Google Calendar is enabled for current tier
+    const googleCalendarEnabled = isGoogleCalendarEnabled();
+
     // Fetch trainer's Google tokens and email
     const { data: trainer, error: trainerError } = await supabaseAdmin
       .from("users")
@@ -31,7 +35,9 @@ export async function POST(req: Request) {
         status: 400,
       });
     }
-    if (!trainer.google_access_token || !trainer.google_refresh_token) {
+
+    // Only check Google Calendar connection if feature is enabled
+    if (googleCalendarEnabled && (!trainer.google_access_token || !trainer.google_refresh_token)) {
       return new Response("Trainer has not connected Google Calendar", {
         status: 400,
       });
@@ -58,63 +64,70 @@ export async function POST(req: Request) {
       startDateTime.getTime() + duration_minutes * 60000
     );
 
-    // Set up Google Calendar client for trainer
-    const calendar = await getGoogleCalendarClient(
-      trainer.google_refresh_token
-    );
-
-    // Create Google Calendar event for trainer
-    const event = await calendar.events.insert({
-      calendarId: trainer.google_calendar_id || "primary",
-      requestBody: {
-        summary: `${type} with Client`,
-        description: "Auto-synced from Fitness Platform",
-        start: {
-          dateTime: startDateTime.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        },
-        end: {
-          dateTime: endDateTime.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        },
-        attendees: clientEmail ? [{ email: clientEmail }] : [],
-      },
-    });
-
-    if (!event.data.id) {
-      return new Response("Failed to create Google Calendar event", {
-        status: 500,
-      });
-    }
-
-    // Try to create client Google Calendar event
+    let eventDataId = null;
     let clientGoogleEventId = null;
-    if (clientGoogleRefreshToken && clientGoogleCalendarId) {
-      try {
-        const clientCalendar = await getGoogleCalendarClient(
-          clientGoogleRefreshToken
-        );
-        const clientEvent = await clientCalendar.events.insert({
-          calendarId: clientGoogleCalendarId,
-          requestBody: {
-            summary: `${type} with Trainer`,
-            description: "Auto-synced from Fitness Platform",
-            start: {
-              dateTime: startDateTime.toISOString(),
-              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            },
-            end: {
-              dateTime: endDateTime.toISOString(),
-              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            },
-            attendees: trainer.email ? [{ email: trainer.email }] : [],
+
+    // Only create Google Calendar events if feature is enabled
+    if (googleCalendarEnabled) {
+      // Set up Google Calendar client for trainer
+      const calendar = await getGoogleCalendarClient(
+        trainer.google_refresh_token
+      );
+
+      // Create Google Calendar event for trainer
+      const event = await calendar.events.insert({
+        calendarId: trainer.google_calendar_id || "primary",
+        requestBody: {
+          summary: `${type} with Client`,
+          description: "Auto-synced from Fitness Platform",
+          start: {
+            dateTime: startDateTime.toISOString(),
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           },
+          end: {
+            dateTime: endDateTime.toISOString(),
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          },
+          attendees: clientEmail ? [{ email: clientEmail }] : [],
+        },
+      });
+
+      if (!event.data.id) {
+        return new Response("Failed to create Google Calendar event", {
+          status: 500,
         });
-        if (clientEvent.data.id) {
-          clientGoogleEventId = clientEvent.data.id;
+      }
+
+      eventDataId = event.data.id;
+
+      // Try to create client Google Calendar event
+      if (clientGoogleRefreshToken && clientGoogleCalendarId) {
+        try {
+          const clientCalendar = await getGoogleCalendarClient(
+            clientGoogleRefreshToken
+          );
+          const clientEvent = await clientCalendar.events.insert({
+            calendarId: clientGoogleCalendarId,
+            requestBody: {
+              summary: `${type} with Trainer`,
+              description: "Auto-synced from Fitness Platform",
+              start: {
+                dateTime: startDateTime.toISOString(),
+                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+              },
+              end: {
+                dateTime: endDateTime.toISOString(),
+                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+              },
+              attendees: trainer.email ? [{ email: trainer.email }] : [],
+            },
+          });
+          if (clientEvent.data.id) {
+            clientGoogleEventId = clientEvent.data.id;
+          }
+        } catch (err) {
+          console.error("Failed to create client Google Calendar event:", err);
         }
-      } catch (err) {
-        console.error("Failed to create client Google Calendar event:", err);
       }
     }
 
@@ -128,7 +141,7 @@ export async function POST(req: Request) {
         duration_minutes,
         type,
         status: "scheduled",
-        google_event_id: event.data.id,
+        google_event_id: eventDataId,
         client_google_event_id: clientGoogleEventId,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -137,31 +150,34 @@ export async function POST(req: Request) {
       return new Response("Failed to create session in DB", { status: 500 });
     }
 
-    // Sync all sessions to ensure everything is properly synchronized
-    // This handles any edge cases and ensures old sessions are also synced
-    try {
-      console.log("Syncing all sessions after booking new session");
-      const syncResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/google/calendar/sync-all-sessions?trainerId=${trainer_id}&clientId=${client_id}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      if (syncResponse.ok) {
-        const syncResult = await syncResponse.json();
-        console.log("Sync all sessions completed:", syncResult);
-      } else {
-        console.warn(
-          "Sync all sessions failed, but session was created successfully"
+    // Only sync Google Calendar if feature is enabled
+    if (googleCalendarEnabled) {
+      // Sync all sessions to ensure everything is properly synchronized
+      // This handles any edge cases and ensures old sessions are also synced
+      try {
+        console.log("Syncing all sessions after booking new session");
+        const syncResponse = await fetch(
+          `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/google/calendar/sync-all-sessions?trainerId=${trainer_id}&clientId=${client_id}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }
         );
+
+        if (syncResponse.ok) {
+          const syncResult = await syncResponse.json();
+          console.log("Sync all sessions completed:", syncResult);
+        } else {
+          console.warn(
+            "Sync all sessions failed, but session was created successfully"
+          );
+        }
+      } catch (syncError) {
+        console.error("Error during sync all sessions:", syncError);
+        // Don't fail the session creation if sync fails
       }
-    } catch (syncError) {
-      console.error("Error during sync all sessions:", syncError);
-      // Don't fail the session creation if sync fails
     }
 
     return new Response("Session and calendar event created", { status: 200 });

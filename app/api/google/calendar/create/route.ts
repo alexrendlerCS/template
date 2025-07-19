@@ -1,16 +1,26 @@
 import { createClient } from "@/lib/supabase-server";
 import { getGoogleCalendarClient } from "@/lib/google";
 import { NextResponse } from "next/server";
+import { isGoogleCalendarEnabled } from "@/lib/config/features";
 
 export async function POST(request: Request) {
   try {
-    console.log("📅 Calendar creation request received");
+    console.log("Calendar event creation request received");
     const supabase = createClient();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
 
-    if (!session) {
+    // Check if Google Calendar is enabled for current tier
+    if (!isGoogleCalendarEnabled()) {
+      console.log("Google Calendar feature is disabled for current tier");
+      return new NextResponse("Google Calendar feature not available in current tier", { status: 403 });
+    }
+
+    // Use getUser() instead of getSession() for better security
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (!user) {
       console.log("❌ No session found");
       return new NextResponse("Unauthorized", { status: 401 });
     }
@@ -19,7 +29,7 @@ export async function POST(request: Request) {
     const { data: userData, error: userError } = await supabase
       .from("users")
       .select("google_refresh_token, google_access_token, full_name, role")
-      .eq("id", session.user.id)
+      .eq("id", user.id)
       .single();
 
     if (userError) {
@@ -71,7 +81,7 @@ export async function POST(request: Request) {
           google_calendar_id: newCalendar.data.id,
           google_account_connected: true,
         })
-        .eq("id", session.user.id);
+        .eq("id", user.id);
 
       if (updateError) {
         console.error(

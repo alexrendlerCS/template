@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
+import { isGoogleCalendarEnabled, getCurrentTier } from "@/lib/config/features";
+import { UpgradeOverlay } from "@/components/ui/upgrade-overlay";
 
 // Generate a random string for OAuth state
 function generateRandomString(length: number = 32): string {
@@ -41,6 +43,45 @@ export default function GoogleCalendarPopup({
   const { toast } = useToast();
   const searchParams = useSearchParams();
   const [isConnecting, setIsConnecting] = useState(false);
+
+  // Check if Google Calendar is enabled for current tier
+  const googleCalendarEnabled = isGoogleCalendarEnabled();
+  const currentTier = getCurrentTier();
+
+  const handleUpgrade = () => {
+    // This would typically redirect to a pricing/upgrade page
+    console.log("Upgrade requested for Google Calendar");
+    toast({
+      title: "Upgrade Required",
+      description: "Please upgrade your plan to access Google Calendar integration.",
+    });
+    onOpenChange(false);
+  };
+
+  // If Google Calendar is not enabled, show upgrade overlay
+  if (!googleCalendarEnabled) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Google Calendar Integration</DialogTitle>
+            <DialogDescription>
+              This feature is not available in your current plan.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <UpgradeOverlay
+              feature="Google Calendar Integration"
+              currentTier={currentTier}
+              onUpgrade={handleUpgrade}
+              variant="overlay"
+              showPricing={true}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   // Handle URL parameters in effect
   useEffect(() => {

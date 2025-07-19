@@ -21,6 +21,9 @@ export interface FeatureLimits {
     customAnalytics: boolean;
   };
   
+  // Google Calendar Integration
+  googleCalendarEnabled: boolean;
+  
   // Additional Features
   customAnalyticsDashboard: boolean;
   advancedReporting: boolean;
@@ -56,6 +59,7 @@ export const tierConfigs: Record<SubscriptionTier, TierConfig> = {
         recentSessions: false,
         customAnalytics: false,
       },
+      googleCalendarEnabled: false,
       customAnalyticsDashboard: false,
       advancedReporting: false,
       bulkOperations: false,
@@ -82,6 +86,7 @@ export const tierConfigs: Record<SubscriptionTier, TierConfig> = {
         recentSessions: true,
         customAnalytics: false,
       },
+      googleCalendarEnabled: true,
       customAnalyticsDashboard: false,
       advancedReporting: false,
       bulkOperations: true,
@@ -108,6 +113,7 @@ export const tierConfigs: Record<SubscriptionTier, TierConfig> = {
         recentSessions: true,
         customAnalytics: true,
       },
+      googleCalendarEnabled: true,
       customAnalyticsDashboard: true,
       advancedReporting: true,
       bulkOperations: true,
@@ -147,6 +153,11 @@ export function getFeatureLimit(feature: keyof FeatureLimits): number {
 export function isAnalyticsFeatureEnabled(feature: keyof TierConfig['features']['analyticsFeatures']): boolean {
   const config = getCurrentTierConfig();
   return config.features.analyticsEnabled && config.features.analyticsFeatures[feature];
+}
+
+// Function to check if Google Calendar is enabled
+export function isGoogleCalendarEnabled(): boolean {
+  return isFeatureEnabled('googleCalendarEnabled');
 }
 
 // Function to check if user has reached client limit

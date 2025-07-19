@@ -351,3 +351,121 @@ This template is licensed under the MIT License. See [LICENSE](./LICENSE) for de
 ---
 
 **Built with ❤️ for fitness professionals** 
+
+## Feature Flags and Tier System
+
+The template includes a comprehensive tiered subscription system with feature flags that control access to different functionality based on the user's subscription tier.
+
+### Subscription Tiers
+
+The system supports three subscription tiers:
+
+1. **Lowest Tier** (`lowest`): Basic features only
+2. **Middle Tier** (`middle`): Enhanced features including Google Calendar
+3. **Highest Tier** (`highest`): Full feature access including custom analytics
+
+### Feature Configuration
+
+Features are configured in `lib/config/features.ts`:
+
+```typescript
+// Example feature limits per tier
+const tierConfigs = {
+  lowest: {
+    maxClients: 5,
+    maxPackagesPerSessionType: 2,
+    analyticsEnabled: false,
+    googleCalendarEnabled: false,
+    // ... other features
+  },
+  middle: {
+    maxClients: 25,
+    maxPackagesPerSessionType: 5,
+    analyticsEnabled: true,
+    googleCalendarEnabled: true,
+    // ... other features
+  },
+  highest: {
+    maxClients: 100,
+    maxPackagesPerSessionType: 10,
+    analyticsEnabled: true,
+    googleCalendarEnabled: true,
+    // ... other features
+  }
+};
+```
+
+### Google Calendar Integration
+
+Google Calendar integration is a tiered feature that's only available to **middle** and **highest** tier users:
+
+- **Lowest tier**: No Google Calendar access
+- **Middle tier**: Full Google Calendar integration
+- **Highest tier**: Full Google Calendar integration
+
+#### Google Calendar Feature Gating
+
+The following functionality is properly gated by tier:
+
+1. **Login Flow**: Google Calendar connection prompts only appear for eligible tiers
+2. **Session Creation**: Google Calendar events are only created for eligible tiers
+3. **Session Updates**: Google Calendar sync only occurs for eligible tiers
+4. **API Endpoints**: All Google Calendar APIs check tier access before processing
+5. **UI Components**: Google Calendar components show upgrade prompts for ineligible tiers
+
+#### Implementation Details
+
+- **Frontend**: Components check `isGoogleCalendarEnabled()` before showing Google Calendar features
+- **Backend**: All Google Calendar API endpoints validate tier access using `isGoogleCalendarEnabled()`
+- **Database**: Sessions are created without Google Calendar events for ineligible tiers
+- **User Experience**: Clear upgrade prompts guide users to higher tiers for Google Calendar access
+
+### Analytics Features
+
+Analytics features are tiered with different levels of access:
+
+- **Lowest tier**: No analytics access (shows upgrade overlay)
+- **Middle tier**: Basic analytics with upgrade prompts for advanced features
+- **Highest tier**: Full analytics including custom dashboard
+
+### Client and Package Limits
+
+Each tier has specific limits on:
+
+- **Maximum clients**: 5 (lowest) → 25 (middle) → 100 (highest)
+- **Maximum packages per session type**: 2 (lowest) → 5 (middle) → 10 (highest)
+
+### Setting the Current Tier
+
+The current tier is controlled by the `SUBSCRIPTION_TIER` environment variable:
+
+```bash
+# .env.local
+SUBSCRIPTION_TIER=lowest  # or 'middle' or 'highest'
+```
+
+### Feature Flag Functions
+
+Use these helper functions to check feature access:
+
+```typescript
+import { 
+  isFeatureEnabled, 
+  isAnalyticsFeatureEnabled, 
+  isGoogleCalendarEnabled,
+  getCurrentTier,
+  getCurrentTierConfig 
+} from '@/lib/config/features';
+
+// Check if a specific feature is enabled
+const analyticsEnabled = isFeatureEnabled('analyticsEnabled');
+
+// Check if Google Calendar is enabled
+const calendarEnabled = isGoogleCalendarEnabled();
+
+// Get current tier
+const currentTier = getCurrentTier();
+
+// Get full tier configuration
+const tierConfig = getCurrentTierConfig();
+``` 

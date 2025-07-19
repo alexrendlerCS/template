@@ -7,6 +7,8 @@ import { Calendar, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/use-toast";
 import GoogleCalendarSuccessDialog from "./GoogleCalendarSuccessDialog";
+import { isGoogleCalendarEnabled, getCurrentTier } from "@/lib/config/features";
+import { UpgradeOverlay } from "@/components/ui/upgrade-overlay";
 
 interface GoogleCalendarBannerProps {
   onDismiss?: () => void;
@@ -17,6 +19,32 @@ export function GoogleCalendarBanner({ onDismiss }: GoogleCalendarBannerProps) {
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
+
+  // Check if Google Calendar is enabled for current tier
+  const googleCalendarEnabled = isGoogleCalendarEnabled();
+  const currentTier = getCurrentTier();
+
+  const handleUpgrade = () => {
+    // This would typically redirect to a pricing/upgrade page
+    console.log("Upgrade requested for Google Calendar");
+    toast({
+      title: "Upgrade Required",
+      description: "Please upgrade your plan to access Google Calendar integration.",
+    });
+  };
+
+  // If Google Calendar is not enabled, show upgrade overlay
+  if (!googleCalendarEnabled) {
+    return (
+      <UpgradeOverlay
+        feature="Google Calendar Integration"
+        currentTier={currentTier}
+        onUpgrade={handleUpgrade}
+        variant="banner"
+        showPricing={false}
+      />
+    );
+  }
 
   // Check localStorage for connection success flag
   useEffect(() => {

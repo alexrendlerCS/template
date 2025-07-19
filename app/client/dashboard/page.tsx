@@ -216,7 +216,63 @@ function GoogleCalendarSection({
   isConnected: boolean;
   onConnect: () => void;
 }) {
+  // Check if Google Calendar is enabled for current tier
+  const googleCalendarEnabled = isGoogleCalendarEnabled();
+  const currentTier = getCurrentTier();
+
+  const handleUpgrade = () => {
+    // This would typically redirect to a pricing/upgrade page
+    console.log("Upgrade requested for Google Calendar");
+    toast({
+      title: "Upgrade Required",
+      description: "Please upgrade your plan to access Google Calendar integration.",
+    });
+  };
+
   if (isConnected) return null;
+
+  // If Google Calendar is not enabled, show upgrade prompt
+  if (!googleCalendarEnabled) {
+    return (
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Calendar className="h-5 w-5 text-gray-400" />
+            <span>Google Calendar (Upgrade Required)</span>
+          </CardTitle>
+          <CardDescription>
+            This feature is not available in your current plan
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+            <div className="flex-shrink-0">
+              <Image
+                src="/placeholder-logo.svg"
+                alt="Google Calendar"
+                width={48}
+                height={48}
+                className="rounded opacity-50"
+              />
+            </div>
+            <div className="flex-grow">
+              <h4 className="font-medium mb-1 text-gray-500">Never Miss a Session</h4>
+              <p className="text-sm text-gray-500">
+                Upgrade your plan to connect your Google Calendar and automatically sync your training sessions
+              </p>
+            </div>
+          </div>
+          <Button
+            onClick={handleUpgrade}
+            className="w-full bg-gray-600 hover:bg-gray-700 text-white"
+          >
+            <Calendar className="h-4 w-4 mr-2" />
+            Upgrade to Connect Calendar
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="mt-6">
@@ -449,15 +505,15 @@ export default function ClientDashboard() {
           setShowContractModal(true);
           setShowCalendarPopup(false);
           setShowSuccessDialog(false);
-        } else if (!googleConnected) {
+        } else if (!googleConnected && googleCalendarEnabled) {
           console.log(
-            "Contract accepted but Google not connected, showing calendar popup"
+            "Contract accepted but Google not connected and feature enabled, showing calendar popup"
           );
           setShowContractModal(false);
           setShowCalendarPopup(true);
           setShowSuccessDialog(false);
         } else {
-          console.log("Both contract accepted and Google connected");
+          console.log("Both contract accepted and Google connected or feature disabled");
           setShowContractModal(false);
           setShowCalendarPopup(false);
         }

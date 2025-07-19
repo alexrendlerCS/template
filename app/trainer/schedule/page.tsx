@@ -49,6 +49,7 @@ import {
 } from "@dnd-kit/core";
 import { useToast } from "@/components/ui/use-toast";
 import { DatePicker } from "@/components/DatePicker";
+import { isGoogleCalendarEnabled } from "@/lib/config/features";
 
 interface DatabaseSession {
   id: string;
@@ -1564,17 +1565,25 @@ export default function TrainerSchedulePage() {
 
       // Sync Google Calendar events
       try {
-        await syncGoogleCalendarEvents(
-          editingSession,
-          editSessionData.date,
-          editSessionData.startTime,
-          editSessionData.endTime
-        );
-        setFeedbackDialog({
-          open: true,
-          title: "Session Updated",
-          message: `Session updated successfully. Google Calendar events have been synchronized.`,
-        });
+        if (isGoogleCalendarEnabled()) {
+          await syncGoogleCalendarEvents(
+            editingSession,
+            editSessionData.date,
+            editSessionData.startTime,
+            editSessionData.endTime
+          );
+          setFeedbackDialog({
+            open: true,
+            title: "Session Updated",
+            message: `Session updated successfully. Google Calendar events have been synchronized.`,
+          });
+        } else {
+          setFeedbackDialog({
+            open: true,
+            title: "Session Updated",
+            message: `Session updated successfully.`,
+          });
+        }
       } catch (syncError) {
         console.error("[Calendar Sync Error]:", syncError);
         setFeedbackDialog({
@@ -2796,6 +2805,12 @@ async function syncGoogleCalendarEvents(
   newStartTime: string,
   newEndTime: string
 ) {
+  // Check if Google Calendar is enabled for current tier
+  if (!isGoogleCalendarEnabled()) {
+    console.log("[Calendar Sync] Google Calendar feature is disabled for current tier");
+    return;
+  }
+
   console.log("[Calendar Sync] Starting sync for session:", session.id);
 
   // Get client and trainer details
