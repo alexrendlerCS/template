@@ -128,7 +128,7 @@ const menuItems = [
     title: "Messages",
     url: "/trainer/messages",
     icon: MessageSquare,
-    badge: "(Coming Soon)",
+    badge: "(Additional Feature)",
   },
 ];
 

@@ -83,7 +83,7 @@ const menuItems = [
     title: "Messages",
     url: "/client/messages",
     icon: MessageSquare,
-    badge: "(Coming Soon)",
+    badge: "(Additional Feature)",
   },
 ];
 

@@ -33,6 +33,7 @@ import GoogleCalendarPopup from "@/components/GoogleCalendarPopup";
 import GoogleCalendarSuccessDialog from "@/components/GoogleCalendarSuccessDialog";
 import { GoogleCalendarBanner } from "@/components/GoogleCalendarBanner";
 import { toast } from "@/components/ui/use-toast";
+import { isGoogleCalendarEnabled, getCurrentTier } from '@/lib/config/features';
 
 // Interface for the final processed session
 interface Session {

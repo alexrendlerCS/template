@@ -105,14 +105,10 @@ const mockConversation = [
 
 export default function TrainerMessagesPage() {
   return (
-    <div className="flex-1 flex items-center justify-center">
-      <div className="text-center">
-        <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-        <h1 className="text-2xl font-bold mb-2">Messages Coming Soon</h1>
-        <p className="text-gray-600">
-          The trainer messaging feature is under development. Stay tuned!
-        </p>
-      </div>
+    <div className="flex flex-col items-center justify-center h-full py-24">
+      <h1 className="text-2xl font-bold mb-4">Messaging Add-On</h1>
+      <p className="text-lg text-gray-700 mb-2 text-center">Secure in-app messaging is available as an optional add-on feature for trainers and clients.</p>
+      <p className="text-md text-gray-500 text-center">Contact support to enable messaging for your business. Additional costs apply.</p>
     </div>
   );
 }
