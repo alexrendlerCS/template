@@ -1,0 +1,134 @@
+[33mea5e68f[m[33m ([m[1;36mHEAD -> [m[1;32mmain[m[33m)[m Step-By-Step
+[33m95a6e1d[m Google Calendar Tier Based
+[33ma4042e3[m Initial Commit
+[33m94db50a[m Build Fix
+[33m7a9c323[m Filter Fix
+[33md3a5602[m Redirect Fix
+[33mb93859c[m Added Past Sessions View
+[33m226458e[m Added 1x/Week Packages
+[33m331e1f9[m build fix
+[33m8942337[m Schedule Update
+[33m9680f44[m Updated Database Documentation
+[33m6fd420b[m Delete Client Function
+[33mc3e8ba1[m Client Dashboard Front End Improvements
+[33md89cdb3[m Forgot Password Functionality
+[33md4d5ff3[m Visual Enhancements to client dash
+[33mfd95b97[m Added more timezone clairty
+[33me92969b[m Timezone Booking Conversion Fix
+[33m59de5ad[m Removed checkout field
+[33m3917554[m Build Fix
+[33m561547b[m Build Fix / Sync
+[33m376128d[m Client Booking Fix
+[33m7f23d1d[m Build Fix
+[33m703b2d2[m Discount Code Delete Feature
+[33me1c1153[m Calendar Change
+[33m5f966e2[m Build type fixes
+[33m4b6d804[m Reschedule Functionality Added
+[33m64fb2a4[m Better error handling/schedule page restyle.
+[33m740d63c[m Build fix
+[33m150e824[m Added Custom Payments
+[33m9d4681e[m Build Type Fixes
+[33m4d989b3[m New Features Added
+[33mdb2ec10[m Fixed Redirect
+[33m45bbd0d[m Redirect fix
+[33m2807d11[m Email Confirm Fix
+[33ma42629a[m Update ContractModal.tsx
+[33m66f352e[m Update ContractModal.tsx
+[33me51fb61[m Enhanced Logs
+[33m69c906c[m Booking fix
+[33m3f29405[m Updated Schedule Fix
+[33m8f1824b[m New Trainer Schedule
+[33m9870f92[m Fixed Sidebar
+[33m697c0ee[m Mobile Responsiveness
+[33mb1a1778[m TypeScript Errors
+[33m81ae3b4[m Add Free Sessions Option
+[33mfa70d3c[m Single Session Purchase Option
+[33m1fb1fd2[m Trainer Contract View
+[33mcdb0a6b[m View/Download Contract File
+[33m88895ac[m Added Post-Tax Revenue
+[33m91df03f[m Added trainer session booking
+[33m110fd1f[m Referral Page + Build Error Fix
+[33mea825fd[m Trainer Settings
+[33m3814e9f[m Trainer Analytics
+[33m04e3449[m Trainer Payment Page
+[33m35c004b[m Deploy build fix
+[33mf0759ce[m Enhance client management and login validation
+[33m4ca2051[m Update page.tsx
+[33md67f2f8[m Dynamic Trainer Calendar
+[33m2fb7606[m Trainer Front End
+[33m780f7be[m Trainer Front End
+[33m738e9ca[m Final Session Track Fix
+[33mc6a77f6[m Old Webhook Revert
+[33m68e3d94[m Original price error fix
+[33ma8b00a4[m Updated session log
+[33m0610617[m Type Error
+[33me160287[m Completed Client Front End
+[33m80f5af1[m Sign Out Fix
+[33m2e66157[m Loop Fix
+[33mf575a0d[m Build fix
+[33m660bce2[m Role Based redirects
+[33m73dcecd[m Updated Scopes
+[33mc40fdfc[m Added scope
+[33m8d62a73[m Added trainer google account pop up
+[33m05eee79[m Callback route update
+[33m22fbfbc[m Remove old route
+[33mf2bd9aa[m UI fixes
+[33m73af092[m Deployment Fixes
+[33m9b39f2a[m OAuth Cookies Fix
+[33mfad11a3[m BugFix
+[33maba9a4f[m Redesign homepage and update root route handling
+[33m7fcb13d[m Updated new tab redirect
+[33m97d4900[m Revert
+[33m92fe055[m Update GoogleCalendarBanner.tsx
+[33mf15ada3[m Google Calendar Redirect Fix
+[33mf5b6b47[m Readded Footer
+[33m7a753a3[m Add prorated package support for Stripe purchases
+[33m81ff04b[m Live Stripe Implementation
+[33m0d15ece[m Bug Fixes
+[33mf705a90[m Deployment Fixes
+[33m9224856[m Version Checks
+[33mad839b0[m Deploy fix
+[33m8591d38[m Build fixes
+[33mb69da2f[m Count up animation added
+[33m173f438[m Correct sessions tracked per payment
+[33m4a3e86f[m Working Payment Tracking
+[33m041783d[m Session Type Tracking
+[33m8fd4dcf[m Successful Payment-Backend Link
+[33m893ce6c[m Stripe Test Integration
+[33mc7bfffe[m Trainer Login Fixed
+[33md88393a[m Improved UI
+[33m9cd6caa[m Updated session tracking
+[33m0206021[m Deployment lint fix
+[33mde5acd7[m Session Email Confirmation
+[33m8c74e17[m Updated Calendar UI
+[33mfe4e11c[m Updated Dashboard
+[33m3227425[m Contract Signing Flow
+[33m9726526[m Real Privacy Policy Added
+[33m03a8a0f[m Build Fixes
+[33m851f78f[m Lockfile error
+[33mfd2be0a[m Session Booking Flow
+[33m2af6b20[m Added client sidebar
+[33m19ff240[m Updated Calendar Implementation
+[33me3e329d[m Duplicate Google Calendar Pop Up
+[33m9eaa309[m Updated TOS and Privacy Policy
+[33m2c6b641[m Cookies Compliance Update
+[33m1fb1865[m Update Supabase Cookie Calls
+[33mf108459[m lock file match package
+[33m8f9e9d1[m Back End Integration
+[33me3d3b79[m Cache Fixed
+[33m8345a00[m Cache Error
+[33m5344c79[m Create tsconfig.tsbuildinfo
+[33m52b542c[m Google Calendar Implementation
+[33m0cbdc37[m Monthly Sessions Added
+[33med512f6[m Logo Implemented
+[33mbeb9726[m lib in git ignore....
+[33m673f345[m fix: update path alias configuration for Vercel build
+[33mfea98fe[m PLEASE
+[33mc6a7f89[m Final Fix
+[33mce9d7ca[m Redeploy
+[33mfcfa614[m Updated config
+[33m4da4a37[m Build Change
+[33mc16b2ed[m Deploy Fix
+[33mf24287a[m Updated config for build
+[33mc1c6aa7[m Front End Skeleton
+[33ma20e4a2[m Initial commit
