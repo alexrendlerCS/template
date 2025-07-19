@@ -49,7 +49,7 @@ import {
 } from "@dnd-kit/core";
 import { useToast } from "@/components/ui/use-toast";
 import { DatePicker } from "@/components/DatePicker";
-import { isGoogleCalendarEnabled } from "@/lib/config/features";
+import { isGoogleCalendarEnabled, getCurrentTier } from "@/lib/config/features";
 
 interface DatabaseSession {
   id: string;
@@ -237,6 +237,7 @@ export default function TrainerSchedulePage() {
   const [isUpdatingSession, setIsUpdatingSession] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const firstSessionRowRef = useRef<HTMLDivElement>(null);
+  const currentTier = getCurrentTier();
 
   // Replace dynamic time slot logic with static 30-min slots from 12:00 AM to 11:30 PM
   function generateStaticTimeSlots() {
@@ -2092,6 +2093,15 @@ export default function TrainerSchedulePage() {
   return (
     <>
       <div className="flex-1 bg-white">
+        {/* Starter tier Google Calendar sync warning */}
+        {currentTier === "lowest" && (
+          <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 mb-4 flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-yellow-600" />
+            <span>
+              <strong>Automatic Google Calendar sync is not available on the Starter plan.</strong> Upgrade your subscription to enable automatic syncing of your training schedule with Google Calendar.
+            </span>
+          </div>
+        )}
         <header className="border-b border-gray-200 bg-white px-6 py-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
