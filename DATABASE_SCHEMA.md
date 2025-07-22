@@ -281,7 +281,16 @@ This document describes the complete database schema for the fitness training ap
 The sessions table has comprehensive RLS policies:
 
 1. **sessions_select_policy**: Users can read sessions where they are the client or trainer
-2. **sessions_insert_policy**: Only trainers can create sessions
+2. **sessions_insert_policy**: Trainers and clients can create sessions
+   
+   ```sql
+   CREATE POLICY "sessions_insert_policy" ON sessions
+       FOR INSERT
+       TO authenticated
+       WITH CHECK (
+           auth.uid() = trainer_id OR auth.uid() = client_id
+       );
+   ```
 3. **sessions_update_policy**: Users can update sessions where they are the client or trainer
 4. **sessions_delete_policy**: Only trainers can delete sessions
 5. **sessions_service_role_policy**: Service role has full access for admin operations

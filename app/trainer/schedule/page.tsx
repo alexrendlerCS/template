@@ -586,58 +586,22 @@ export default function TrainerSchedulePage() {
 
   // Function to generate time slots based on trainer availability for a specific date
   const generateTimeSlotsForDate = (date: string) => {
-    if (!date || !trainerAvailability.length) {
-      setAvailableTimeSlots([]);
-      return;
-    }
-
-    // Parse the date string as local time to avoid timezone issues
-    const [year, month, day] = date.split("-").map(Number);
-    const selectedDate = new Date(year, month - 1, day); // Local time
-    // JS: 0=Sunday, 1=Monday, ..., 6=Saturday
-    // DB: 0=Sunday, 1=Monday, ..., 6=Saturday (same as JS)
-    const jsDay = selectedDate.getDay();
-    const weekday = jsDay; // Keep 0-6 numbering (Sunday=0, Monday=1, etc.)
-
-    // Find availability for this weekday
-    const dayAvailability = trainerAvailability.filter(
-      (availability) => availability.weekday === weekday
-    );
-
-    if (dayAvailability.length === 0) {
-      setAvailableTimeSlots([]);
-      return;
-    }
-
-    const timeSlotsSet = new Set<string>();
-
-    dayAvailability.forEach((availability) => {
-      const startTime = new Date(`2000-01-01T${availability.start_time}`);
-      const endTime = new Date(`2000-01-01T${availability.end_time}`);
-
-      // Generate 30-minute slots from start_time to end_time - 1 hour
-      let currentTime = new Date(startTime);
-      const endTimeMinusOneHour = new Date(endTime.getTime() - 60 * 60 * 1000); // Subtract 1 hour
-
-      while (currentTime <= endTimeMinusOneHour) {
-        const timeString = currentTime.toLocaleTimeString("en-US", {
+    // Always allow trainers to book any time slot (ignore availability)
+    // Only check for session conflicts, not availability
+    const slots = [];
+    let current = new Date(2000, 0, 1, 0, 0, 0); // 12:00 AM
+    const end = new Date(2000, 0, 1, 23, 30, 0); // 11:30 PM
+    while (current <= end) {
+      slots.push(
+        current.toLocaleTimeString("en-US", {
           hour: "numeric",
           minute: "2-digit",
           hour12: true,
-        });
-        timeSlotsSet.add(timeString);
-        currentTime.setMinutes(currentTime.getMinutes() + 30); // Add 30 minutes
-      }
-    });
-
-    // Convert to array and sort
-    const sortedTimeSlots = Array.from(timeSlotsSet).sort((a, b) => {
-      const timeA = new Date(`2000-01-01T${a}`);
-      const timeB = new Date(`2000-01-01T${b}`);
-      return timeA.getTime() - timeB.getTime();
-    });
-
-    setAvailableTimeSlots(sortedTimeSlots);
+        })
+      );
+      current.setMinutes(current.getMinutes() + 30);
+    }
+    setAvailableTimeSlots(slots);
   };
 
   // Function to create a new session
